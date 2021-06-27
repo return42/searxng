@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
-# -*- coding: utf-8; mode: sh indent-tabs-mode: nil -*-
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # shellcheck disable=SC2001
 
 # shellcheck source=utils/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-# shellcheck source=utils/brand.env
-source "${REPO_ROOT}/utils/brand.env"
-source_dot_config
-source "${REPO_ROOT}/utils/lxc-searx.env"
-in_container && lxc_set_suite_env
+
+# shellcheck source=utils/lib_install.sh
+source "${REPO_ROOT}/utils/lib_install.sh"
 
 # ----------------------------------------------------------------------------
 # config
@@ -183,14 +180,18 @@ apache
   :install: apache site with the searx uwsgi app
   :remove:  apache site ${APACHE_FILTRON_SITE}
 
-searx settings: ${SEARX_SETTINGS_PATH}
+If needed, set PUBLIC_URL of your WEB service in file:
+${DOT_CONFIG}::
 
-If needed, set PUBLIC_URL of your WEB service in the '${DOT_CONFIG#"$REPO_ROOT/"}' file::
   PUBLIC_URL          : ${PUBLIC_URL}
   SEARX_INSTANCE_NAME : ${SEARX_INSTANCE_NAME}
   SERVICE_USER        : ${SERVICE_USER}
   SEARX_INTERNAL_HTTP : http://${SEARX_INTERNAL_HTTP}
 EOF
+
+    echo -e "  SEARX_SETTINGS_PATH : ${_BBlue}${SEARX_SETTINGS_PATH}${_creset}"
+    echo -e "  SEARX_SRC           : ${_BBlue}${SEARX_SRC:-none}${_creset}"
+
     if in_container; then
         # searx is listening on 127.0.0.1 and not available from outside container
         # in containers the service is listening on 0.0.0.0 (see lxc-searx.env)

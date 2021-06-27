@@ -60,6 +60,7 @@ test.shell:
 		utils/brand.env \
 		./manage \
 		utils/lib.sh \
+		utils/lib_install.sh \
 	        utils/filtron.sh \
 	        utils/searx.sh \
 	        utils/morty.sh \

@@ -1,15 +1,11 @@
 #!/usr/bin/env bash
-# -*- coding: utf-8; mode: sh indent-tabs-mode: nil -*-
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# shellcheck disable=SC2119,SC2001
+# shellcheck disable=SC2001
 
 # shellcheck source=utils/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-# shellcheck source=utils/brand.env
-source "${REPO_ROOT}/utils/brand.env"
-source_dot_config
-source "${REPO_ROOT}/utils/lxc-searx.env"
-in_container && lxc_set_suite_env
+# shellcheck source=utils/lib_install.sh
+source "${REPO_ROOT}/utils/lib_install.sh"
 
 # ----------------------------------------------------------------------------
 # config
@@ -17,6 +13,7 @@ in_container && lxc_set_suite_env
 
 PUBLIC_URL="${PUBLIC_URL:-http://$(uname -n)/searx}"
 PUBLIC_HOST="${PUBLIC_HOST:-$(echo "$PUBLIC_URL" | sed -e 's/[^/]*\/\/\([^@]*@\)\?\([^:/]*\).*/\2/')}"
+SEARX_SETTINGS_PATH="${SEARX_SETTINGS_PATH:-/etc/searx/settings.yml}"
 
 FILTRON_URL_PATH="${FILTRON_URL_PATH:-$(echo "${PUBLIC_URL}" \
 | sed -e 's,^.*://[^/]*\(/.*\),\1,g')}"
@@ -97,7 +94,9 @@ nginx (${PUBLIC_URL})
 
 filtron rules: ${FILTRON_RULES_TEMPLATE}
 
-If needed, set PUBLIC_URL of your WEB service in the '${DOT_CONFIG#"$REPO_ROOT/"}' file::
+If needed, set PUBLIC_URL of your WEB service in file:
+${DOT_CONFIG}::
+
   PUBLIC_URL     : ${PUBLIC_URL}
   PUBLIC_HOST    : ${PUBLIC_HOST}
   SERVICE_USER   : ${SERVICE_USER}
@@ -105,6 +104,10 @@ If needed, set PUBLIC_URL of your WEB service in the '${DOT_CONFIG#"$REPO_ROOT/"
   FILTRON_API    : ${FILTRON_API}
   FILTRON_LISTEN : ${FILTRON_LISTEN}
 EOF
+
+    echo -e "  SEARX_SETTINGS_PATH : ${_BBlue}${SEARX_SETTINGS_PATH}${_creset}"
+    echo -e "  SEARX_SRC           : ${_BBlue}${SEARX_SRC:-none}${_creset}"
+
     if in_container; then
         # in containers the service is listening on 0.0.0.0 (see lxc-searx.env)
         for ip in $(global_IPs) ; do
