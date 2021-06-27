@@ -37,15 +37,13 @@ see how you can simplify your *user defined* ``settings.yml``.
 Global Settings
 ===============
 
-``general:``
+.. _settings global brand:
+
+``brand:``
 ------------
 
-.. code:: yaml
-
-   general:
-     debug: false               # Debug mode, only for development
-     instance_name:  "searxng"  # displayed name
-     contact_url: false         # mailto:contact@example.com
+If you change a value in this section, don't forget to rebuild the instance's
+environment (:ref:`make buildenv`)
 
 .. code:: yaml
 
@@ -56,6 +54,17 @@ Global Settings
      docs_url: https://searxng/searxng.github.io/searxng
      public_instances: https://searx.space
      wiki_url: https://github.com/searxng/searxng/wiki
+
+
+``general:``
+------------
+
+.. code:: yaml
+
+   general:
+     debug: false               # Debug mode, only for development
+     instance_name:  "searxng"  # displayed name
+     contact_url: false         # mailto:contact@example.com
 
 ``debug`` :
   Allow a more detailed log if you run searx directly. Display *detailed* error

@@ -81,6 +81,15 @@ the check fails if you edit the requirements listed in
 If you think, something goes wrong with your ./local environment or you change
 the :origin:`setup.py` file, you have to call :ref:`make clean`.
 
+.. _make buildenv:
+
+``make buildenv``
+=================
+
+Rebuild the environment with the new settings from the :ref:`settings global
+brand` section of your :ref:`settings.yml <settings location>`.
+
+
 .. _make run:
 
 ``make run``
