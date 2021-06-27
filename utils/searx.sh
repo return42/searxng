@@ -161,6 +161,7 @@ install / remove
   :all:        complete (de-) installation of searx service
   :user:       add/remove service user '$SERVICE_USER' ($SERVICE_HOME)
   :searx-src:  clone $GIT_URL
+  :init-src:   copy files (SEARX_SRC_INIT_FILES) to ${SEARX_SRC}
   :pyenv:      create/remove virtualenv (python) in $SEARX_PYENV
   :uwsgi:      install searx uWSGI application
   :settings:   reinstall settings from ${SEARX_SETTINGS_TEMPLATE}
@@ -238,7 +239,11 @@ main() {
                 all) install_all ;;
                 user) assert_user ;;
                 pyenv) create_pyenv ;;
-                searx-src) clone_searx ;;
+                searx-src)
+                    clone_searx
+                    init_SEARX_SRC
+                    ;;
+                init-src) init_SEARX_SRC ;;
                 settings) install_settings ;;
                 uwsgi)
                     install_searx_uwsgi
@@ -314,6 +319,7 @@ install_all() {
     assert_user
     wait_key
     clone_searx
+    init_SEARX_SRC
     wait_key
     create_pyenv
     wait_key
@@ -420,6 +426,22 @@ git config user.name "$ADMIN_NAME"
 git config --list
 EOF
     popd > /dev/null
+}
+
+init_SEARX_SRC(){
+    rst_title "update files in: ${SEARX_SRC}/"
+
+    if ! clone_is_available; then
+        err_msg "you have to install searx first"
+        exit 42
+    fi
+
+    for i in "${SEARX_SRC_INIT_FILES[@]}"; do
+        if [ "${REPO_ROOT}/$i" -nt "${SEARX_SRC}/$i" ]; then
+            info_msg "update $i from ${REPO_ROOT} (is newer)"
+            cp "${REPO_ROOT}/$i" "${SEARX_SRC}/$i"
+        fi
+    done
 }
 
 install_settings() {

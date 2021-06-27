@@ -12,7 +12,7 @@ eval orig_"$(declare -f source_dot_config)"
 source_dot_config() {
     # a modified source_dot_config function that looks for a file
     # /usr/local/searx/searx-src/
-
+    local msg=""
     if [ -z "$eval_SEARX_SRC" ]; then
         export eval_SEARX_SRC='true'
         SEARX_SRC=$("${REPO_ROOT}/utils/searx.sh" --getenv SEARX_SRC)
@@ -22,8 +22,12 @@ source_dot_config() {
             for i in "${SEARX_SRC_INIT_FILES[@]}"; do
                 if [[ "${REPO_ROOT}/$i" -nt "${SEARX_SRC}/$i" ]]; then
                     warn_msg "${REPO_ROOT}/$i is newer!"
+                    msg="to update use:  sudo -H ./utils/searx.sh install init-src"
                 fi
             done
+            if [ ! -z "$msg" ];then
+                warn_msg "$msg"
+            fi
             DOT_CONFIG="${SEARX_SRC}/.config.sh"
         else
             info_msg "using local config: ${DOT_CONFIG}"
