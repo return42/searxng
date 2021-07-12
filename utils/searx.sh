@@ -146,7 +146,7 @@ usage::
   $(basename "$0") remove     [all|user|pyenv|searx-src]
   $(basename "$0") activate   [service]
   $(basename "$0") deactivate [service]
-  $(basename "$0") inspect    [service]
+  $(basename "$0") inspect    [service|settings <key>]
   $(basename "$0") option     [debug-[on|off]|image-proxy-[on|off]|result-proxy <url> <key>]
   $(basename "$0") apache     [install|remove]
 
@@ -169,8 +169,9 @@ activate service
   activate and start service daemon (systemd unit)
 deactivate service
   stop and deactivate service daemon (systemd unit)
-inspect service
-  run some small tests and inspect service's status and log
+inspect
+  :service:    run some small tests and inspect service's status and log
+  :settings:   inspect YAML setting <key> from SearXNG instance (${SEARX_SRC})
 option
   set one of the available options
 apache
@@ -204,6 +205,10 @@ main() {
                 service)
                     sudo_or_exit
                     inspect_service
+                    ;;
+                settings)
+                    prompt_installation_setting "$3"
+                    dump_return $?
                     ;;
                 *) usage "$_usage"; exit 42;;
             esac ;;
@@ -425,9 +430,14 @@ EOF
 }
 
 prompt_installation_status(){
-    local _state
-    _state="$(install_searx_get_state)"
-    case $_state in
+
+    local state branch remote remote_url instance_setting
+    state="$(install_searx_get_state)"
+    branch="$(git name-rev --name-only HEAD)"
+    remote="$(git config branch."${branch}".remote)"
+    remote_url="$(git config remote."${remote}".url)"
+
+    case $state in
         missing-searx-clone)
             info_msg "${_BBlue}(status: $(install_searx_get_state))${_creset}"
             return 0
@@ -435,6 +445,16 @@ prompt_installation_status(){
         *)
             warn_msg "SearXNG instance already installed at: $SEARX_SRC"
             warn_msg "status:  ${_BBlue}$(install_searx_get_state)${_creset} "
+            instance_setting="$(prompt_installation_setting brand.git_url)"
+            if ! [ "$instance_setting" = "$remote_url" ]; then
+                warn_msg "instance's brand.git_url: '${instance_setting}'" \
+                         "differs from local clone's remote URL: ${remote_url}"
+            fi
+            instance_setting="$(prompt_installation_setting brand.git_branch)"
+            if ! [ "$instance_setting" = "$branch" ]; then
+                warn_msg "instance brand.git_branch: ${instance_setting}" \
+                         "differs from local clone's branch: ${branch}"
+            fi
             return 42
             ;;
     esac
@@ -445,6 +465,39 @@ verify_continue_install(){
         MSG="[${_BCyan}KEY${_creset}] to continue installation / [${_BCyan}CTRL-C${_creset}] to exit" \
            wait_key
     fi
+}
+
+prompt_installation_setting(){
+
+    # usage:  prompt_installation_setting brand.git_url
+    #
+    # Prompts the value of the (YAML) setting in the SearXNG instance.
+
+    local _state
+    _state="$(install_searx_get_state)"
+    case $_state in
+        python-installed|installer-modified)
+            sudo -H -u "${SERVICE_USER}" "${SEARX_PYENV}/bin/python" <<EOF
+import sys, searx
+unset = object()
+memo = searx.settings
+current = ""
+for name in "${1}".split('.'):
+   current += name
+   memo = memo.get(name, unset)
+   if memo is unset:
+       sys.stderr.write("error: setting '%s' does not exists\n" % current)
+       sys.exit(42)
+   else:
+       current += "."
+print(memo)
+sys.exit(0)
+EOF
+            ;;
+        *)
+            return 42
+            ;;
+    esac
 }
 
 init_SEARX_SRC(){
