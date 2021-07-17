@@ -137,7 +137,6 @@ SCHEMA = {
         'docs_url': SettingsValue(str, ''),
         'public_instances': SettingsValue(str, ''),
         'wiki_url': SettingsValue(str, ''),
-        'twitter_url': SettingsValue(str, ''),
     },
     'search': {
         'safe_search': SettingsValue((0,1,2), 0),
