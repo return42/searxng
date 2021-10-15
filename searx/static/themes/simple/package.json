@@ -10,7 +10,7 @@
     "grunt-contrib-uglify": "~5.0.1",
     "grunt-contrib-watch": "~1.1.0",
     "grunt-stylelint": "^0.16.0",
-    "grunt-eslint": "^23.0.0",
+    "grunt-eslint": "^24.0.0",
     "grunt-webfont": "^1.7.2",
     "ionicons-npm": "^2.0.1",
     "eslint": "^7.32.0",
