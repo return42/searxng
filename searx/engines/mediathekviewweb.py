@@ -4,6 +4,7 @@
 
 """
 
+import mimetypes
 import datetime
 from json import loads, dumps
 
@@ -61,16 +62,17 @@ def response(resp):
     for item in mwv_result_list:
 
         item['hms'] = str(datetime.timedelta(seconds=item['duration']))
-
-        results.append(
-            {
-                'url': item['url_video_hd'],
-                'title': "%(channel)s: %(title)s (%(hms)s)" % item,
-                'length': item['hms'],
-                'content': "%(description)s" % item,
-                'iframe_src': item['url_video_hd'],
-                'template': 'videos.html',
-            }
-        )
+        r =  {
+            'url': item['url_video_hd'],
+            'title': "%(channel)s: %(title)s (%(hms)s)" % item,
+            'length': item['hms'],
+            'content': "%(description)s" % item,
+            'video_src': item['url_video_hd'],
+            'template': 'videos.html',
+        }
+        (video_type, _) = mimetypes.guess_type(item['url_video_hd'])
+        if video_type:
+            r['video_type'] = video_type
+        results.append(r)
 
     return results
