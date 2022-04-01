@@ -194,6 +194,15 @@ module.exports = function (grunt) {
         dest: '../../../templates/simple/icons.html',
       },
     },
+    downloadfile: {
+      options: {
+        dest: './fonts',
+        overwriteEverytime: true
+      },
+      files: {
+        'NotoColorEmoji.ttf': 'https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoColorEmoji.ttf',
+      }
+    },
   });
 
   grunt.registerMultiTask('svg2jinja', 'Create Jinja2 macro', function () {
@@ -286,6 +295,7 @@ module.exports = function (grunt) {
   grunt.loadNpmTasks('grunt-contrib-copy');
   grunt.loadNpmTasks('grunt-contrib-uglify');
   grunt.loadNpmTasks('grunt-image');
+  grunt.loadNpmTasks('grunt-downloadfile');
   grunt.loadNpmTasks('grunt-contrib-less');
   grunt.loadNpmTasks('grunt-contrib-cssmin');
   grunt.loadNpmTasks('grunt-stylelint');
@@ -302,5 +312,6 @@ module.exports = function (grunt) {
     'image',
     'svg2png',
     'svg2jinja',
+    'downloadfile',
   ]);
 };
