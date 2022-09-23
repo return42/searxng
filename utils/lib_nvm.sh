@@ -27,6 +27,7 @@ nvm.env() {
     source "${NVM_DIR}/nvm.sh"
     source "${NVM_DIR}/bash_completion"
     [ "$VERBOSE" = "1" ] && info_msg "sourced NVM environment from ${NVM_DIR}"
+    return 0
 }
 
 nvm.is_installed() {
