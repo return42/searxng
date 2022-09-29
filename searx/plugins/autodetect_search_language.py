@@ -69,7 +69,7 @@ from flask_babel import gettext
 import babel
 
 from searx.utils import detect_language
-from searx.languages import language_codes
+from searx.sxng_locales import sxng_locales
 
 name = gettext('Autodetect search language')
 description = gettext('Automatically detect the query search language and switch to it.')
@@ -77,7 +77,7 @@ preference_section = 'general'
 default_on = False
 
 supported_langs = set()
-"""Languages supported by most searxng engines (:py:obj:`searx.languages.language_codes`)."""
+"""Languages supported by most searxng engines (:py:obj:`searx.sxng_locales.sxng_locales`)."""
 
 
 def pre_search(request, search):  # pylint: disable=unused-argument
@@ -92,6 +92,6 @@ def pre_search(request, search):  # pylint: disable=unused-argument
 
 
 def init(app, settings):  # pylint: disable=unused-argument
-    for searxng_locale in language_codes:
+    for searxng_locale in sxng_locales:
         supported_langs.add(searxng_locale[0].split('-')[0])
     return True
