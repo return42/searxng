@@ -8,7 +8,7 @@ from typing import Set
 import os
 import pathlib
 
-from babel import Locale
+import babel
 from babel.support import Translations
 import babel.languages
 import babel.core
@@ -141,7 +141,7 @@ def locales_initialize(directory=None):
     for tag in LOCALE_BEST_MATCH:
         descr = LOCALE_NAMES.get(tag)
         if not descr:
-            locale = Locale.parse(tag, sep='-')
+            locale = babel.Locale.parse(tag, sep='-')
             LOCALE_NAMES[tag] = get_locale_descr(locale, tag.replace('-', '_'))
 
     for dirname in sorted(os.listdir(directory)):
@@ -151,10 +151,64 @@ def locales_initialize(directory=None):
         tag = dirname.replace('_', '-')
         descr = LOCALE_NAMES.get(tag)
         if not descr:
-            locale = Locale.parse(dirname)
+            locale = babel.Locale.parse(dirname)
             LOCALE_NAMES[tag] = get_locale_descr(locale, dirname)
             if locale.text_direction == 'rtl':
                 RTL_LOCALES.add(tag)
+
+
+def region_tag(locale: babel.Locale) -> str:
+    """Returns SearXNG's region tag from the locale (e.g. zh-TW , en-US)."""
+    if not locale.territory:
+        raise ValueError('%s missed a territory')
+    return locale.language + '-' + locale.territory
+
+
+def language_tag(locale: babel.Locale) -> str:
+    """Returns SearXNG's language tag from the locale and if exits, the tag
+    includes the script name (e.g. en, zh_Hant).
+    """
+    sxng_lang = locale.language
+    if locale.script:
+        sxng_lang += '_' + locale.script
+    return sxng_lang
+
+
+def get_offical_locales(
+    territory: str, languages=None, regional: bool = False, de_facto: bool = True
+) -> Set[babel.Locale]:
+    """Returns a list of :py:obj:`babel.Locale` with languages from
+    :py:obj:`babel.languages.get_official_languages`.
+
+    :param territory: The territory (country or region) code.
+
+    :param languages: A list of language codes the languages from
+      :py:obj:`babel.languages.get_official_languages` should be in
+      (intersection).  If this argument is ``None``, all official languages in
+      this territory are used.
+
+    :param regional: If the regional flag is set, then languages which are
+      regionally official are also returned.
+
+    :param de_facto: If the de_facto flag is set to `False`, then languages
+      which are “de facto” official are not returned.
+
+    """
+    ret_val = set()
+    o_languages = babel.languages.get_official_languages(territory, regional=regional, de_facto=de_facto)
+
+    if languages:
+        languages = [l.lower() for l in languages]
+        o_languages = set(l for l in o_languages if l.lower() in languages)
+
+    for lang in o_languages:
+        try:
+            locale = babel.Locale.parse(lang + '_' + territory)
+            ret_val.add(locale)
+        except babel.UnknownLocaleError:
+            continue
+
+    return ret_val
 
 
 def get_engine_locale(searxng_locale, engine_locales, default=None):
