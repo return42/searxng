@@ -11,7 +11,7 @@ from lxml import etree
 from httpx import HTTPError
 
 from searx import settings
-from searx.data import ENGINES_LANGUAGES
+from searx.engines import engines
 from searx.network import get as http_get
 from searx.exceptions import SearxEngineResponseException
 
@@ -110,7 +110,7 @@ def seznam(query, _lang):
 
 def startpage(query, lang):
     # startpage autocompleter
-    lui = ENGINES_LANGUAGES['startpage'].get(lang, 'english')
+    lui = engines['startpage'].supported_languages.get(lang, 'english')  # vintage / deprecated
     url = 'https://startpage.com/suggestions?{query}'
     resp = get(url.format(query=urlencode({'q': query, 'segment': 'startpage.udog', 'lui': lui})))
     data = resp.json()
