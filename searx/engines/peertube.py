@@ -1,12 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""
- peertube (Videos)
+# lint: pylint
+"""Peertube (videos)
 """
 
 from json import loads
 from datetime import datetime
 from urllib.parse import urlencode
 from searx.utils import html_to_text
+
+from searx.enginelib.traits import EngineTraits
+
+traits: EngineTraits
 
 # about
 about = {
@@ -22,26 +26,20 @@ about = {
 categories = ["videos"]
 paging = True
 base_url = "https://peer.tube"
-supported_languages_url = (
-    'https://framagit.org/framasoft/peertube/search-index/-/raw/master/client/src/views/Search.vue'
-)
-
 
 # do search-request
 def request(query, params):
-    sanitized_url = base_url.rstrip("/")
-    pageno = (params["pageno"] - 1) * 15
-    search_url = sanitized_url + "/api/v1/search/videos/?pageno={pageno}&{query}"
+    """Build peertube request"""
+    search_url = base_url.rstrip("/") + "/api/v1/search/videos/?pageno={pageno}&{query}"
     query_dict = {"search": query}
-    language = params["language"].split("-")[0]
-    if "all" != language and language in supported_languages:
-        query_dict["languageOneOf"] = language
+
+    pageno = (params["pageno"] - 1) * 15
+    engine_lang = traits.get_language(params["searxng_locale"])
+    if engine_lang:
+        query_dict["languageOneOf"] = engine_lang
+
     params["url"] = search_url.format(query=urlencode(query_dict), pageno=pageno)
     return params
-
-
-def _get_offset_from_pageno(pageno):
-    return (pageno - 1) * 15 + 1
 
 
 # get response from search-request
@@ -83,10 +81,56 @@ def response(resp):
     return results
 
 
-def _fetch_supported_languages(resp):
-    import re
+def fetch_traits(engine_traits: EngineTraits):
+    """Fetch languages from peertube's search-index source code.
 
-    # https://docs.python.org/3/howto/regex.html#greedy-versus-non-greedy
-    videolanguages = re.search(r"videoLanguages \(\)[^\n]+(.*?)\]", resp.text, re.DOTALL)
-    peertube_languages = [m.group(1) for m in re.finditer(r"\{ id: '([a-z]+)', label:", videolanguages.group(1))]
-    return peertube_languages
+    See videoLanguages_ in commit `8ed5c729 - Refactor and redesign client`_
+
+    .. _8ed5c729 - Refactor and redesign client:
+       https://framagit.org/framasoft/peertube/search-index/-/commit/8ed5c729
+    .. _videoLanguages:
+       https://framagit.org/framasoft/peertube/search-index/-/commit/8ed5c729#3d8747f9a60695c367c70bb64efba8f403721fad_0_291
+    """
+
+    # pylint: disable=import-outside-toplevel
+    import re
+    import babel
+    from searx.locales import language_tag
+    from searx import network
+
+    resp = network.get(
+        'https://framagit.org/framasoft/peertube/search-index/-/raw/master/client/src/components/Filters.vue',
+        # the response from search-index repository is very slow
+        timeout=60,
+    )
+
+    if not resp.ok:
+        print("ERROR: response from peertube is not OK.")
+        return
+
+    js_lang = re.search(r"videoLanguages \(\)[^\n]+(.*?)\]", resp.text, re.DOTALL)
+    if not js_lang:
+        print("ERROR: can't determine languages from peertube")
+        return
+
+    for lang in re.finditer(r"\{ id: '([a-z]+)', label:", js_lang.group(1)):
+        try:
+            eng_tag = lang.group(1)
+            if eng_tag == 'oc':
+                # Occitanis not known by babel, its closest relative is Catalan
+                # but 'ca' is already in the list of engine_traits.languages -->
+                # 'oc' will be ignored.
+                continue
+
+            sxng_tag = language_tag(babel.Locale.parse(eng_tag))
+
+        except babel.UnknownLocaleError:
+            print("ERROR: %s is unknown by babel" % eng_tag)
+            continue
+
+        conflict = engine_traits.languages.get(sxng_tag)
+        if conflict:
+            if conflict != eng_tag:
+                print("CONFLICT: babel %s --> %s, %s" % (sxng_tag, conflict, eng_tag))
+            continue
+        engine_traits.languages[sxng_tag] = eng_tag
