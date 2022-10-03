@@ -3090,10 +3090,9 @@
   },
   "qwant": {
     "all_locale": null,
-    "data_type": "supported_languages",
+    "data_type": "traits_v1",
     "languages": {},
-    "regions": {},
-    "supported_languages": {
+    "regions": {
       "bg-BG": "bg_BG",
       "ca-ES": "ca_ES",
       "cs-CZ": "cs_CZ",
@@ -3133,14 +3132,14 @@
       "th-TH": "th_TH",
       "zh-CN": "zh_CN",
       "zh-HK": "zh_HK"
-    }
+    },
+    "supported_languages": {}
   },
   "qwant images": {
     "all_locale": null,
-    "data_type": "supported_languages",
+    "data_type": "traits_v1",
     "languages": {},
-    "regions": {},
-    "supported_languages": {
+    "regions": {
       "bg-BG": "bg_BG",
       "ca-ES": "ca_ES",
       "cs-CZ": "cs_CZ",
@@ -3180,14 +3179,14 @@
       "th-TH": "th_TH",
       "zh-CN": "zh_CN",
       "zh-HK": "zh_HK"
-    }
+    },
+    "supported_languages": {}
   },
   "qwant news": {
     "all_locale": null,
-    "data_type": "supported_languages",
+    "data_type": "traits_v1",
     "languages": {},
-    "regions": {},
-    "supported_languages": {
+    "regions": {
       "ca-ES": "ca_ES",
       "de-AT": "de_AT",
       "de-CH": "de_CH",
@@ -3212,14 +3211,14 @@
       "nl-BE": "nl_BE",
       "nl-NL": "nl_NL",
       "pt-PT": "pt_PT"
-    }
+    },
+    "supported_languages": {}
   },
   "qwant videos": {
     "all_locale": null,
-    "data_type": "supported_languages",
+    "data_type": "traits_v1",
     "languages": {},
-    "regions": {},
-    "supported_languages": {
+    "regions": {
       "bg-BG": "bg_BG",
       "ca-ES": "ca_ES",
       "cs-CZ": "cs_CZ",
@@ -3259,7 +3258,8 @@
       "th-TH": "th_TH",
       "zh-CN": "zh_CN",
       "zh-HK": "zh_HK"
-    }
+    },
+    "supported_languages": {}
   },
   "startpage": {
     "all_locale": null,
