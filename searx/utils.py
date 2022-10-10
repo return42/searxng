@@ -24,7 +24,7 @@ from babel.core import get_global
 from searx import settings
 from searx.data import USER_AGENTS, data_dir
 from searx.version import VERSION_TAG
-from searx.languages import language_codes
+from searx.sxng_locales import sxng_locales
 from searx.exceptions import SearxXPathSyntaxException, SearxEngineXPathException
 from searx import logger
 
@@ -352,11 +352,11 @@ def is_valid_lang(lang) -> Optional[Tuple[bool, str, str]]:
     is_abbr = len(lang) == 2
     lang = lang.lower()
     if is_abbr:
-        for l in language_codes:
+        for l in sxng_locales:
             if l[0][:2] == lang:
                 return (True, l[0][:2], l[3].lower())
         return None
-    for l in language_codes:
+    for l in sxng_locales:
         if l[1].lower() == lang or l[3].lower() == lang:
             return (True, l[0][:2], l[3].lower())
     return None
