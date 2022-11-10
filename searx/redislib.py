@@ -10,8 +10,11 @@ article.
 
 """
 
+import uuid
 import hmac
+from functools import wraps
 
+from searx.shared import redisdb
 from searx import get_setting
 
 LUA_SCRIPT_STORAGE = {}
@@ -239,3 +242,38 @@ def incr_sliding_window(client, name: str, duration: int):
     name = "SearXNG_counter_" + secret_hash(name)
     c = script(args=[duration], keys=[name])
     return c
+
+
+def cache_str(expire, cache_key=None):
+    """Decorater that caches the return value of a function that returns a
+    :py:obj:`str` type.  A return value ``None`` is normalized to an empty
+    string.  Any other value from the function is converted to a :py:obj:`str`.
+    The value is stored in redis until `expire` time (in sec.).
+
+    """
+    if cache_key is None:
+        cache_key = "SearXNG_cache_str_%s" % uuid.uuid4()
+
+    def decorate(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            c = redisdb.client()
+            if c:
+                ret_val = c.get(cache_key)
+                if ret_val is not None:
+                    return ret_val.decode('utf-8')
+
+            ret_val = func(*args, **kwargs)
+            if ret_val is None:
+                ret_val = ''
+            if isinstance(ret_val, bytes):
+                ret_val = str(ret_val, 'utf-8')
+            else:
+                ret_val = str(ret_val)
+            if c:
+                c.set(cache_key, ret_val, ex=expire)
+            return ret_val
+
+        return wrapper
+
+    return decorate
