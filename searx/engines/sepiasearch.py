@@ -1,44 +1,56 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+# lint: pylint
 """
- SepiaSearch (Videos)
+SepiaSearch (Videos)
+~~~~~~~~~~~~~~~~~~~~
+
+Sepiasearch uses the same languages as :py:obj:`searx.engines.peertube`
 """
+
+from typing import TYPE_CHECKING
 
 from json import loads
-from dateutil import parser, relativedelta
 from urllib.parse import urlencode
 from datetime import datetime
+from dateutil.parser import parse
+from dateutil.relativedelta import relativedelta
 
-# about
+from searx.engines.peertube import fetch_traits  # pylint: disable=unused-import
+from searx.enginelib.traits import EngineTraits
+
+if TYPE_CHECKING:
+    import logging
+
+    logger: logging.Logger
+
+traits: EngineTraits
+
 about = {
+    # pylint: disable=line-too-long
     "website": 'https://sepiasearch.org',
     "wikidata_id": None,
-    "official_api_documentation": "https://framagit.org/framasoft/peertube/search-index/-/tree/master/server/controllers/api",  # NOQA
+    "official_api_documentation": "https://framagit.org/framasoft/peertube/search-index/-/tree/master/server/controllers/api",
     "use_official_api": True,
     "require_api_key": False,
     "results": 'JSON',
 }
 
+# engine dependent config
 categories = ['videos']
 paging = True
-time_range_support = True
-safesearch = True
-supported_languages = [
-    # fmt: off
-    'en', 'fr', 'ja', 'eu', 'ca', 'cs', 'eo', 'el',
-    'de', 'it', 'nl', 'es', 'oc', 'gd', 'zh', 'pt',
-    'sv', 'pl', 'fi', 'ru'
-    # fmt: on
-]
+
 base_url = 'https://sepiasearch.org/api/v1/search/videos'
 
-safesearch_table = {0: 'both', 1: 'false', 2: 'false'}
-
+time_range_support = True
 time_range_table = {
-    'day': relativedelta.relativedelta(),
-    'week': relativedelta.relativedelta(weeks=-1),
-    'month': relativedelta.relativedelta(months=-1),
-    'year': relativedelta.relativedelta(years=-1),
+    'day': relativedelta(),
+    'week': relativedelta(weeks=-1),
+    'month': relativedelta(months=-1),
+    'year': relativedelta(years=-1),
 }
+
+safesearch = True
+safesearch_table = {0: 'both', 1: 'false', 2: 'false'}
 
 
 def minute_to_hm(minute):
@@ -48,6 +60,10 @@ def minute_to_hm(minute):
 
 
 def request(query, params):
+
+    # eng_region = traits.get_region(params['searxng_locale'], 'en_US')
+    eng_lang = traits.get_language(params['searxng_locale'], None)
+
     params['url'] = (
         base_url
         + '?'
@@ -56,15 +72,17 @@ def request(query, params):
                 'search': query,
                 'start': (params['pageno'] - 1) * 10,
                 'count': 10,
-                'sort': '-match',
+                # -createdAt: sort by date ascending / createdAt: date descending
+                'sort': '-match',  # sort by *match descending*
                 'nsfw': safesearch_table[params['safesearch']],
             }
         )
     )
 
-    language = params['language'].split('-')[0]
-    if language in supported_languages:
-        params['url'] += '&languageOneOf[]=' + language
+    if eng_lang is not None:
+        params['url'] += '&languageOneOf[]=' + eng_lang
+        params['url'] += '&boostLanguages[]=' + eng_lang
+
     if params['time_range'] in time_range_table:
         time = datetime.now().date() + time_range_table[params['time_range']]
         params['url'] += '&startDate=' + time.isoformat()
@@ -81,25 +99,28 @@ def response(resp):
         return []
 
     for result in search_results['data']:
-        title = result['name']
-        content = result['description']
-        thumbnail = result['thumbnailUrl']
-        publishedDate = parser.parse(result['publishedAt'])
-        author = result.get('account', {}).get('displayName')
-        length = minute_to_hm(result.get('duration'))
-        url = result['url']
+        metadata = [
+            x
+            for x in [
+                result.get('channel', {}).get('displayName'),
+                result.get('channel', {}).get('host'),
+                ', '.join(result.get('tags', [])),
+            ]
+            if x
+        ]
 
         results.append(
             {
-                'url': url,
-                'title': title,
-                'content': content,
-                'author': author,
-                'length': length,
+                'url': result['url'],
+                'title': result['name'],
+                'content': result.get('description') or '',
+                'author': result.get('account', {}).get('displayName'),
+                'length': minute_to_hm(result.get('duration')),
                 'template': 'videos.html',
-                'publishedDate': publishedDate,
+                'publishedDate': parse(result['publishedAt']),
                 'iframe_src': result.get('embedUrl'),
-                'thumbnail': thumbnail,
+                'thumbnail': result.get('thumbnailUrl') or result.get('previewUrl'),
+                'metadata': ' | '.join(metadata),
             }
         )
 
