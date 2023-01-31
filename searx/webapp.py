@@ -82,6 +82,7 @@ from searx.webutils import (
 from searx.webadapter import (
     get_search_query_from_webapp,
     get_selected_categories,
+    parse_lang,
 )
 from searx.utils import (
     html_to_text,
@@ -440,9 +441,7 @@ def render(template_name: str, **kwargs):
     if locale in RTL_LOCALES and 'rtl' not in kwargs:
         kwargs['rtl'] = True
     if 'current_language' not in kwargs:
-        kwargs['current_language'] = match_language(
-            request.preferences.get_value('language'), settings['search']['languages']
-        )
+        kwargs['current_language'] = parse_lang(request.preferences, {}, RawTextQuery('', []))
 
     # values from settings
     kwargs['search_formats'] = [x for x in settings['search']['formats'] if x != 'html']
@@ -676,7 +675,9 @@ def search():
     raw_text_query = None
     result_container = None
     try:
-        search_query, raw_text_query, _, _ = get_search_query_from_webapp(request.preferences, request.form)
+        search_query, raw_text_query, _, _, selected_locale = get_search_query_from_webapp(
+            request.preferences, request.form
+        )
         # search = Search(search_query) #  without plugins
         search = SearchWithPlugins(search_query, request.user_plugins, request)  # pylint: disable=redefined-outer-name
 
@@ -829,11 +830,7 @@ def search():
             result_container.unresponsive_engines
         ),
         current_locale = request.preferences.get_value("locale"),
-        current_language = match_language(
-            search_query.lang,
-            settings['search']['languages'],
-            fallback=request.preferences.get_value("language")
-        ),
+        current_language = selected_locale,
         search_language = match_language(
             search.search_query.lang,
             settings['search']['languages'],
