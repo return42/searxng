@@ -87,7 +87,6 @@ from searx.utils import (
     html_to_text,
     gen_useragent,
     dict_subset,
-    match_language,
 )
 from searx.version import VERSION_STRING, GIT_URL, GIT_BRANCH
 from searx.query import RawTextQuery
@@ -115,6 +114,7 @@ from searx.locales import (
     RTL_LOCALES,
     localeselector,
     locales_initialize,
+    match_locale,
 )
 
 # renaming names from searx imports ...
@@ -225,7 +225,7 @@ def _get_browser_language(req, lang_list):
         if '-' in lang:
             lang_parts = lang.split('-')
             lang = "{}-{}".format(lang_parts[0], lang_parts[-1].upper())
-        locale = match_language(lang, lang_list, fallback=None)
+        locale = match_locale(lang, lang_list, fallback=None)
         if locale is not None:
             return locale
     return 'en'
@@ -444,7 +444,7 @@ def render(template_name: str, **kwargs):
     if locale in RTL_LOCALES and 'rtl' not in kwargs:
         kwargs['rtl'] = True
     if 'current_language' not in kwargs:
-        kwargs['current_language'] = match_language(
+        kwargs['current_language'] = match_locale(
             request.preferences.get_value('language'), settings['search']['languages']
         )
 
@@ -827,7 +827,7 @@ def search():
             result_container.unresponsive_engines
         ),
         current_locale = request.preferences.get_value("locale"),
-        current_language = match_language(
+        current_language = match_locale(
             search_query.lang,
             settings['search']['languages'],
             fallback=request.preferences.get_value("language")
