@@ -1,0 +1,47 @@
+version: 1.0.0
+
+categories:
+
+  - id: general
+    ui_tab: true
+    name: General
+
+  - id: images
+    ui_tab: true
+    name: Images
+
+  - id: videos
+    ui_tab: true
+    name: Videos
+
+  - id: news
+    ui_tab: true
+    name: News
+
+  - id: map
+    ui_tab: true
+    name: Map
+
+  - id: music
+    ui_tab: true
+    name: Music
+
+  - id: it
+    ui_tab: true
+    name: IT
+
+  - id: science
+    ui_tab: true
+    name: since
+
+  - id: files
+    ui_tab: true
+    name: Files
+
+  - id: social media
+    ui_tab: true
+    name: Social Media
+
+  - id: tv
+    ui_tab: true
+    name: TV
