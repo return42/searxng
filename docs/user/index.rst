@@ -13,3 +13,5 @@ User information
 .. include:: search-syntax.md
    :parser: myst_parser.sphinx_
 
+.. include:: privacy-policy.md
+   :parser: myst_parser.sphinx_
