@@ -551,10 +551,10 @@ def pre_request():
 
     # request.user_plugins
     request.user_plugins = []  # pylint: disable=assigning-non-slot
-    allowed_plugins = preferences.plugins.get_enabled()
+    enabled_plugins = preferences.plugins.get_enabled()
     disabled_plugins = preferences.plugins.get_disabled()
     for plugin in plugins:
-        if (plugin.default_on and plugin.id not in disabled_plugins) or plugin.id in allowed_plugins:
+        if (plugin.default_on and plugin.id not in disabled_plugins) or plugin.id in enabled_plugins:
             request.user_plugins.append(plugin)
 
 
@@ -956,8 +956,8 @@ def preferences():
 
     # render preferences
     image_proxy = request.preferences.get_value('image_proxy')  # pylint: disable=redefined-outer-name
-    disabled_engines = request.preferences.engines.get_disabled()
-    allowed_plugins = request.preferences.plugins.get_enabled()
+    enabled_engines = request.preferences.engines.get_enabled()
+    enabled_plugins = request.preferences.plugins.get_enabled()
 
     # stats for preferences page
     filtered_engines = dict(filter(lambda kv: request.preferences.validate_token(kv[1]), engines.items()))
@@ -1077,14 +1077,14 @@ def preferences():
             {'info': a.self_info(), 'keywords': a.keywords}
             for a in answerers
         ],
-        disabled_engines = disabled_engines,
+        enabled_engines = enabled_engines,
         autocomplete_backends = autocomplete_backends,
         shortcuts = {y: x for x, y in engine_shortcuts.items()},
         themes = themes,
         plugins = plugins,
         doi_resolvers = settings['doi_resolvers'],
         current_doi_resolver = get_doi_resolver(request.preferences),
-        allowed_plugins = allowed_plugins,
+        enabled_plugins = enabled_plugins,
         preferences_url_params = request.preferences.get_as_url_params(),
         locked_preferences = settings['preferences']['lock'],
         preferences = True

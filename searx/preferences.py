@@ -227,9 +227,9 @@ class BooleanChoices:
         if self.locked:
             return
 
-        disabled = self.transform_form_items(items)
+        enabled = self.transform_form_items(items)
         for setting in self.choices:
-            self.choices[setting] = setting not in disabled
+            self.choices[setting] = setting in enabled
 
     @property
     def enabled(self):
@@ -509,10 +509,10 @@ class Preferences:
                 if self.key_value_settings[user_setting_name].locked:
                     continue
                 self.key_value_settings[user_setting_name].parse(user_setting)
-            elif user_setting_name == 'disabled_engines':
-                self.engines.parse_cookie(input_data.get('disabled_engines', ''), input_data.get('enabled_engines', ''))
-            elif user_setting_name == 'disabled_plugins':
-                self.plugins.parse_cookie(input_data.get('disabled_plugins', ''), input_data.get('enabled_plugins', ''))
+            elif user_setting_name == 'enabled_engines':
+                self.engines.parse_cookie(input_data.get('enabled_engines', ''), input_data.get('enabled_engines', ''))
+            elif user_setting_name == 'enabled_plugins':
+                self.plugins.parse_cookie(input_data.get('enabled_plugins', ''), input_data.get('enabled_plugins', ''))
             elif user_setting_name == 'tokens':
                 self.tokens.parse(user_setting)
             elif not any(
@@ -522,25 +522,25 @@ class Preferences:
 
     def parse_form(self, input_data: Dict[str, str]):
         """Parse formular (``<input>``) data from a ``flask.request.form``"""
-        disabled_engines = []
+        enabled_engines = []
         enabled_categories = []
-        disabled_plugins = []
+        enabled_plugins = []
         for user_setting_name, user_setting in input_data.items():
             if user_setting_name in self.key_value_settings:
                 self.key_value_settings[user_setting_name].parse(user_setting)
             elif user_setting_name.startswith('engine_'):
-                disabled_engines.append(user_setting_name)
+                enabled_engines.append(user_setting_name)
             elif user_setting_name.startswith('category_'):
                 enabled_categories.append(user_setting_name[len('category_') :])
             elif user_setting_name.startswith('plugin_'):
-                disabled_plugins.append(user_setting_name)
+                enabled_plugins.append(user_setting_name)
             elif user_setting_name == 'tokens':
                 self.tokens.parse_form(user_setting)
             else:
                 self.unknown_params[user_setting_name] = user_setting
         self.key_value_settings['categories'].parse_form(enabled_categories)
-        self.engines.parse_form(disabled_engines)
-        self.plugins.parse_form(disabled_plugins)
+        self.engines.parse_form(enabled_engines)
+        self.plugins.parse_form(enabled_plugins)
 
     # cannot be used in case of engines or plugins
     def get_value(self, user_setting_name: str):
