@@ -222,7 +222,7 @@ def get_locale():
 babel = Babel(app, locale_selector=get_locale)
 
 
-def _get_browser_language(req, lang_list):
+def _get_browser_language(req, lang_list) -> str:
     client = ClientPref.from_http_request(req)
     locale = match_locale(client.locale_tag, lang_list, fallback='en')
     return locale
@@ -368,17 +368,6 @@ def get_translations():
     }
 
 
-def get_enabled_categories(category_names: Iterable[str]):
-    """The categories in ``category_names```for which there is no active engine
-    are filtered out and a reduced list is returned."""
-
-    enabled_engines = [item[0] for item in request.preferences.engines.get_enabled()]
-    enabled_categories = set()
-    for engine_name in enabled_engines:
-        enabled_categories.update(engines[engine_name].categories)
-    return [x for x in category_names if x in enabled_categories]
-
-
 def get_pretty_url(parsed_url: urllib.parse.ParseResult):
     path = parsed_url.path
     path = path[:-1] if len(path) > 0 and path[-1] == '/' else path
@@ -428,7 +417,7 @@ def render(template_name: str, **kwargs):
     kwargs['theme'] = request.preferences.get_value('theme')
     kwargs['method'] = request.preferences.get_value('method')
     kwargs['categories_as_tabs'] = list(settings['categories_as_tabs'].keys())
-    kwargs['categories'] = get_enabled_categories(settings['categories_as_tabs'].keys())
+    kwargs['categories'] = [x for x in settings['categories_as_tabs'] if x in request.preferences.engines]
     kwargs['DEFAULT_CATEGORY'] = DEFAULT_CATEGORY
 
     # i18n
@@ -1085,7 +1074,7 @@ def preferences():
         doi_resolvers = settings['doi_resolvers'],
         current_doi_resolver = get_doi_resolver(request.preferences),
         enabled_plugins = enabled_plugins,
-        preferences_url_params = request.preferences.get_as_url_params(),
+        preferences_url_params = request.preferences.url_params,
         locked_preferences = settings['preferences']['lock'],
         preferences = True
         # fmt: on

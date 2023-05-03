@@ -8,284 +8,423 @@
 from base64 import urlsafe_b64encode, urlsafe_b64decode
 from zlib import compress, decompress
 from urllib.parse import parse_qs, urlencode
-from typing import Iterable, Dict, List, Optional
+from typing import Iterable, Dict, List, Set, Optional, Tuple
+from collections import OrderedDict
 
 import flask
 import babel
+import babel.core
 
-from searx import settings, autocomplete
+from searx import get_setting, autocomplete, locales
 from searx.enginelib import Engine
 from searx.plugins import Plugin
-from searx.locales import LOCALE_NAMES
-from searx.webutils import VALID_LANGUAGE_CODE
 from searx.engines import DEFAULT_CATEGORY
 
+from searx import logger
 
-COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 5  # 5 years
-DOI_RESOLVERS = list(settings['doi_resolvers'])
+logger = logger.getChild('preferences')
+
+COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
+
+UNSET_VALUES = ('', 'none', 'false', 'null')  # list of lowerkey strings
+MAP_STR2BOOL = OrderedDict(
+    # when one value maps to multiple keys, we need a ordering for the value to
+    # key mapping.  THe string representation is normalized to the first
+    # macthing boolean value ('0' or '1')
+    ('0', False),
+    ('1', True),
+    ('on', True),
+    ('off', False),
+    ('true', True),
+    ('false', False),
+    ('', False),  # unset is mapped to False
+    ('none', False),  # None is mapped to False
+)
+
+
+def is_locked(name: str):
+    """Checks if a given setting name is locked by settings.yml"""
+    lock: List = get_setting('preferences.lock')
+    if not lock:
+        return False
+    return name in lock
 
 
 class ValidationException(Exception):
-
     """Exption from ``cls.__init__`` when configuration value is invalid."""
 
 
 class Setting:
-    """Base class of user settings"""
+    """Base class of user settings
 
-    def __init__(self, default_value, locked: bool = False):
-        super().__init__()
-        self.value = default_value
+    ``self.value`` :
+        A python value (object). The string representation of this value is
+        ``str(self)``.
+
+    ``self.unset_values`` :
+        A list of lowerkey strings like ``('', 'none', 'false', 'null')``.  By
+        default, a setting is not nullable.  The value of a unset setting is
+        ``None``.  The first item in the list is used for normalization of the
+        string representation (:py:obj:`Setting.value_str`).
+
+    ``self.locked`` : bool
+        The setting is locked (:py:obj:`True`) or unlocked (:py:obj:`False`)
+
+    """
+
+    def __init__(
+        self,
+        default_value,  # any type that can be converted to a string
+        locked: bool = False,
+        unset_values: Optional[List[str]] = None,
+    ):
+        self.set_value(default_value)
         self.locked = locked
+        self.unset_values = unset_values or []
 
-    def parse(self, data: str):
-        """Parse ``data`` and store the result at ``self.value``
+    def value_str(self, value) -> str:
+        """Returns the string representation of the value / can be used in HTML
+        forms and cookies.
 
-        If needed, its overwritten in the inheritance.
-        """
-        self.value = data
-
-    def get_value(self):
-        """Returns the value of the setting
+        If setting is *nullable* the string representation of the value is
+        normalized to the first item in the ``self.unset_values`` list.
 
         If needed, its overwritten in the inheritance.
+
         """
-        return self.value
+        val_str = str(value)
+        if self.unset_values and val_str.lower() in self.unset_values:
+            return self.unset_values[0].lower()
+        return val_str
 
-    def save(self, name: str, resp: flask.Response):
-        """Save cookie ``name`` in the HTTP response object
+    def parse_str(self, data: str):
+        """Parse ``data`` string and return a *value* object.  Overwritten in
+        the inheritance.
 
-        If needed, its overwritten in the inheritance."""
-        resp.set_cookie(name, self.value, max_age=COOKIE_MAX_AGE)
+        """
+        val_str = str(data)
+        if self.unset_values and val_str.lower() in self.unset_values:
+            return None
+        return data
 
+    def validate(self, value) -> bool:
+        """Validates ``value``.  If invalid, a :py:obj:`ValidationException` is
+        raised.  To be valid, a value and its string representation needs to be
+        reversible (:py:obj:`Setting.value_str` & :py:obj:`Setting.parse_str`)::
 
-class StringSetting(Setting):
-    """Setting of plain string values"""
+            self.parse_str(value_str(value)) == value
 
+        Overwritten in the inheritance.
 
-class EnumStringSetting(Setting):
-    """Setting of a value which can only come from the given choices"""
+        """
+        try:
+            val_str = self.value_str(value)
+            val_obj = self.parse_str(val_str)
 
-    def __init__(self, default_value: str, choices: Iterable[str], locked=False):
-        super().__init__(default_value, locked)
-        self.choices = choices
-        self._validate_selection(self.value)
+        except Exception as exc:
+            raise ValidationException(f'string cast of {repr(value)} fails with: {exc}')
 
-    def _validate_selection(self, selection: str):
-        if selection not in self.choices:
-            raise ValidationException('Invalid value: "{0}"'.format(selection))
+        if self.unset_values and val_str in self.unset_values:
+            return True
 
-    def parse(self, data: str):
-        """Parse and validate ``data`` and store the result at ``self.value``"""
-        self._validate_selection(data)
-        self.value = data
+        if val_obj != value:
+            raise ValidationException(f'value {repr(value)} is not reversible <--> {repr(val_obj)}')
 
+        return True
 
-class MultipleChoiceSetting(Setting):
-    """Setting of values which can only come from the given choices"""
+    def set_value(self, value):
+        """Validates & set ``value``"""
+        self.validate(value)
+        self.value = value
 
-    def __init__(self, default_value: List[str], choices: Iterable[str], locked=False):
-        super().__init__(default_value, locked)
-        self.choices = choices
-        self._validate_selections(self.value)
+    def parse(self, data: str) -> bool:
+        """If setting is not *locked*, validate & set value from typecast of
+        data string (see :py:obj:`self.parse_str`).  Returns ``False`` if locked
+        and ``True`` if value is valid.
 
-    def _validate_selections(self, selections: List[str]):
-        for item in selections:
-            if item not in self.choices:
-                raise ValidationException('Invalid value: "{0}"'.format(selections))
-
-    def parse(self, data: str):
-        """Parse and validate ``data`` and store the result at ``self.value``"""
-        if data == '':
-            self.value = []
-            return
-
-        elements = data.split(',')
-        self._validate_selections(elements)
-        self.value = elements
-
-    def parse_form(self, data: List[str]):
+        """
         if self.locked:
-            return
-
-        self.value = []
-        for choice in data:
-            if choice in self.choices and choice not in self.value:
-                self.value.append(choice)
+            return False
+        self.set_value(self.parse_str(data))
+        return True
 
     def save(self, name: str, resp: flask.Response):
-        """Save cookie ``name`` in the HTTP response object"""
-        resp.set_cookie(name, ','.join(self.value), max_age=COOKIE_MAX_AGE)
+        """Set cookie ``name`` in HTTP response object, if setting is locked,
+        leave reponse-cookie unset.
 
+        If needed, its overwritten in the inheritance.
 
-class SetSetting(Setting):
-    """Setting of values of type ``set`` (comma separated string)"""
+        """
+        if not self.locked:
+            resp.set_cookie(name, str(self), max_age=COOKIE_MAX_AGE)
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.values = set()
-
-    def get_value(self):
-        """Returns a string with comma separated values."""
-        return ','.join(self.values)
-
-    def parse(self, data: str):
-        """Parse and validate ``data`` and store the result at ``self.value``"""
-        if data == '':
-            self.values = set()
-            return
-
-        elements = data.split(',')
-        for element in elements:
-            self.values.add(element)
-
-    def parse_form(self, data: str):
-        if self.locked:
-            return
-
-        elements = data.split(',')
-        self.values = set(elements)
-
-    def save(self, name: str, resp: flask.Response):
-        """Save cookie ``name`` in the HTTP response object"""
-        resp.set_cookie(name, ','.join(self.values), max_age=COOKIE_MAX_AGE)
-
-
-class SearchLanguageSetting(EnumStringSetting):
-    """Available choices may change, so user's value may not be in choices anymore"""
-
-    def _validate_selection(self, selection):
-        if selection != '' and selection != 'auto' and not VALID_LANGUAGE_CODE.match(selection):
-            raise ValidationException('Invalid language code: "{0}"'.format(selection))
-
-    def parse(self, data: str):
-        """Parse and validate ``data`` and store the result at ``self.value``"""
-        if data not in self.choices and data != self.value:
-            # hack to give some backwards compatibility with old language cookies
-            data = str(data).replace('_', '-')
-            lang = data.split('-', maxsplit=1)[0]
-
-            if data in self.choices:
-                pass
-            elif lang in self.choices:
-                data = lang
-            else:
-                data = self.value
-        self._validate_selection(data)
-        self.value = data
+    def __str__(self) -> str:
+        return self.value_str(self.value)
 
 
 class MapSetting(Setting):
     """Setting of a value that has to be translated in order to be storable"""
 
-    def __init__(self, default_value, map: Dict[str, object], locked=False):  # pylint: disable=redefined-builtin
-        super().__init__(default_value, locked)
-        self.map = map
+    def __init__(
+        self,
+        default_value,
+        str2val: 'OrderedDict[str, object]',  # only mapping types are valid
+        locked=False,
+        unset_values: Optional[List[str]] = None,
+    ):
 
-        if self.value not in self.map.values():
-            raise ValidationException('Invalid default value')
+        self.str2val = str2val
+        super().__init__(default_value, locked, unset_values)
 
-    def parse(self, data: str):
-        """Parse and validate ``data`` and store the result at ``self.value``"""
+    def value_str(self, value) -> str:
+        if self.unset_values and str(value).lower() in self.unset_values:
+            return str(self.unset_values[0].lower())
+        for k, val in self.str2val.items():
+            if val == value:
+                return k
+        raise ValueError('value %s is not in: %s' % (value, self.str2val.values()))
 
-        if data not in self.map:
-            raise ValidationException('Invalid choice: {0}'.format(data))
-        self.value = self.map[data]
-        self.key = data  # pylint: disable=attribute-defined-outside-init
+    def parse_str(self, data: str):
+        if self.unset_values and data.lower() in self.unset_values:
+            return None
+        return self.str2val[data]
 
-    def save(self, name: str, resp: flask.Response):
-        """Save cookie ``name`` in the HTTP response object"""
-        if hasattr(self, 'key'):
-            resp.set_cookie(name, self.key, max_age=COOKIE_MAX_AGE)
+    def validate(self, value) -> bool:
+        if self.value_str(value) is None:
+            raise ValidationException(f'Invalid value: {repr(value)}')
+        return super().validate(value)
 
 
-class BooleanChoices:
-    """Maps strings to booleans that are either true or false."""
+class BoolSetting(MapSetting):
+    """Setting of a ``True`` / ``False`` value"""
 
-    def __init__(self, name: str, choices: Dict[str, bool], locked: bool = False):
-        self.name = name
-        self.choices = choices
-        self.locked = locked
-        self.default_choices = dict(choices)
+    def __init__(self, default_val: bool, locked=False):
+        super().__init__(default_val, MAP_STR2BOOL, locked)
 
-    def transform_form_items(self, items):
-        return items
 
-    def transform_values(self, values):
-        return values
+class StringSetting(Setting):
+    """Setting of plain string values"""
 
-    def parse_cookie(self, data_disabled: str, data_enabled: str):
-        for disabled in data_disabled.split(','):
-            if disabled in self.choices:
-                self.choices[disabled] = False
+    def __init__(
+        self,
+        default_value: str,  # only string types are valid
+        locked: bool = False,
+        unset_values: Optional[List[str]] = None,
+    ):
+        super().__init__(default_value, locked, unset_values)
 
-        for enabled in data_enabled.split(','):
-            if enabled in self.choices:
-                self.choices[enabled] = True
+    def parse_str(self, data: str) -> Optional[str]:
+        return str(super().parse_str(data))
 
-    def parse_form(self, items: List[str]):
-        if self.locked:
-            return
+    def validate(self, value: str) -> bool:
+        if not isinstance(value, str):
+            raise ValidationException(f'Invalid type: {repr(value)}')
+        return super().validate(value)
 
-        enabled = self.transform_form_items(items)
-        for setting in self.choices:
-            self.choices[setting] = setting in enabled
+
+class EnumStringSetting(StringSetting):
+    """Setting of a value which can unset or come from the given catalog
+
+    - unset_values: a list of lowerkey strings like ``('', 'none', 'false', 'null')``
+    """
+
+    def __init__(
+        self,
+        default_value: str,  # only string types are valid
+        catalog: Iterable[str],
+        locked: bool = False,
+        unset_values: Optional[List[str]] = None,
+    ):
+        self.catalog = catalog
+        super().__init__(default_value, locked, unset_values)
+
+    def validate(self, value: str) -> bool:
+        if self.value_str(value) not in self.catalog:
+            raise ValidationException(f'Invalid value: "{value}"')
+        return super().validate(value)
+
+
+class SetStringSetting(Setting):
+    """Setting of comma separated string values of type ``set``.
+
+    Since the comma character is already used for separating in the string
+    representation, the string values of the selection options must not contain
+    a comma character.
+    """
+
+    def __init__(
+        self,
+        default_value: Set[str],  # only a set of string types are valid
+        locked: bool = False,
+        unset_values: Optional[List[str]] = None,
+    ):
+
+        super().__init__(default_value, locked, unset_values)
+
+    def value_str(self, value) -> str:
+        if self.unset_values and str(value).lower() in self.unset_values:
+            return str(self.unset_values[0].lower())
+        return ','.join(value)
+
+    def parse_str(self, data: str) -> Optional[set]:
+        if self.unset_values and data.lower() in self.unset_values:
+            return None
+        return {x.strip() for x in data.split(',')}
+
+    def validate(self, value: Set[str]) -> bool:
+        if not isinstance(value, Iterable):
+            raise ValidationException(f'Invalid type: {repr(value)}')
+        for item in self.value:
+            if not isinstance(item, str):
+                raise ValidationException(f'item is not a string type: {repr(item)}')
+        return super().validate(value)
+
+
+class MultipleChoiceSetting(SetStringSetting):
+    """Setting of comma separated string values which can only come from the
+    given catalog.  About limitations see :py:obj:`SetStringSetting`.
+
+    """
+
+    def __init__(
+        self,
+        default_value: Set[str],
+        catalog: Iterable[str],
+        locked: bool = False,
+        unset_values: Optional[List[str]] = None,
+    ):
+        self.catalog = set(catalog)
+        super().__init__(set(default_value), locked, unset_values)
+
+    def validate(self, value: Set[str]) -> bool:
+        if not isinstance(value, Iterable):
+            raise ValidationException(f'Invalid type: {repr(value)}')
+        for item in self.value:
+            if self.value_str(item) not in self.catalog:
+                raise ValidationException(f'Set contains invalid value: "{item}"')
+        return super().validate(value)
+
+
+class BoolGroup(dict):
+    """A mapable group of boolean settings."""
+
+    def __init__(self, group: str, defaults: Dict[str, bool]):
+        super().__init__()
+        self.group = group
+        self.defaults = defaults
+
+        self.key_enabled = f'enabled_{self.group}'
+        self.key_disabled = f'disabled_{self.group}'
+
+        for name, value in self.defaults.items():
+            k = f'{self.group}_{name}'
+            self[k] = BoolSetting(value)
 
     @property
-    def enabled(self):
-        return (k for k, v in self.choices.items() if v)
+    def enabled(self) -> List[str]:
+        return [k for k, v in self.items() if v.value]
 
     @property
-    def disabled(self):
-        return (k for k, v in self.choices.items() if not v)
+    def disable(self) -> List[str]:
+        return [k for k, v in self.items() if not v.value]
+
+    def set_values(self, name_list: List[str], value: bool):
+        for name in name_list:
+            k = f'{self.group}_{name}'
+            if k in self:
+                self[k].set_value(value)
+
+    def parse(self, settings: Dict[str, str]):
+        enabled = [x.strip() for x in settings.get(self.key_enabled, '').split(',')]
+        self.set_values(enabled, True)
+
+        disabled = [x.strip() for x in settings.get(self.key_disabled, '').split(',')]
+        self.set_values(disabled, False)
+
+    @property
+    def modified(self) -> Tuple[Dict[str, BoolSetting], Dict[str, BoolSetting]]:
+        """Tuple with enabled in first and disabled settings in second position."""
+        enabled, disabled = {}, {}
+        for name, default in self.defaults.items():
+            k = f'{self.group}_{name}'
+            value = self[k].value
+            if default != value:
+                if value:
+                    enabled[name] = value
+                else:
+                    disabled[name] = value
+        return enabled, disabled
+
+    @property
+    def settings(self) -> Dict[str, str]:
+        enabled, disabled = self.modified
+        enabled, disabled = ','.join(enabled.keys()), ','.join(disabled.keys())
+        return {
+            self.key_enabled: enabled,
+            self.key_disabled: disabled,
+        }
 
     def save(self, resp: flask.Response):
-        """Save cookie in the HTTP response object"""
-        disabled_changed = (k for k in self.disabled if self.default_choices[k])
-        enabled_changed = (k for k in self.enabled if not self.default_choices[k])
-        resp.set_cookie('disabled_{0}'.format(self.name), ','.join(disabled_changed), max_age=COOKIE_MAX_AGE)
-        resp.set_cookie('enabled_{0}'.format(self.name), ','.join(enabled_changed), max_age=COOKIE_MAX_AGE)
-
-    def get_disabled(self):
-        return self.transform_values(list(self.disabled))
-
-    def get_enabled(self):
-        return self.transform_values(list(self.enabled))
+        for k, v in self.settings.items():
+            resp.set_cookie(k, v, max_age=COOKIE_MAX_AGE)
 
 
-class EnginesSetting(BooleanChoices):
-    """Engine settings"""
-
-    def __init__(self, default_value, engines: Iterable[Engine]):
-        choices = {}
-        for engine in engines:
-            for category in engine.categories:
-                if not category in list(settings['categories_as_tabs'].keys()) + [DEFAULT_CATEGORY]:
-                    continue
-                choices['{}__{}'.format(engine.name, category)] = not engine.disabled
-        super().__init__(default_value, choices)
-
-    def transform_form_items(self, items):
-        return [item[len('engine_') :].replace('_', ' ').replace('  ', '__') for item in items]
-
-    def transform_values(self, values):
-        if len(values) == 1 and next(iter(values)) == '':
-            return []
-        transformed_values = []
-        for value in values:
-            engine, category = value.split('__')
-            transformed_values.append((engine, category))
-        return transformed_values
-
-
-class PluginsSetting(BooleanChoices):
+class PluginGroup(BoolGroup):
     """Plugin settings"""
 
-    def __init__(self, default_value, plugins: Iterable[Plugin]):
-        super().__init__(default_value, {plugin.id: plugin.default_on for plugin in plugins})
+    def __init__(self, plugins: Iterable[Plugin]):
 
-    def transform_form_items(self, items):
-        return [item[len('plugin_') :] for item in items]
+        defaults = {plugin.id: plugin.default_on for plugin in plugins}
+        super().__init__('plugins', defaults)
+
+
+class EngineCategoryGroup(BoolGroup):
+    """Engine/Category settings.  Engines can be enabled/disabled per UI
+    category, the ID of the setting is a combination of::
+
+       {engine.name}__{ui-categoriy}
+
+    """
+
+    def __init__(self, engines: Iterable[Engine]):
+        self.eng_cat: Dict[str, Set[str]] = {}
+        defaults = {}
+        ui_categories = list(get_setting('categories_as_tabs').keys()) + [DEFAULT_CATEGORY]
+
+        for eng in engines:
+            eng_name = eng.name
+            c = set()
+
+            for cat in eng.categories:
+                c.add(cat)
+                if cat in ui_categories:
+                    defaults[f'{eng_name}__{cat}'] = not eng.disabled
+            self.eng_cat[eng_name] = c
+
+        super().__init__('engines', defaults)
+
+    @property
+    def enabled(self) -> Set[Tuple[str, str]]:
+        enabled = set()
+        for eng_name, categories in self.eng_cat:
+            for cat in categories:
+                item = self.get(f'{eng_name}__{cat}')
+                if item and item.value:
+                    enabled.add(cat)
+        return enabled
+
+    @property
+    def disabled(self) -> Set[Tuple[str, str]]:
+        disabled = set()
+        for eng_name, categories in self.eng_cat:
+            for cat in categories:
+                item = self.get(f'{eng_name}__{cat}')
+                if item and not item.value:
+                    disabled.add(cat)
+        return disabled
+
+    def enabled_categories(self) -> Set[str]:
+        return set(cat for _, cat in self.enabled)
 
 
 class ClientPref:
@@ -293,7 +432,7 @@ class ClientPref:
 
     # hint: searx.webapp.get_client_settings should be moved into this class
 
-    locale: babel.Locale
+    locale: Optional[babel.Locale]
     """Locale prefered by the client."""
 
     def __init__(self, locale: Optional[babel.Locale] = None):
@@ -347,152 +486,108 @@ class Preferences:
         client: Optional[ClientPref] = None,
     ):
 
-        super().__init__()
+        self.client = client or ClientPref()
+
+        # pylint: disable=invalid-name
+        CATALOG_DOI_RESOLVER = set(get_setting('doi_resolvers').keys())
+        CATALOG_SEARCH_LOCALE = set(get_setting('search.languages'))
+        CATALOG_UI_LOCALE = set(locales.LOCALE_NAMES.keys())
+        CATALOG_AUTOCOMPLETE = set(autocomplete.backends.keys())
+        CATALOG_SAVE_SEARCH = OrderedDict([('0', 0), ('1', 1), ('2', 2)])
+
+        self.unknown_params: Dict[str, Setting] = {}
+        self.engines = EngineCategoryGroup(engines=engines.values())
+        self.plugins = PluginGroup(plugins=plugins)
 
         self.key_value_settings: Dict[str, Setting] = {
-            # fmt: off
-            'categories': MultipleChoiceSetting(
-                ['general'],
-                locked=is_locked('categories'),
-                choices=categories + ['none']
-            ),
-            'language': SearchLanguageSetting(
-                settings['search']['default_lang'],
-                locked=is_locked('language'),
-                choices=settings['search']['languages'] + ['']
-            ),
-            'locale': EnumStringSetting(
-                settings['ui']['default_locale'],
-                locked=is_locked('locale'),
-                choices=list(LOCALE_NAMES.keys()) + ['']
-            ),
+            'advanced_search': BoolSetting(get_setting('ui.advanced_search'), locked=is_locked('advanced_search')),
             'autocomplete': EnumStringSetting(
-                settings['search']['autocomplete'],
+                get_setting('search.autocomplete'),
                 locked=is_locked('autocomplete'),
-                choices=list(autocomplete.backends.keys()) + ['']
+                catalog=CATALOG_AUTOCOMPLETE,
+                unset_values=UNSET_VALUES,
             ),
-            'image_proxy': MapSetting(
-                settings['server']['image_proxy'],
-                locked=is_locked('image_proxy'),
-                map={
-                    '': settings['server']['image_proxy'],
-                    '0': False,
-                    '1': True,
-                    'True': True,
-                    'False': False
-                }
+            'categories': MultipleChoiceSetting(
+                ['general'], locked=is_locked('categories'), catalog=categories, unset_values=UNSET_VALUES
+            ),
+            'center_alignment': BoolSetting(get_setting('ui.center_alignment'), locked=is_locked('center_alignment')),
+            'doi_resolver': MultipleChoiceSetting(
+                get_setting('default_doi_resolver'), locked=is_locked('doi_resolver'), catalog=CATALOG_DOI_RESOLVER
+            ),
+            'image_proxy': BoolSetting(get_setting('server.image_proxy'), locked=is_locked('image_proxy')),
+            'infinite_scroll': BoolSetting(get_setting('ui.infinite_scroll'), locked=is_locked('infinite_scroll')),
+            # FIXME: language should renamed to search_locale
+            'language': EnumStringSetting(
+                get_setting('search.default_lang'),
+                locked=is_locked('language'),
+                catalog=CATALOG_SEARCH_LOCALE,
+                unset_values=UNSET_VALUES,
             ),
             'method': EnumStringSetting(
-                settings['server']['method'],
-                locked=is_locked('method'),
-                choices=('GET', 'POST')
+                get_setting('server.method'), locked=is_locked('method'), catalog=('GET', 'POST')
+            ),
+            'query_in_title': BoolSetting(get_setting('ui.query_in_title'), locked=is_locked('query_in_title')),
+            'results_on_new_tab': BoolSetting(
+                get_setting('ui.results_on_new_tab'), locked=is_locked('results_on_new_tab')
             ),
             'safesearch': MapSetting(
-                settings['search']['safe_search'],
-                locked=is_locked('safesearch'),
-                map={
-                    '0': 0,
-                    '1': 1,
-                    '2': 2
-                }
-            ),
-            'theme': EnumStringSetting(
-                settings['ui']['default_theme'],
-                locked=is_locked('theme'),
-                choices=themes
-            ),
-            'results_on_new_tab': MapSetting(
-                settings['ui']['results_on_new_tab'],
-                locked=is_locked('results_on_new_tab'),
-                map={
-                    '0': False,
-                    '1': True,
-                    'False': False,
-                    'True': True
-                }
-            ),
-            'doi_resolver': MultipleChoiceSetting(
-                [settings['default_doi_resolver'], ],
-                locked=is_locked('doi_resolver'),
-                choices=DOI_RESOLVERS
+                get_setting('search.safe_search'), locked=is_locked('safesearch'), str2val=CATALOG_SAVE_SEARCH
             ),
             'simple_style': EnumStringSetting(
-                settings['ui']['theme_args']['simple_style'],
+                get_setting('ui.theme_args.simple_style'),
                 locked=is_locked('simple_style'),
-                choices=['', 'auto', 'light', 'dark']
+                catalog=['', 'auto', 'light', 'dark'],
             ),
-            'center_alignment': MapSetting(
-                settings['ui']['center_alignment'],
-                locked=is_locked('center_alignment'),
-                map={
-                    '0': False,
-                    '1': True,
-                    'False': False,
-                    'True': True
-                }
+            'theme': EnumStringSetting(get_setting('ui.default_theme'), locked=is_locked('theme'), catalog=themes),
+            'tokens': SetStringSetting(set()),
+            'ui_locale': EnumStringSetting(
+                get_setting('ui.default_locale'),
+                locked=is_locked('locale'),
+                catalog=CATALOG_UI_LOCALE,
+                unset_values=UNSET_VALUES,
             ),
-            'advanced_search': MapSetting(
-                settings['ui']['advanced_search'],
-                locked=is_locked('advanced_search'),
-                map={
-                    '0': False,
-                    '1': True,
-                    'False': False,
-                    'True': True,
-                    'on': True,
-                }
-            ),
-            'query_in_title': MapSetting(
-                settings['ui']['query_in_title'],
-                locked=is_locked('query_in_title'),
-                map={
-                    '': settings['ui']['query_in_title'],
-                    '0': False,
-                    '1': True,
-                    'True': True,
-                    'False': False
-                }
-            ),
-            'infinite_scroll': MapSetting(
-                settings['ui']['infinite_scroll'],
-                locked=is_locked('infinite_scroll'),
-                map={
-                    '': settings['ui']['infinite_scroll'],
-                    '0': False,
-                    '1': True,
-                    'True': True,
-                    'False': False
-                }
-            ),
-            # fmt: on
         }
 
-        self.engines = EnginesSetting('engines', engines=engines.values())
-        self.plugins = PluginsSetting('plugins', plugins=plugins)
-        self.tokens = SetSetting('tokens')
-        self.client = client or ClientPref()
-        self.unknown_params: Dict[str, str] = {}
+    @property
+    def settings(self) -> Dict[str, str]:
+        """Returns a dictionary where names of a setting are mapped to the
+        string representation of the value / can be used in HTML forms and
+        cookies.
 
-    def get_as_url_params(self):
-        """Return preferences as URL parameters"""
-        settings_kv = {}
+        The returned value is a condensed version of the (modified) settings:
+
+        1. The dictionary does not contain locked settings.
+        2. From instances of :py:obj:`BoolGroup` only the enabled & disabled
+           items are used (:py:obj:`BoolGroup.settings`).
+
+        To get the python type of a value, use :py:obj:`Preferences.get_value`.
+
+        """
+        ret_val = {}
         for k, v in self.key_value_settings.items():
-            if v.locked:
-                continue
-            if isinstance(v, MultipleChoiceSetting):
-                settings_kv[k] = ','.join(v.get_value())
-            else:
-                settings_kv[k] = v.get_value()
+            if not v.locked:
+                ret_val[k] = str(v)
+        ret_val.update(self.engines.settings)
+        ret_val.update(self.plugins.settings)
+        return ret_val
 
-        settings_kv['disabled_engines'] = ','.join(self.engines.disabled)
-        settings_kv['enabled_engines'] = ','.join(self.engines.enabled)
+    def parse_dict(self, input_data: Dict[str, str]):
+        """parse preferences from request (``flask.request.form``)"""
 
-        settings_kv['disabled_plugins'] = ','.join(self.plugins.disabled)
-        settings_kv['enabled_plugins'] = ','.join(self.plugins.enabled)
+        self.engines.parse(input_data)
+        self.plugins.parse(input_data)
 
-        settings_kv['tokens'] = ','.join(self.tokens.values)
+        for name, value in input_data.items():
 
-        return urlsafe_b64encode(compress(urlencode(settings_kv).encode())).decode()
+            if name in self.key_value_settings:
+                self.key_value_settings[name].parse(value)
+            elif not any(name.startswith(x) for x in ['enabled_', 'disabled_']):
+                self.unknown_params[name] = Setting(value)
+
+    @property
+    def url_params(self):
+        """Return preferences as URL parameters"""
+        return urlsafe_b64encode(compress(urlencode(self.settings).encode())).decode()
 
     def parse_encoded_data(self, input_data: str):
         """parse (base64) preferences from request (``flask.request.form['preferences']``)"""
@@ -502,86 +597,34 @@ class Preferences:
             dict_data[x] = y[0]
         self.parse_dict(dict_data)
 
-    def parse_dict(self, input_data: Dict[str, str]):
-        """parse preferences from request (``flask.request.form``)"""
-        for user_setting_name, user_setting in input_data.items():
-            if user_setting_name in self.key_value_settings:
-                if self.key_value_settings[user_setting_name].locked:
-                    continue
-                self.key_value_settings[user_setting_name].parse(user_setting)
-            elif user_setting_name == 'enabled_engines':
-                self.engines.parse_cookie(input_data.get('enabled_engines', ''), input_data.get('enabled_engines', ''))
-            elif user_setting_name == 'enabled_plugins':
-                self.plugins.parse_cookie(input_data.get('enabled_plugins', ''), input_data.get('enabled_plugins', ''))
-            elif user_setting_name == 'tokens':
-                self.tokens.parse(user_setting)
-            elif not any(
-                user_setting_name.startswith(x) for x in ['enabled_', 'disabled_', 'engine_', 'category_', 'plugin_']
-            ):
-                self.unknown_params[user_setting_name] = user_setting
+    def get_value(self, name: str):
+        """Returns the value for setting of ``name``"""
 
-    def parse_form(self, input_data: Dict[str, str]):
-        """Parse formular (``<input>``) data from a ``flask.request.form``"""
-        enabled_engines = []
-        enabled_categories = []
-        enabled_plugins = []
-        for user_setting_name, user_setting in input_data.items():
-            if user_setting_name in self.key_value_settings:
-                self.key_value_settings[user_setting_name].parse(user_setting)
-            elif user_setting_name.startswith('engine_'):
-                enabled_engines.append(user_setting_name)
-            elif user_setting_name.startswith('category_'):
-                enabled_categories.append(user_setting_name[len('category_') :])
-            elif user_setting_name.startswith('plugin_'):
-                enabled_plugins.append(user_setting_name)
-            elif user_setting_name == 'tokens':
-                self.tokens.parse_form(user_setting)
-            else:
-                self.unknown_params[user_setting_name] = user_setting
-        self.key_value_settings['categories'].parse_form(enabled_categories)
-        self.engines.parse_form(enabled_engines)
-        self.plugins.parse_form(enabled_plugins)
-
-    # cannot be used in case of engines or plugins
-    def get_value(self, user_setting_name: str):
-        """Returns the value for ``user_setting_name``"""
-        ret_val = None
-        if user_setting_name in self.key_value_settings:
-            ret_val = self.key_value_settings[user_setting_name].get_value()
-        if user_setting_name in self.unknown_params:
-            ret_val = self.unknown_params[user_setting_name]
-        return ret_val
+        for setting in [
+            self.key_value_settings,
+            self.engines,
+            self.plugins,
+            self.unknown_params,
+        ]:
+            item = setting.get(name)
+            if item:
+                return item.value
 
     def save(self, resp: flask.Response):
         """Save cookie in the HTTP response object"""
-        for user_setting_name, user_setting in self.key_value_settings.items():
-            # pylint: disable=unnecessary-dict-index-lookup
-            if self.key_value_settings[user_setting_name].locked:
-                continue
-            user_setting.save(user_setting_name, resp)
         self.engines.save(resp)
         self.plugins.save(resp)
-        self.tokens.save('tokens', resp)
-        for k, v in self.unknown_params.items():
-            resp.set_cookie(k, v, max_age=COOKIE_MAX_AGE)
-        return resp
+        for name, setting in self.key_value_settings.items():
+            setting.save(name, resp)
+        for name, setting in self.unknown_params.items():
+            setting.save(name, resp)
+
+    @property
+    def tokens(self):
+        return self.key_value_settings['tokens'].value
 
     def validate_token(self, engine):
         valid = True
         if hasattr(engine, 'tokens') and engine.tokens:
-            valid = False
-            for token in self.tokens.values:
-                if token in engine.tokens:
-                    valid = True
-                    break
-
+            valid = bool(self.tokens.intersect(engine.tokens))
         return valid
-
-
-def is_locked(setting_name: str):
-    """Checks if a given setting name is locked by settings.yml"""
-    if 'preferences' not in settings:
-        return False
-    if 'lock' not in settings['preferences']:
-        return False
-    return setting_name in settings['preferences']['lock']
