@@ -241,7 +241,7 @@ def get_search_query_from_webapp(
         raise SearxParameterException('q', '')
 
     # set blocked engines
-    disabled_engines = preferences.engines.get_disabled()
+    disabled_engines = preferences.engines.get_disabled()  # FIXME
 
     # parse query, if tags are set, which change
     # the search engine or search-language
