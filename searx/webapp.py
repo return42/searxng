@@ -472,7 +472,6 @@ def render(template_name: str, **kwargs):
         + urlencode(
             {
                 'method': request.preferences.get_value('method'),
-                'autocomplete': request.preferences.get_value('autocomplete'),
             }
         )
     )
@@ -1267,10 +1266,9 @@ Disallow: /*?*q=*
     )
 
 
-@app.route('/opensearch.xml', methods=['GET'])
+@app.route('/opensearch.xml', methods=['GET', 'POST'])
 def opensearch():
     method = request.preferences.get_value('method')
-    autocomplete = request.preferences.get_value('autocomplete')
 
     # chrome/chromium only supports HTTP GET....
     if request.headers.get('User-Agent', '').lower().find('webkit') >= 0:
@@ -1279,7 +1277,7 @@ def opensearch():
     if method not in ('POST', 'GET'):
         method = 'POST'
 
-    ret = render('opensearch.xml', opensearch_method=method, autocomplete=autocomplete)
+    ret = render('opensearch.xml', opensearch_method=method)
     resp = Response(response=ret, status=200, mimetype="application/opensearchdescription+xml")
     return resp
 
