@@ -5,10 +5,13 @@
 
 from urllib.parse import urlencode
 
+from searx.utils import markdown_to_text
+
 about = {
     "website": 'https://yummly.com',
     "wikidata_id": 'Q8061140',
-    "official_api_documentation": 'https://developer.yummly.com/documentation.html', # not used since it requires an api key
+    # not used since it requires an api key
+    "official_api_documentation": 'https://developer.yummly.com/documentation.html',
     "use_official_api": False,
     "require_api_key": False,
     "results": 'JSON',
@@ -46,7 +49,7 @@ def response(resp):
         content = result['seo']['web']['meta-tags']['description']
         description = result['content']['description']
         if description is not None:
-            content = description['text']
+            content = markdown_to_text(description['text'])
 
         results.append(
             {
