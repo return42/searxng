@@ -75,6 +75,7 @@ lang2emoji = {
 }
 
 
+@network.provide_networkcontext()
 def main():
     load_engines(settings['engines'])
     # traits_map = EngineTraitsMap.from_data()
@@ -85,7 +86,6 @@ def main():
 
 def fetch_traits_map():
     """Fetchs supported languages for each engine and writes json file with those."""
-    network.set_timeout_for_thread(10.0)
 
     def log(msg):
         print(msg)

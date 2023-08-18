@@ -1,6 +1,6 @@
 import os
 
-import aiounittest
+import unittest
 
 os.environ.pop('SEARX_DEBUG', None)
 os.environ.pop('SEARX_DEBUG_LOG_LEVEL', None)
@@ -36,7 +36,7 @@ class SearxTestLayer:
         pass
 
 
-class SearxTestCase(aiounittest.AsyncTestCase):
+class SearxTestCase(unittest.TestCase):
     """Base test case for non-robot tests."""
 
     layer = SearxTestLayer

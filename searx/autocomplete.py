@@ -16,7 +16,7 @@ from searx.engines import (
     engines,
     google,
 )
-from searx.network import get as http_get
+from searx.network import NETWORKS
 from searx.exceptions import SearxEngineResponseException
 
 
@@ -24,7 +24,8 @@ def get(*args, **kwargs):
     if 'timeout' not in kwargs:
         kwargs['timeout'] = settings['outgoing']['request_timeout']
     kwargs['raise_for_httperror'] = True
-    return http_get(*args, **kwargs)
+    network_context = NETWORKS.get('autocomplete').get_context()
+    return network_context.request('GET', *args, **kwargs)
 
 
 def brave(query, _lang):

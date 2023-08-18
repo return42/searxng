@@ -12,7 +12,8 @@ from urllib.parse import urlparse
 import re
 import httpx
 
-from searx import network, logger
+from searx import logger
+from searx.network import NETWORKS
 from searx.utils import gen_useragent, detect_language
 from searx.results import ResultContainer
 from searx.search.models import SearchQuery, EngineRef
@@ -72,8 +73,8 @@ def _download_and_check_if_image(image_url: str) -> bool:
         a = time()
         try:
             # use "image_proxy" (avoid HTTP/2)
-            network.set_context_network_name('image_proxy')
-            r, stream = network.stream(
+            network_context = NETWORKS.get('image_proxy').get_context()
+            r = network_context.stream(
                 'GET',
                 image_url,
                 timeout=10.0,
@@ -96,7 +97,6 @@ def _download_and_check_if_image(image_url: str) -> bool:
             else:
                 is_image = False
             del r
-            del stream
             return is_image
         except httpx.TimeoutException:
             logger.error('Timeout for %s: %i', image_url, int(time() - a))

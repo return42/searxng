@@ -22,8 +22,7 @@ import json
 import re
 from os.path import join
 
-import httpx
-
+import searx.network
 from searx import searx_dir  # pylint: disable=E0401 C0413
 from searx.external_bang import LEAF_KEY
 
@@ -35,7 +34,7 @@ HTTP_COLON = 'http:'
 
 
 def get_bang_url():
-    response = httpx.get(URL_BV1)
+    response = searx.network.get(URL_BV1)
     response.raise_for_status()
 
     r = RE_BANG_VERSION.findall(response.text)
@@ -43,7 +42,7 @@ def get_bang_url():
 
 
 def fetch_ddg_bangs(url):
-    response = httpx.get(url)
+    response = searx.network.get(url)
     response.raise_for_status()
     return json.loads(response.content.decode())
 
@@ -155,9 +154,14 @@ def get_bangs_filename():
     return join(join(searx_dir, "data"), "external_bangs.json")
 
 
-if __name__ == '__main__':
+@searx.network.provide_networkcontext()
+def main():
     bangs_url, bangs_version = get_bang_url()
     print(f'fetch bangs from {bangs_url}')
     output = {'version': bangs_version, 'trie': parse_ddg_bangs(fetch_ddg_bangs(bangs_url))}
-    with open(get_bangs_filename(), 'w', encoding="utf8") as fp:
-        json.dump(output, fp, ensure_ascii=False, indent=4)
+    with open(get_bangs_filename(), 'w', encoding="utf8") as f:
+        json.dump(output, f, ensure_ascii=False, indent=4)
+
+
+if __name__ == '__main__':
+    main()

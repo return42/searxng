@@ -13,14 +13,15 @@ Output file: :origin:`searx/data/ahmia_blacklist.txt` (:origin:`CI Update data
 
 from os.path import join
 
-import requests
 from searx import searx_dir
+from searx.network import provide_networkcontext, get
 
 URL = 'https://ahmia.fi/blacklist/banned/'
 
 
+@provide_networkcontext()
 def fetch_ahmia_blacklist():
-    resp = requests.get(URL, timeout=3.0)
+    resp = get(URL, timeout=3.0)
     if resp.status_code != 200:
         # pylint: disable=broad-exception-raised
         raise Exception("Error fetching Ahmia blacklist, HTTP code " + resp.status_code)

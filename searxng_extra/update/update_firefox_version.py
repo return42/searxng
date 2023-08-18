@@ -15,9 +15,9 @@ from os.path import join
 from urllib.parse import urlparse, urljoin
 from packaging.version import parse
 
-import requests
 from lxml import html
 from searx import searx_dir
+from searx import network
 
 URL = 'https://ftp.mozilla.org/pub/firefox/releases/'
 RELEASE_PATH = '/pub/firefox/releases/'
@@ -37,8 +37,9 @@ useragents = {
 }
 
 
+@network.provide_networkcontext()
 def fetch_firefox_versions():
-    resp = requests.get(URL, timeout=2.0)
+    resp = network.get(URL, timeout=2.0)
     if resp.status_code != 200:
         # pylint: disable=broad-exception-raised
         raise Exception("Error fetching firefox versions, HTTP code " + resp.status_code)

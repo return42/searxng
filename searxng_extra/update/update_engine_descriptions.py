@@ -206,7 +206,6 @@ def initialize():
 
 def fetch_wikidata_descriptions():
     print('Fetching wikidata descriptions')
-    searx.network.set_timeout_for_thread(60)
     result = wikidata.send_wikidata_query(
         SPARQL_DESCRIPTION.replace('%IDS%', IDS).replace('%LANGUAGES_SPARQL%', LANGUAGES_SPARQL)
     )
@@ -355,6 +354,7 @@ def get_output():
     return output
 
 
+@searx.network.provide_networkcontext()
 def main():
     initialize()
     fetch_wikidata_descriptions()
