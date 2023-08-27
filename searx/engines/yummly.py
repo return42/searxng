@@ -5,6 +5,7 @@
 
 from urllib.parse import urlencode
 
+from flask_babel import gettext
 from searx.utils import markdown_to_text
 
 about = {
@@ -22,6 +23,7 @@ categories = []
 api_url = "https://mapi.yummly.com"
 number_of_results = 10
 show_pro_recipes = False
+base_url = 'https://www.yummly.com/'
 
 
 def request(query, params):
@@ -51,12 +53,23 @@ def response(resp):
         if description is not None:
             content = markdown_to_text(description['text'])
 
+        img_src = None
+        if result['display']['images']:
+            img_src = result['display']['images'][0]
+        elif result['content']['details']['images']:
+            img_src = result['content']['details']['images'][0]['resizableImageUrl']
+
+        url = result['display']['source']['sourceRecipeUrl']
+        if 'www.yummly.com/private' in url:
+            url = base_url + result['tracking-id']
+
         results.append(
             {
-                'url': result['display']['source']['sourceRecipeUrl'],
+                'url': url,
                 'title': result['display']['displayName'],
                 'content': content,
-                'img_src': result['display']['images'][0],
+                'img_src': img_src,
+                'metadata': f"{gettext('Language')}: {result['locale'].split('-')[0]}",
             }
         )
 
