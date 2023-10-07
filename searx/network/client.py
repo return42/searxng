@@ -479,13 +479,11 @@ class HTTPClient(BaseHTTPClient):
 
     def _is_error_but_retry(self, response):
         # pylint: disable=too-many-boolean-expressions
-        if (
+        return (
             (self.retry_on_http_error is True and 400 <= response.status_code <= 599)
             or (isinstance(self.retry_on_http_error, list) and response.status_code in self.retry_on_http_error)
             or (isinstance(self.retry_on_http_error, int) and response.status_code == self.retry_on_http_error)
-        ):
-            return True
-        return False
+        )
 
     @staticmethod
     def _extract_do_raise_for_httperror(kwargs):
