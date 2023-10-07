@@ -46,7 +46,7 @@ A NetworkContext is most probably thread-safe, but this has not been tested.
 The overall architecture:
 * searx.network.network.NETWORKS contains all the networks.
     The method `NetworkManager.get(network_name)` returns an initialized Network.
-* searx.network.network.Network define one network (a set of proxies, local IP address, etc...).
+* searx.network.network.Network defines a network (a set of proxies, local IP address, etc...).
     They are defined in settings.yml.
     The method `Network.get_context()` creates a new NetworkContext.
 * searx.network.context contains three different implementations of NetworkContext. One for each retry policy.
