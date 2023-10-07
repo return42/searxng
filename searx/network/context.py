@@ -243,7 +243,7 @@ class NetworkContextRetryFunction(NetworkContext):
 
     def call(self, func: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
         try:
-            while self._retries >= 0 and self.get_remaining_time() > 0:
+            while self._retries > 0 and self.get_remaining_time() > 0:
                 self._set_http_client()
                 try:
                     return func(*args, **kwargs)  # type: ignore
