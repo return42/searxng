@@ -91,9 +91,9 @@ DEFAULT_MAX_REDIRECTS = httpx._config.DEFAULT_MAX_REDIRECTS  # pylint: disable=p
 
 
 class NetworkContextNotFound(Exception):
-    """A NetworkContext is expected to be set in this thread.
+    """A NetworkContext is expected to exist for the current thread.
 
-    Use searx.network.set_context_for_thread or searx.network.context_for_thread
+    Use searx.network.networkcontext_for_thread or searx.network.provide_networkcontext
     to set a NetworkContext
     """
 

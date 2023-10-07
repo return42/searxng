@@ -360,7 +360,8 @@ class NetwortSettingsDecoder:
 class NetworkManager:
     """Contains all the Network instances.
 
-    By default, there is one default network, so searx.network.
+    By default, there is one default network with the default parameters,
+    so @searx.network.provide_networkcontext() works out of the box.
     """
 
     DEFAULT_NAME = '__DEFAULT__'
