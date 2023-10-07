@@ -50,7 +50,7 @@ The overall architecture:
     They are defined in settings.yml.
     The method `Network.get_context()` creates a new NetworkContext.
 * searx.network.context contains three different implementations of NetworkContext. One for each retry policy.
-* searx.network.client.HTTPClient and searx.network.client.TorHTTPClient implements wrappers around httpx.Client
+* searx.network.client.HTTPClient and searx.network.client.TorHTTPClient implement wrappers around httpx.Client.
 """
 import threading
 from contextlib import contextmanager
