@@ -243,16 +243,24 @@ class NetworkContextRetryFunction(NetworkContext):
 
     def call(self, func: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
         try:
-            while self._retries > 0 and self.get_remaining_time() > 0:
+            # if retries == 1, this method can call `func` twice,
+            # so the exit condition is self._retries must be equal or above zero
+            # to allow two iteration
+            while self._retries >= 0 and self.get_remaining_time() > 0:
                 self._set_http_client()
                 try:
                     return func(*args, **kwargs)  # type: ignore
-                except (ssl.SSLError, httpx.RequestError, httpx.HTTPStatusError, SoftRetryHTTPException) as e:
+                except SoftRetryHTTPException as e:
                     if self._retries <= 0:
+                        return e.response
+                except (ssl.SSLError, httpx.RequestError, httpx.HTTPStatusError) as e:
+                    if self._retries <= 1:
                         # raise the exception only there is no more try
                         raise e
                 self._retries -= 1
-            raise httpx.TimeoutException("Timeout")
+            if self.get_remaining_time() <= 0:
+                raise httpx.TimeoutException("Timeout")
+            raise httpx.HTTPError("Internal error: this should not happen")
         finally:
             self._reset_http_client()
 
@@ -313,11 +321,14 @@ class _RetrySameHTTPClient(ABCHTTPClient):
 
     def __init__(self, http_client: ABCHTTPClient, network_content: NetworkContextRetrySameHTTPClient):
         self.http_client = http_client
-        self.network_content = network_content
+        self.network_context = network_content
 
     def send(self, stream: bool, method: str, url: str, **kwargs) -> httpx.Response:
-        retries = self.network_content._retries  # pylint: disable=protected-access
-        while retries >= 0 and self.network_content.get_remaining_time() > 0:
+        retries = self.network_context._retries  # pylint: disable=protected-access
+        # if retries == 1, this method can send two HTTP requets,
+        # so the exit condition is self._retries must be equal or above zero
+        # to allow two iteration
+        while retries >= 0 and self.network_context.get_remaining_time() > 0:
             try:
                 return self.http_client.send(stream, method, url, **kwargs)
             except SoftRetryHTTPException as e:
@@ -327,7 +338,9 @@ class _RetrySameHTTPClient(ABCHTTPClient):
                 if retries <= 0:
                     raise e
             retries -= 1
-        return self.http_client.send(stream, method, url, **kwargs)
+        if self.network_context.get_remaining_time() <= 0:
+            raise httpx.TimeoutException("Timeout")
+        raise httpx.HTTPError("Internal error: this should not happen")
 
     def close(self):
         return self.http_client.close()
@@ -365,6 +378,9 @@ class _RetryDifferentHTTPClient(ABCHTTPClient):
 
     def send(self, stream: bool, method: str, url: str, **kwargs) -> httpx.Response:
         retries = self.network_context._retries  # pylint: disable=protected-access
+        # if retries == 1, this method can send two HTTP requets,
+        # so the exit condition is self._retries must be equal or above zero
+        # to allow two iteration
         while retries >= 0 and self.network_context.get_remaining_time() > 0:
             http_client = self.network_context._http_client_factory()  # pylint: disable=protected-access
             try:
@@ -376,8 +392,9 @@ class _RetryDifferentHTTPClient(ABCHTTPClient):
                 if retries <= 0:
                     raise e
             retries -= 1
-        http_client = self.network_context._http_client_factory()  # pylint: disable=protected-access
-        return http_client.send(stream, method, url, **kwargs)
+        if self.network_context.get_remaining_time() <= 0:
+            raise httpx.TimeoutException("Timeout")
+        raise httpx.HTTPError("Internal error: this should not happen")
 
     def close(self):
         raise NotImplementedError()

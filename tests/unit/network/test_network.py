@@ -139,7 +139,7 @@ class TestNetwork(SearxTestCase):
 class TestNetworkRequestRetries(SearxTestCase):
 
     TEXT = "Lorem Ipsum"
-    RETRY_STRATEGY = "Engine"
+    RETRY_STRATEGY = "ENGINE"
 
     @classmethod
     def get_response_403_then_200(cls):
@@ -202,12 +202,12 @@ class TestNetworkRequestRetries(SearxTestCase):
         def get_response(*args, **kwargs):
             nonlocal request_count
             request_count += 1
-            if request_count < 3:
+            if request_count <= 2:
                 raise httpx.RequestError('fake exception', request=None)
             return httpx.Response(status_code=200, text=TestNetworkRequestRetries.TEXT)
 
         with patch.object(httpx.Client, 'request', new=get_response):
-            network = Network.from_dict(enable_http=True, retries=2, retry_strategy=self.RETRY_STRATEGY)
+            network = Network.from_dict(enable_http=True, retries=3, retry_strategy=self.RETRY_STRATEGY)
             context = network.get_context(timeout=2.0)
             response = context.request('GET', 'https://example.com/', raise_for_httperror=False)
             self.assertEqual(response.status_code, 200)
