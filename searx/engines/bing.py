@@ -68,6 +68,11 @@ verification by a cookie is needed / thats not possible in SearXNG.
 base_url = 'https://www.bing.com/search'
 """Bing (Web) search URL"""
 
+send_accept_language_header = True
+"""Bing tries to guess user's language and territory from the HTTP
+Accept-Language.  Optional the user can select a search-language (can be
+different to the UI language) and a region (market code)."""
+
 
 def _page_offset(pageno):
     return (int(pageno) - 1) * 10 + 1
@@ -76,6 +81,12 @@ def _page_offset(pageno):
 def set_bing_cookies(params, engine_language, engine_region):
     params['cookies']['_EDGE_CD'] = f'm={engine_region}&u={engine_language}'
     params['cookies']['_EDGE_S'] = f'mkt={engine_region}&ui={engine_language}'
+    SRCHHPGUSR = [  # pylint: disable=invalid-name
+        'SRCHLANG=%s' % engine_language.split('-')[0],
+    ]
+    params['cookies']['SRCHHPGUSR'] = '&'.join(SRCHHPGUSR)
+
+
     logger.debug("bing cookies: %s", params['cookies'])
 
 
@@ -95,15 +106,13 @@ def request(query, params):
         'pq': query,
     }
 
-    # To get correct page, arg first and this arg FORM is needed, the value PERE
-    # is on page 2, on page 3 its PERE1 and on page 4 its PERE2 .. and so forth.
-    # The 'first' arg should never send on page 1.
+    # To get correct page arg 'first' and 'FORM' is needed. The value of FORM is
+    # 'PERE' on page 1 and 2, on page 3 its PERE1 and on page 4 its PERE2 .. and
+    # so forth.
+    query_params['first'] = _page_offset(page)
+    query_params['FORM'] = 'PERE'
 
-    if page > 1:
-        query_params['first'] = _page_offset(page)  # see also arg FORM
-    if page == 2:
-        query_params['FORM'] = 'PERE'
-    elif page > 2:
+    if page > 2:
         query_params['FORM'] = 'PERE%s' % (page - 2)
 
     params['url'] = f'{base_url}?{urlencode(query_params)}'
