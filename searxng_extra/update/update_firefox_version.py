@@ -37,7 +37,7 @@ useragents = {
 }
 
 
-@network.provide_networkcontext()
+@network.networkcontext_decorator()
 def fetch_firefox_versions():
     resp = network.get(URL, timeout=2.0)
     if resp.status_code != 200:

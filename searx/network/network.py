@@ -51,13 +51,16 @@ TYPE_RETRY_ON_ERROR = Union[List[int], int, bool]  # pylint: disable=invalid-nam
 
 @dataclass(order=True, frozen=True)
 class NetworkSettings:
-    """Configuration for a Network. See NetworkSettingsReader"""
+    """Configuration for a Network. See NetworkSettingsReader
+
+    TODO: check if we need order=True
+    """
 
     # Individual HTTP requests can override these parameters.
     verify: bool = True
     max_redirects: int = 30
     # These parameters can not be overridden.
-    enable_http: bool = False
+    enable_http: bool = False  # disable http:// URL (unencrypted) by default = make sure to use HTTPS
     enable_http2: bool = True
     max_connections: Optional[int] = 10
     max_keepalive_connections: Optional[int] = 100

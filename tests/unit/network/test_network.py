@@ -17,12 +17,12 @@ from tests import SearxTestCase
 class TestHTTPClient(SearxTestCase):
     def test_get_client(self):
         httpclient = BaseHTTPClient(verify=True)
-        client1 = httpclient._get_client_and_update_kwargs()
-        client2 = httpclient._get_client_and_update_kwargs(verify=True)
-        client3 = httpclient._get_client_and_update_kwargs(max_redirects=10)
-        client4 = httpclient._get_client_and_update_kwargs(verify=True)
-        client5 = httpclient._get_client_and_update_kwargs(verify=False)
-        client6 = httpclient._get_client_and_update_kwargs(max_redirects=10)
+        client1 = httpclient._get_client_and_update_kwargs({})
+        client2 = httpclient._get_client_and_update_kwargs({"verify": True})
+        client3 = httpclient._get_client_and_update_kwargs({"max_redirects": 10})
+        client4 = httpclient._get_client_and_update_kwargs({"verify": True})
+        client5 = httpclient._get_client_and_update_kwargs({"verify": False})
+        client6 = httpclient._get_client_and_update_kwargs({"max_redirects": 10})
 
         self.assertEqual(client1, client2)
         self.assertEqual(client1, client4)
@@ -302,7 +302,7 @@ class TestNetworkApi(SearxTestCase):
             send_was_called = True
             return httpx.Response(status_code=200, text=TestNetworkApi.TEXT)
 
-        @searx.network.provide_networkcontext()
+        @searx.network.networkcontext_decorator()
         def main():
             nonlocal response
             response = searx.network.get("https://example.com")
@@ -332,7 +332,7 @@ class TestNetworkApi(SearxTestCase):
             send_was_called = True
             return httpx.Response(status_code=200, text=TestNetworkApi.TEXT)
 
-        @searx.network.provide_networkcontext()
+        @searx.network.networkcontext_decorator()
         def main():
             nonlocal response
             f = getattr(searx.network, method.lower())
@@ -368,7 +368,7 @@ class TestNetworkApi(SearxTestCase):
             send_was_called = True
             return httpx.Response(status_code=200, text=TestNetworkApi.TEXT)
 
-        @searx.network.provide_networkcontext()
+        @searx.network.networkcontext_decorator()
         def main():
             nonlocal response
             f = getattr(searx.network, method.lower())
@@ -391,7 +391,7 @@ class TestNetworkApi(SearxTestCase):
             return httpx.Response(status_code=200, text=TestNetworkApi.TEXT)
 
         with patch.object(httpx.Client, 'send', new=send):
-            with searx.network.networkcontext_for_thread(timeout=3.0) as network_context:
+            with searx.network.networkcontext_manager(timeout=3.0) as network_context:
                 network_context.request("GET", "https://example.com")
                 network_context.get_http_runtime()
                 self.assertTrue(network_context.get_http_runtime() > 0.25)

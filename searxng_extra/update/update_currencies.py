@@ -21,7 +21,7 @@ from os.path import join
 from searx import searx_dir
 from searx.locales import LOCALE_NAMES, locales_initialize
 from searx.engines import wikidata, set_loggers
-from searx.network import provide_networkcontext
+from searx.network import networkcontext_decorator
 
 set_loggers(wikidata, 'wikidata')
 locales_initialize()
@@ -139,7 +139,7 @@ def get_filename():
     return join(join(searx_dir, "data"), "currencies.json")
 
 
-@provide_networkcontext()
+@networkcontext_decorator()
 def main():
     db = fetch_db()
 

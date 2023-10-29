@@ -44,7 +44,7 @@ class OnlineProcessor(EngineProcessor):
     engine_type = 'online'
 
     def initialize(self):
-        with searx.network.networkcontext_for_thread(self.engine_name, self.engine.timeout) as network_context:
+        with searx.network.networkcontext_manager(self.engine_name, self.engine.timeout) as network_context:
             network_context.call(super().initialize)
 
     def get_params(self, search_query, engine_category):
@@ -152,9 +152,7 @@ class OnlineProcessor(EngineProcessor):
 
     def search(self, query, params, result_container, start_time, timeout_limit):
         try:
-            with searx.network.networkcontext_for_thread(
-                self.engine_name, timeout_limit, start_time
-            ) as network_context:
+            with searx.network.networkcontext_manager(self.engine_name, timeout_limit, start_time) as network_context:
                 # send requests and parse the results
                 search_results = network_context.call(self._search_basic, query, params)
                 # extend_container in the network context to get the HTTP runtime

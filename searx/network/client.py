@@ -406,14 +406,14 @@ class BaseHTTPClient(ABCHTTPClient):
 
     def __init__(
         self,
-        **kwargs,
+        **default_kwargs,
     ):
         # set the default values
         self.default = _HTTPMultiClientConf(True, 30)
         # extract the values from the HTTPCient constructor
         # the line before is mandatory to be able to self._extract_kwargs_clients
         # and keep the other arguments
-        self.default, self.kwargs = self._extract_kwargs_clients(kwargs)
+        self.default, self.default_kwargs = self._extract_kwargs_clients(default_kwargs)
         self.clients: Dict[Tuple, OneHTTPClient] = {}
 
     def close(self):
@@ -424,22 +424,23 @@ class BaseHTTPClient(ABCHTTPClient):
     def is_closed(self) -> bool:
         return all(client.is_closed for client in self.clients.values())
 
+    # send(... ,foo=1, bar=2)
     def send(self, stream, method, url, timeout=None, **kwargs):
-        client, kwargs = self._get_client_and_update_kwargs(**kwargs)
+        client = self._get_client_and_update_kwargs(kwargs)
         return client.send(stream, method, url, timeout, **kwargs)
 
-    def _get_client_and_update_kwargs(self, **kwargs) -> Tuple[OneHTTPClient, Dict]:
+    def _get_client_and_update_kwargs(self, kwargs) -> OneHTTPClient:
         # extract HTTPMultiClientConf using the parameter in the request
         # and fallback to the parameters defined in the constructor
         # = the parameters set in the network settings
-        kwargs_clients, kwargs = self._extract_kwargs_clients(kwargs)
-        if kwargs_clients not in self.clients:
-            self.clients[kwargs_clients] = OneHTTPClient(
-                verify=kwargs_clients.verify,
-                max_redirects=kwargs_clients.max_redirects,
-                **self.kwargs,
+        http_multi_client_conf, kwargs = self._extract_kwargs_clients(kwargs)
+        if http_multi_client_conf not in self.clients:
+            self.clients[http_multi_client_conf] = OneHTTPClient(
+                verify=http_multi_client_conf.verify,
+                max_redirects=http_multi_client_conf.max_redirects,
+                **self.default_kwargs,
             )
-        return self.clients[kwargs_clients], kwargs
+        return self.clients[http_multi_client_conf]
 
     def _extract_kwargs_clients(self, kwargs) -> Tuple[_HTTPMultiClientConf, Dict]:
         # default values
@@ -463,7 +464,7 @@ class HTTPClient(BaseHTTPClient):
 
     def _check_configuration(self):
         # make sure we can create at least an OneHTTPClient without exception
-        self._get_client_and_update_kwargs()
+        self._get_client_and_update_kwargs({})
 
     def send(self, stream, method, url, timeout=None, **kwargs):
         try:
@@ -494,7 +495,7 @@ class HTTPClient(BaseHTTPClient):
         return do_raise_for_httperror
 
     def __repr__(self):
-        keys_values = " ".join([f"{k}={v!r}" for k, v in self.kwargs.items()])
+        keys_values = " ".join([f"{k}={v!r}" for k, v in self.default_kwargs.items()])
         return f"<{self.__class__.__name__} retry_on_http_error={self.retry_on_http_error!r} {keys_values}>"
 
 
@@ -529,7 +530,7 @@ class TorHTTPClient(HTTPClient):
         use_local_dns = False
 
         # get one httpx client through get_client_and_update_kwargs
-        one_http_client, _ = self._get_client_and_update_kwargs(verify=True)
+        one_http_client = self._get_client_and_update_kwargs({"verify": True})
         httpx_client = one_http_client.client
         # ignore client._transport because it is not used with all://
         for transport in httpx_client._mounts.values():  # pylint: disable=protected-access

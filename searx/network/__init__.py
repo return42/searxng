@@ -36,8 +36,8 @@ It is only possible to send an HTTP request with a NetworkContext
 (otherwise, SearXNG raises a NetworkContextNotFound exception).
 Two helpers set a NetworkContext for the current thread:
 
-* The decorator `@provide_networkcontext`, the intended usage is an external script (see searxng_extra)
-* The context manager `networkcontext_for_thread`, for the generic use case.
+* The decorator `@networkcontext_decorator`, the intended usage is an external script (see searxng_extra)
+* The context manager `networkcontext_manager`, for the generic use case.
 
 Inside the thread, the caller can use `searx.network.get`, `searx.network.post` and similar functions without
 caring about the HTTP client. However, if the caller creates a new thread, it must initialize a new NetworkContext.
@@ -67,8 +67,8 @@ from searx.network.raise_for_httperror import raise_for_httperror
 __all__ = [
     "NETWORKS",
     "NetworkContextNotFound",
-    "networkcontext_for_thread",
-    "provide_networkcontext",
+    "networkcontext_manager",
+    "networkcontext_decorator",
     "raise_for_httperror",
     "request",
     "get",
@@ -93,13 +93,13 @@ DEFAULT_MAX_REDIRECTS = httpx._config.DEFAULT_MAX_REDIRECTS  # pylint: disable=p
 class NetworkContextNotFound(Exception):
     """A NetworkContext is expected to exist for the current thread.
 
-    Use searx.network.networkcontext_for_thread or searx.network.provide_networkcontext
+    Use searx.network.networkcontext_manager or searx.network.networkcontext_decorator
     to set a NetworkContext
     """
 
 
 @contextmanager
-def networkcontext_for_thread(
+def networkcontext_manager(
     network_name: Optional[str] = None, timeout: Optional[float] = None, start_time: Optional[float] = None
 ):
     """Context manager to set a NetworkContext for the current thread
@@ -111,7 +111,7 @@ def networkcontext_for_thread(
 
     ```python
     from time import sleep
-    from searx.network import networkcontext_for_thread, get
+    from searx.network import networkcontext_manager, get
 
     def search(query):
         # the timeout is automatically set to 2.0 seconds (the remaining time for the NetworkContext)
@@ -124,7 +124,7 @@ def networkcontext_for_thread(
     # "worldtimeapi" is network defined in settings.yml
     # network_context.call might call multiple times the search function,
     # however the timeout will be respected.
-    with networkcontext_for_thread('worldtimeapi', timeout=3.0) as network_context:
+    with networkcontext_manager('worldtimeapi', timeout=3.0) as network_context:
         sleep(1.0)
         auckland_time, ip_time = network_context.call(search(query))
         print("Auckland time: ", auckland_time["datetime"])
@@ -142,7 +142,7 @@ def networkcontext_for_thread(
         del network_context
 
 
-def provide_networkcontext(
+def networkcontext_decorator(
     network_name: Optional[str] = None, timeout: Optional[float] = None, start_time: Optional[float] = None
 ):
     """Set the NetworkContext, then call the wrapped function using searx.network.context.NetworkContext.call
@@ -158,7 +158,7 @@ def provide_networkcontext(
     from time import sleep
     from searx import network
 
-    @network.provide_networkcontext(timeout=3.0)
+    @network.networkcontext_decorator(timeout=3.0)
     def main()
         sleep(1.0)
         # the timeout is automatically set to 2.0 (the remaining time for the NetworkContext).
@@ -173,7 +173,7 @@ def provide_networkcontext(
     def func_outer(func: Callable[P, R]):
         @wraps(func)
         def func_inner(*args: P.args, **kwargs: P.kwargs) -> R:
-            with networkcontext_for_thread(network_name, timeout, start_time) as network_context:
+            with networkcontext_manager(network_name, timeout, start_time) as network_context:
                 return network_context.call(func, *args, **kwargs)
 
         return func_inner
@@ -225,7 +225,7 @@ def request(
     * default_encoding:
         this parameter is not available and is always "utf-8".
 
-    This function requires a NetworkContext provided by either provide_networkcontext or networkcontext_for_thread.
+    This function requires a NetworkContext provided by either networkcontext_decorator or networkcontext_manager.
 
     The implementation uses one or more httpx.Client
     """

@@ -49,7 +49,7 @@ from pathlib import Path
 
 from searx import searx_dir
 from searx.engines import wikidata, set_loggers
-from searx.network import provide_networkcontext
+from searx.network import networkcontext_decorator
 from searx.sxng_locales import sxng_locales
 from searx.engines.openstreetmap import get_key_rank, VALUE_TO_LINK
 
@@ -207,7 +207,7 @@ def get_osm_tags_filename():
     return Path(searx_dir) / "data" / "osm_keys_tags.json"
 
 
-@provide_networkcontext()
+@networkcontext_decorator()
 def main():
     result = {
         'keys': optimize_keys(get_keys()),

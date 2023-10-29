@@ -75,7 +75,7 @@ lang2emoji = {
 }
 
 
-@network.provide_networkcontext()
+@network.networkcontext_decorator()
 def main():
     load_engines(settings['engines'])
     # traits_map = EngineTraitsMap.from_data()

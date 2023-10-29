@@ -18,7 +18,7 @@ from os.path import join
 
 from searx import searx_dir
 from searx.engines import wikidata, set_loggers
-from searx.network import provide_networkcontext
+from searx.network import networkcontext_decorator
 
 set_loggers(wikidata, 'wikidata')
 
@@ -46,7 +46,7 @@ ORDER BY ?item DESC(?rank) ?symbol
 """
 
 
-@provide_networkcontext()
+@networkcontext_decorator()
 def get_data():
     results = collections.OrderedDict()
     response = wikidata.send_wikidata_query(SARQL_REQUEST)

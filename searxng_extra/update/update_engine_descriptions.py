@@ -354,7 +354,7 @@ def get_output():
     return output
 
 
-@searx.network.provide_networkcontext()
+@searx.network.networkcontext_decorator()
 def main():
     initialize()
     fetch_wikidata_descriptions()

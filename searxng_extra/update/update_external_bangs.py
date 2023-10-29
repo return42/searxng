@@ -154,7 +154,7 @@ def get_bangs_filename():
     return join(join(searx_dir, "data"), "external_bangs.json")
 
 
-@searx.network.provide_networkcontext()
+@searx.network.networkcontext_decorator()
 def main():
     bangs_url, bangs_version = get_bang_url()
     print(f'fetch bangs from {bangs_url}')
