@@ -1093,7 +1093,7 @@ def image_proxy():
     try:
         headers = dict_subset(resp.headers, {'Content-Type', 'Content-Encoding', 'Content-Length', 'Length'})
         response = Response(
-            resp.iter_bytes(), mimetype=resp.headers['Content-Type'], headers=headers, direct_passthrough=True
+            resp.iter_bytes(), mimetype=resp.headers['Content-Type'], headers=headers, direct_passthrough=False
         )
         response.call_on_close(close_stream)
         return response
