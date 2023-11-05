@@ -173,6 +173,10 @@ fi
 
 unset MORTY_KEY
 
+# environment variables referenced by uwsgi.ini
+export UWSGI_WORKERS="${UWSGI_WORKERS:-%k}"
+export UWSGI_THREAD="${UWSGI_THREAD:4}"
+
 # Start uwsgi
 printf 'Listen on %s\n' "${BIND_ADDRESS}"
 exec su-exec searxng:searxng uwsgi --master --http-socket "${BIND_ADDRESS}" "${UWSGI_SETTINGS_PATH}"
