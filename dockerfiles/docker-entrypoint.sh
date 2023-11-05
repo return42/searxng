@@ -26,6 +26,10 @@ EOF
 export DEFAULT_BIND_ADDRESS="0.0.0.0:8080"
 export BIND_ADDRESS="${BIND_ADDRESS:-${DEFAULT_BIND_ADDRESS}}"
 
+# environment variables referenced by uwsgi.ini
+export UWSGI_WORKERS="${UWSGI_WORKERS:-%k}"
+export UWSGI_THREADS="${UWSGI_THREADS:-4}"
+
 # Parse command line
 FORCE_CONF_UPDATE=0
 DRY_RUN=0
@@ -172,10 +176,6 @@ if [ $DRY_RUN -eq 1 ]; then
 fi
 
 unset MORTY_KEY
-
-# environment variables referenced by uwsgi.ini
-export UWSGI_WORKERS="${UWSGI_WORKERS:-%k}"
-export UWSGI_THREAD="${UWSGI_THREAD:4}"
 
 # Start uwsgi
 printf 'Listen on %s\n' "${BIND_ADDRESS}"
