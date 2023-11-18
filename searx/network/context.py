@@ -3,38 +3,51 @@
 # pyright: basic
 """This module implements various NetworkContext which deals with
 
-* retry strategies: what to do when an HTTP request fails and retries>0
-* record HTTP runtime
-* timeout: In engines, the user query starts at one point in time,
-  the engine timeout is the starting point plus a defined value.
-  NetworkContext sends HTTP requests following the request timeout and the engine timeouts.
+- retry strategies: what to do when an HTTP request fails and retries>0
+- record HTTP runtime
+- timeout: In engines, the user query starts at one point in time, the engine
+  timeout is the starting point plus a defined value.  NetworkContext sends HTTP
+  requests following the request timeout and the engine timeouts.
 
 Example of usage:
 
-```
-context = NetworkContextRetryFunction(...)  # or another implementation
+.. code:: python
 
-def my_engine():
-    http_client = context.get_http_client()
-    ip_ifconfig = http_client.request("GET", "https://ifconfig.me/")
-    print("ip from ifconfig.me ", ip_ifconfig)
-    ip_myip = http_client.request("GET", "https://api.myip.com").json()["ip"]
-    print("ip from api.myip.com", ip_myip)
-    assert ip_ifconfig == ip_myip
-    # ^^ always true with NetworkContextRetryFunction and NetworkContextRetrySameHTTPClient
+   context = NetworkContextRetryFunction(...)  # or another implementation
 
-result = context.call(my_engine)
-print('HTTP runtime:', context.get_total_time())
-```
+   def my_engine():
+       http_client = context.get_http_client()
+       ip_ifconfig = http_client.request("GET", "https://ifconfig.me/")
+       print("ip from ifconfig.me ", ip_ifconfig)
+       ip_myip = http_client.request("GET", "https://api.myip.com").json()["ip"]
+       print("ip from api.myip.com", ip_myip)
+       assert ip_ifconfig == ip_myip
+       # ^^ always true with NetworkContextRetryFunction and NetworkContextRetrySameHTTPClient
 
-Note in the code above NetworkContextRetryFunction is instanced directly for the sake of simplicity.
-NetworkContext are actually instanciated using Network.get_context(...)
+   result = context.call(my_engine)
+   print('HTTP runtime:', context.get_total_time())
 
-Various implementations define what to do when there is an exception in the function `my_engine`:
+Note in the code above ``NetworkContextRetryFunction`` is instanced directly for
+the sake of simplicity.  NetworkContext are actually instanciated using
+``Network.get_context(...)``.  The default strategy is
+:py:obj:`DIFFERENT_HTTP_CLIENT <NetworkContextRetryDifferentHTTPClient>`.
 
-* `NetworkContextRetryFunction` gets another HTTP client and tries the whole function again.
-* `NetworkContextRetryDifferentHTTPClient` gets another HTTP client and tries the query again.
-* `NetworkContextRetrySameHTTPClient` tries the query again with the same HTTP client.
+Various implementations define what to do when there is an exception in the
+function ``my_engine``:
+
+- :py:obj:`NetworkContextRetryFunction` gets another HTTP client and tries the
+  whole function again.
+
+- :py:obj:`NetworkContextRetryDifferentHTTPClient` gets another HTTP client and
+  tries the query again.
+
+- :py:obj:`NetworkContextRetrySameHTTPClient` tries the query again with the
+  same HTTP client.
+
+  .. autoclasstree:: searx.network.context
+     :namespace: searx.network.context
+     :zoom:
+
 """
 import functools
 import ssl
@@ -58,15 +71,18 @@ R = TypeVar('R')
 HTTPCLIENTFACTORY = Callable[[], ABCHTTPClient]
 
 DEFAULT_TIMEOUT = 120.0
-
+"""Default timeout used in a network context"""
 
 ## NetworkContext
 
 
 class NetworkContext(ABC):
-    """Abstract implementation: the call must defined in concrete classes.
+    """Abstract implementation: the :py::obj:`call` must defined in concrete
+    classes.
 
     Lifetime: one engine request or initialization of an engine.
+
+    TODO describe __slots__
     """
 
     __slots__ = ('_retries', '_http_client_factory', '_http_client', '_start_time', '_http_time', '_timeout')
@@ -78,13 +94,24 @@ class NetworkContext(ABC):
         start_time: Optional[float],
         timeout: Optional[float],
     ):
+
+        """TODO describe function
+
+        :param retries: ??
+        :param http_client_factory: ??
+        :param start_time: ??
+        :param timeout: ??
+        :returns: ??
+
+        """
+
         self._retries: int = retries
         # wrap http_client_factory here, so we can forget about this wrapping
         self._http_client_factory = _TimeHTTPClientWrapper.wrap_factory(http_client_factory, self)
         self._http_client: Optional[ABCHTTPClient] = None
         self._start_time: float = start_time or default_timer()
         self._http_time: float = 0.0
-        self._timeout: Optional[float] = timeout
+        self._timeout: Optional[float] = timeout or DEFAULT_TIMEOUT
 
     @abstractmethod
     def call(self, func: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
@@ -123,12 +150,19 @@ class NetworkContext(ABC):
 
     @final
     def get_remaining_time(self, _override_timeout: Optional[float] = None) -> float:
-        """Return the remaining time for the context.
+        """Return the remaining time for the context.  Takes into account the
+        offset resulting from the ``start_time``. ``_override_timeout`` is not
+        intended to be used outside this module.
 
-        _override_timeout is not intended to be used outside this module.
+        .. todo::
+
+           Why does this functions adds a offset of ``timeout += 0.2``, is the
+           value of 0.2 seconds arbitrary, how can this value be explained?
+
         """
-        timeout = _override_timeout or self._timeout or DEFAULT_TIMEOUT
-        timeout += 0.2  # overhead
+
+        timeout = _override_timeout or self._timeout
+        timeout += 0.2
         timeout -= default_timer() - self._start_time
         return timeout
 
@@ -187,6 +221,7 @@ class NetworkContext(ABC):
 
 class _TimeHTTPClientWrapper(ABCHTTPClient):
     """Wrap an ABCHTTPClient:
+
     * to record the HTTP runtime
     * to override the timeout to make sure the total time does not exceed the timeout set on the NetworkContext
     """

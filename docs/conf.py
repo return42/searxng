@@ -118,10 +118,12 @@ extensions = [
     'sphinx.ext.viewcode',
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
+    "sphinx.ext.todo",
     "pallets_sphinx_themes",
     "sphinx_issues", # https://github.com/sloria/sphinx-issues/blob/master/README.rst
     "sphinx_jinja",  # https://github.com/tardyp/sphinx-jinja
     "sphinxcontrib.programoutput",  # https://github.com/NextThought/sphinxcontrib-programoutput
+    'sphinxcontrib.mermaid',
     'linuxdoc.kernel_include',  # Implementation of the 'kernel-include' reST-directive.
     'linuxdoc.rstFlatTable',    # Implementation of the 'flat-table' reST-directive.
     'linuxdoc.kfigure',         # Sphinx extension which implements scalable image handling.
@@ -129,6 +131,8 @@ extensions = [
     'myst_parser',  # https://www.sphinx-doc.org/en/master/usage/markdown.html
     'notfound.extension',  # https://github.com/readthedocs/sphinx-notfound-page
 ]
+
+todo_include_todos = True
 
 autodoc_default_options = {
     'member-order': 'groupwise',

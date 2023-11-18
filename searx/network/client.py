@@ -8,6 +8,12 @@
                        BaseHTTPClient allows to pass these parameter in each query by creating multiple OneHTTPClient.
 * HTTPClient           Inherit from BaseHTTPClient, raise an error according to retry_on_http_error parameter.
 * TorHTTPClient        Inherit from HTTPClientSoftError, check Tor connectivity
+
+.. autoclasstree:: searx.network.client
+   :namespace: searx.network.client
+   :zoom:
+
+
 """
 
 import logging
@@ -518,7 +524,14 @@ class TorHTTPClient(HTTPClient):
             raise httpx.HTTPError('Network configuration problem: not using Tor')
 
     def _is_connected_through_tor(self, proxies, local_addresses) -> bool:
-        """TODO : rewrite to check the proxies variable instead of checking the HTTPTransport ?"""
+        """
+        .. todo::
+
+           Rewrite to check the proxies variable instead of checking the
+           HTTPTransport?
+
+        """
+
         if proxies is None:
             return False
 
