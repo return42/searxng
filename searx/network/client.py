@@ -8,6 +8,12 @@
                        BaseHTTPClient allows to pass these parameter in each query by creating multiple OneHTTPClient.
 * HTTPClient           Inherit from BaseHTTPClient, raise an error according to retry_on_http_error parameter.
 * TorHTTPClient        Inherit from HTTPClientSoftError, check Tor connectivity
+
+.. autoclasstree:: searx.network.client
+   :namespace: searx.network.client
+   :zoom:
+
+
 """
 
 import logging
@@ -103,14 +109,22 @@ def _get_sslcontexts(
 class _HTTPTransportNoHttp(httpx.HTTPTransport):
     """Block HTTP request
 
-    The constructor is blank because httpx.HTTPTransport.__init__ creates an SSLContext unconditionally:
-    https://github.com/encode/httpx/blob/0f61aa58d66680c239ce43c8cdd453e7dc532bfc/httpx/_transports/default.py#L271
+    The constructor is blank because httpx.HTTPTransport.__init__ creates an
+    SSLContext unconditionally:
+
+    - https://github.com/encode/httpx/blob/0f61aa58d66680c239ce43c8cdd453e7dc532bfc/httpx/_transports/default.py#L271
+
+    .. todo::
+
+       Why should a HTTP request (which is blocked by this inheritance) create a
+       SSL-context?
 
     Each SSLContext consumes more than 500kb of memory, since there is about one network per engine.
 
     In consequence, this class overrides all public methods
 
     For reference: https://github.com/encode/httpx/issues/2298
+
     """
 
     def __init__(self, *args, **kwargs):
@@ -119,6 +133,8 @@ class _HTTPTransportNoHttp(httpx.HTTPTransport):
         pass
 
     def handle_request(self, request):
+        """Raise a :py:obj:`httpx.UnsupportedProtocol` exception on HTTP
+        requests."""
         raise httpx.UnsupportedProtocol('HTTP protocol is disabled')
 
     def close(self) -> None:
@@ -133,12 +149,10 @@ class _HTTPTransportNoHttp(httpx.HTTPTransport):
 
 
 class _CustomSyncProxyTransport(SyncProxyTransport):
-    """Inherit from httpx_socks.SyncProxyTransport
-
-    Map python_socks exceptions to httpx.ProxyError exceptions
-    """
+    """Inherit from httpx_socks.SyncProxyTransport"""
 
     def handle_request(self, request):
+        """Turn :py:obj:`python_socks` exceptions into :py:obj:`httpx.ProxyError`"""
         try:
             return super().handle_request(request)
         except ProxyConnectionError as e:
@@ -198,9 +212,16 @@ def _get_transport(verify, http2, local_address, proxy_url, limit, retries):
 class ABCHTTPClient(ABC):
     """Abstract HTTP client
 
-    Multiple implementation are defined bellow.
-    There are like an onion: each implementation relies on the previous one
-    and bring new feature.
+    Multiple implementation are defined bellow.  There are like an onion: each
+    implementation relies on the previous one and bring new feature.
+
+    .. todo::
+
+       Describe what the intention of this class is.  What is expected of the
+       send and close methods.  What is the difference between a
+
+      - _RetryFunctionHTTPClient(ABCHTTPClient) compared to a
+      - BaseHTTPClient(ABCHTTPClient) class
     """
 
     @abstractmethod
@@ -455,7 +476,8 @@ class BaseHTTPClient(ABCHTTPClient):
 
 
 class HTTPClient(BaseHTTPClient):
-    """Inherit from BaseHTTPClient, raise an exception according to the retry_on_http_error parameter"""
+    """Inherit from BaseHTTPClient, raise an exception according to the
+    retry_on_http_error parameter"""
 
     def __init__(self, retry_on_http_error=None, **kwargs):
         super().__init__(**kwargs)
@@ -518,7 +540,14 @@ class TorHTTPClient(HTTPClient):
             raise httpx.HTTPError('Network configuration problem: not using Tor')
 
     def _is_connected_through_tor(self, proxies, local_addresses) -> bool:
-        """TODO : rewrite to check the proxies variable instead of checking the HTTPTransport ?"""
+        """
+        .. todo::
+
+           Rewrite to check the proxies variable instead of checking the
+           HTTPTransport?
+
+        """
+
         if proxies is None:
             return False
 

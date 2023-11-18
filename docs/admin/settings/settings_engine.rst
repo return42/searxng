@@ -61,6 +61,7 @@ engine is shown.  Most of the options have a default value or even are optional.
      enable_http: false
      retry_on_http_error: true # or 403 or [404, 429]
 
+.. _engine name:
 
 ``name`` :
   Name that will be used across SearXNG to define this engine.  In settings, on
@@ -132,6 +133,8 @@ engine is shown.  Most of the options have a default value or even are optional.
 ``display_error_messages`` : default ``true``
   When an engine returns an error, the message is displayed on the user interface.
 
+.. _engine network:
+
 ``network`` : optional
   Use the network configuration from another engine.
   In addition, there are two default networks:
@@ -142,6 +145,8 @@ engine is shown.  Most of the options have a default value or even are optional.
 ``enable_http`` : optional
   Enable HTTP for this engine (by default only HTTPS is enabled).
 
+.. _engine.retry_on_http_error:
+
 ``retry_on_http_error`` : optional
   Retry request on some HTTP status code.
 
@@ -151,8 +156,11 @@ engine is shown.  Most of the options have a default value or even are optional.
   * ``403`` : on HTTP status code 403.
   * ``[403, 429]``: on HTTP status code 403 and 429.
 
+.. _engine proxies:
+
 ``proxies`` :
-  Overwrites proxy settings from :ref:`settings outgoing`.
+  Overwrites proxy settings from :ref:`settings outgoing`
+  (:py:obj:`NetworkSettings.proxies`).
 
 ``using_tor_proxy`` :
   Using tor proxy (``true``) or not (``false``) for this engine.  The default is

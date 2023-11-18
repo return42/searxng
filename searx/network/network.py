@@ -2,15 +2,19 @@
 # lint: pylint
 # pylint: disable=missing-class-docstring
 # pyright: basic
-"""Deal with 
+"""This module implements the network, which essentially consists of instances
+of the :py:obj:`Network` class, which are managed in a :py:obj:`NetworkManager`.
 
-* create Networks from settings.yml
-* each Network contains an ABCHTTPClient for each (proxies, IP addresses). Lazy initialized.
-* a Network provides two methods:
+The composition of the networks results from the settings, in the
+``settings.yml``.  The network settings are hierarchical, there are global
+settings in the :ref:`settings outgoing` section.  Unless configured otherwise,
+each engine then has its own network, the settings of which result from the
+global settings and the individual settings for the engine.
 
-  * get_http_client: returns an HTTP client. Prefer the get_context,
-    retry strategy is ignored with get_http_client
-  * get_context: provides a runtime context for the engine, see searx.network.context
+The individual characteristics of :py:obj:`Network` are determined by the
+individual :py:obj:`NetworkSettings` and they are managed in the
+:py:obj:`NetworkManager`.
+
 """
 
 import ipaddress
@@ -34,6 +38,9 @@ logger = logger.getChild('network')
 
 
 class RetryStrategy(Enum):
+    """Enumeration of available *retry-strategies*.  The retry strategy of a
+    HTTP request is defined by the :py:obj:`NetworkContext`."""
+
     ENGINE = NetworkContextRetryFunction
     SAME_HTTP_CLIENT = NetworkContextRetrySameHTTPClient
     DIFFERENT_HTTP_CLIENT = NetworkContextRetryDifferentHTTPClient
@@ -51,35 +58,105 @@ TYPE_RETRY_ON_ERROR = Union[List[int], int, bool]  # pylint: disable=invalid-nam
 
 @dataclass(order=True, frozen=True)
 class NetworkSettings:
-    """Configuration for a Network. See NetworkSettingsReader
+    """The instances of this class encapsulate the network settings that
+    parameterize a :py:obj:`Network` instance.  The *network settings* are
+    defined in ``settings.yml`` / the global defaults are defined in the
+    :ref:`outgoing <settings outgoing>` settings.
 
-    TODO: check if we need order=True
+    If the network configuration is read from the ``settings.yml``, the
+    instances of this class are created via a helper class
+    :py:obj:`NetwortSettingsDecoder`.
+
+    .. todo::
+
+       - Is a separation of dataclass and methods really necessary?
+
+         TLDR: It should be considered whether the construct of an auxiliary
+         class for object creation can be dispensed with. The
+         :py:obj:`NetwortSettingsDecoder` only has class methods and static
+         methods, these can actually also be all methods of
+         :py:obj:`NetworkSettings`.
+
+       - check if we need order=True
+
     """
 
     # Individual HTTP requests can override these parameters.
     verify: bool = True
+    """see :ref:`outgoing.verify`"""
+
     max_redirects: int = 30
+    """see :ref:`outgoing.max_redirects`"""
+
     # These parameters can not be overridden.
+
     enable_http: bool = False  # disable http:// URL (unencrypted) by default = make sure to use HTTPS
+    """HTTPS only"""
+
     enable_http2: bool = True
+    """see :ref:`outgoing.enable_http2`"""
+
+    # limits
     max_connections: Optional[int] = 10
+    """see :ref:`outgoing.pool_connections`"""
+
     max_keepalive_connections: Optional[int] = 100
+    """see :ref:`outgoing.pool_maxsize`"""
+
     keepalive_expiry: Optional[float] = 5.0
+    """see :ref:`outgoing.keepalive_expiry`"""
+
     local_addresses: List[TYPE_IP_ANY] = field(default_factory=list)
+    """see :ref:`outgoing.source_ips`"""
+
     proxies: Dict[str, List[str]] = field(default_factory=dict)
+    """see :ref:`outgoing.proxies`"""
+
     using_tor_proxy: bool = False
+    """see :ref:`outgoing.using_tor_proxy`"""
+
     retries: int = 0
+    """see :ref:`outgoing.retries`"""
+
     retry_strategy: RetryStrategy = RetryStrategy.DIFFERENT_HTTP_CLIENT
+    """:py:obj:`RetryStrategy` (:py:obj:`NetworkContext`) of the
+    :py:obj:`Network`.  The default strategy is :py:obj:`DIFFERENT_HTTP_CLIENT
+    <NetworkContextRetryDifferentHTTPClient>`."""
+
     retry_on_http_error: Optional[TYPE_RETRY_ON_ERROR] = None
+    """see :ref:`engine.retry_on_http_error`"""
+
     logger_name: Optional[str] = None
+    """Name of the network's logger.  The :py:obj:`NetworkManager` sets it to
+    the name of the network."""
 
 
 class Network:
-    """Provides NetworkContext and ABCHTTPClient following NetworkSettings.
+    """Instances of class :py:obj:`Network` are build from
+    :py:obj:`NetworkSettings` and consist mainly of a :py:obj:`NetworkContext`
+    (:py:obj:`RetryStrategy`) and a :py:obj:`HTTP client
+    <.client.ABCHTTPClient>` instance.
 
-    A Network might have multiple IP addresses and proxies;
-    in this case, each call to get_context or get_http_client provides a different
-    configuration.
+    A Network might have multiple IP addresses and proxies; in this case, each
+    call to :py:obj:`self.get_context` or :py:obj:`self.get_http_client`
+    provides a different configuration.
+
+    :ivar _settings: A instance of :py:obj:`NetworkSettings`
+
+    :ivar _local_addresses_cycle: A generator that rotates infinitely over the
+      local IP addresses aka :ref:`source_ips <outgoing.source_ips>`
+      (:py:obj:`Network._get_local_addresses_cycle`)
+
+    :ivar _proxies_cycle: A generator that rotates infinitely over the
+      :ref:`proxies <outgoing.proxies>` (:py:obj:`Network._get_proxy_cycles`)
+
+    :ivar _clients: A mapping in which the :py:obj:`HTTPClient` are managed on
+      the basis of selected client properties
+      (:py:obj:`Network._get_http_client`).
+
+    :ivar _logger: A logger that is passed to the :py:obj:`HTTPClient`.  The
+      name of the logger comes from :py:obj:`NetworkSettings.logger_name`
+
     """
 
     __slots__ = (
@@ -100,7 +177,18 @@ class Network:
 
     @staticmethod
     def from_dict(**kwargs):
-        """Creates a Network from a keys/values"""
+        """Creates a Network from a keys/values
+
+        .. todo::
+
+           We should consider dropping this factory method as it bypasses the
+           typing we did in :py:obj:`NetworkSettings`.  The typing is only
+           re-established by the decoder .. when a decoder is needed, then the
+           caller should use the decoder directly to generate a
+           :py:obj:`NetworkSettings` instance. / Too many indirections impair
+           the readability of the code.
+
+        """
         return Network(NetwortSettingsDecoder.from_dict(kwargs))
 
     def close(self):
@@ -109,9 +197,9 @@ class Network:
             client.close()
 
     def check_configuration(self) -> bool:
-        """Check if the network configuration is valid.
+        """Check if the network configuration is valid.  Typical use case is to
+        check if the proxy is really a Tor proxy."""
 
-        Typical use case: check if the proxy is really a Tor proxy"""
         try:
             self._get_http_client()
             return True
@@ -120,23 +208,52 @@ class Network:
             return False
 
     def get_context(self, timeout: Optional[float] = None, start_time: Optional[float] = None) -> NetworkContext:
-        """Return a new NetworkContext"""
+        """Creates a new :py:obj:`NetworkContext` object from the configured
+        :py:obj:`NetworkSettings.retry_strategy`."""
+
         context_cls = self._settings.retry_strategy.value
         return context_cls(self._settings.retries, self._get_http_client, start_time, timeout)
 
     def _get_http_client(self) -> HTTPClient:
-        """Return an HTTP client.
+        """Returns a HTTP client.
 
-        Different HTTP clients are returned according to the configuration.
+        The network manages instances of :py:obj:`HTTPClient` by local IP
+        addresses (aka :ref:`source_ips <outgoing.source_ips>`) and
+        :ref:`proxies <outgoing.proxies>`.
 
-        For example, if two proxies are defined,
-        the first call to this function returns an HTTP client using the first proxy.
-        A second call returns an HTTP client using the second proxy.
-        A third call returns the same HTTP client from the first call, using the first proxy.
+        For each pair of a individual combination of the *local IP address* and
+        *proxy setup* a client is instanciated and added to the client mapping
+        in :py:obj:`Network._clients`.
+
+        - The variations of the *local IP address* result from the
+          :py:obj:`Network._local_addresses_cycle` generator.
+
+        - The variations of `proxies (httpx)`_ result from the
+          :py:obj:`Network._proxies_cycle` generator.
+
+        - Clients are reused and cached by a key that combines:
+
+             key = ( <local IP address>, `proxies (httpx)`_)
+
+        The HTTP client instances returned by this method therefore rotate over
+        all variations resulting from the rotating generators.  For each
+        individual combination, a client is instantiated only once and reused
+        from then on when the rotation has reached the same variation again.
+
+        For example, if two proxies are defined (and no local IP):
+
+          The first call to this function returns an HTTP client using the first
+          proxy.  A second call returns an HTTP client using the second proxy.
+          A third call returns the same HTTP client from the first call, using
+          the first proxy.
+
+        .. _proxies (httpx): https://www.python-httpx.org/advanced/#http-proxying
+
         """
         local_addresses = next(self._local_addresses_cycle)
         proxies = next(self._proxies_cycle)  # is a tuple so it can be part of the key
         key = (local_addresses, proxies)
+
         if key not in self._clients or self._clients[key].is_closed:
             http_client_cls = TorHTTPClient if self._settings.using_tor_proxy else HTTPClient
             hook_log_response = self._log_response if searx_debug else None
@@ -158,7 +275,10 @@ class Network:
         return self._clients[key]
 
     def _get_local_addresses_cycle(self):
-        """Never-ending generator of IP addresses"""
+        """Generator that rotates infinitely over the local IP addresses from
+        :py:obj:`NetworkSettings.local_addresses` (:ref:`source_ips
+        <outgoing.source_ips>`)."""
+
         while True:
             at_least_one = False
             for address in self._settings.local_addresses:
@@ -175,46 +295,90 @@ class Network:
                 yield None
 
     def _get_proxy_cycles(self):
-        """Never-ending generator of proxy configurations.
+        """A generator that rotates infinitely over the :ref:`proxies
+        <outgoing.proxies>`.  When no proxies are configured, this generator
+        returns an empty tuple at each iteration.
 
-        Each iteration returns tuples of tuples.
-        Semantically, this is a dictionary where
-        * keys are the mount points (see https://www.python-httpx.org/advanced/#mounting-transports )
-        * values are the proxy URLs.
+        The following configuration, in which two proxies are configured, is
+        shown as an example:
 
-        This private method returns a tuple instead of a dictionary to be hashable.
-        See the line `key = (local_addresses, proxies)` above.
+        .. code:: yaml
 
-        For example, if settings.yml contains:
-        ```yaml
-        proxies: socks5h://localhost:1337
-        ```
-
-        This is equivalent to
-        ```yaml
-        proxies:
-            - all://: socks5h://localhost:1337
-        ```
-
-        And this method always returns:
-        * `(('all://', 'socks5h://localhost:1337'))`
-
-        Another example:
-
-        ```yaml
-        proxies:
-            - all://: socks5h://localhost:1337
-            - https://bing.com:
+           proxies:
+               - all://:
                     - socks5h://localhost:4000
                     - socks5h://localhost:5000
-        ```
+                    - socks5h://localhost:6000
 
-        In this example, this method alternately returns these two responses:
+        Three HTTP clients can be built from this configuration, one communicates
+        via the socket on port 4000, the others via the sockets on port 5000 and
+        6000.  This generator circulates over the three possible values:
 
-        * `(('all://', 'socks5h://localhost:1337'), ('https://bing.com', 'socks5h://localhost:4000'))`
-        * `(('all://', 'socks5h://localhost:1337'), ('https://bing.com', 'socks5h://localhost:5000'))`
+        .. code:: python
 
-        When no proxies are configured, this method returns an empty tuple at each iteration.
+           # first
+           ( ('all://', 'socks5h://localhost:4000'), )
+
+           # second
+           ( ('all://', 'socks5h://localhost:5000'), )
+
+           # third
+           ( ('all://', 'socks5h://localhost:6000'), )
+
+        SearXNG's network allows to have more complex setups.  For instance we
+        can alternate bing requests over two proxies (5000 & 6000) and all other
+        requests go over a third proxy (4000):
+
+        .. code:: yaml
+
+           proxies:
+               - all://:
+                    - socks5h://localhost:4000
+               - https://bing.com:
+                    - socks5h://localhost:5000
+                    - socks5h://localhost:6000
+
+        In this example, this generator alternately returns these two responses:
+
+        .. code:: python
+
+           # first
+           ( ('all://', 'socks5h://localhost:4000'),
+             ('https://bing.com', 'socks5h://localhost:4000'),
+           )
+
+           # second
+           ( ('all://', 'socks5h://localhost:4000'),
+             ('https://bing.com', 'socks5h://localhost:5000'),
+           )
+
+        Semantically, these are dict-types, but this generator use tuple-types
+        because the :py:obj:`Network._get_http_client` method can use them
+        directly as keys for caching the HTTP clients.  A dict-type can be build
+        by ``dict(next(self._proxies_cycle))``.
+
+        Finally, an example where only one proxy is configured and there is no
+        mapping of a url-protocol:
+
+        .. code:: yaml
+
+           proxies: socks5h://localhost:4000
+
+        what is a short notation of:
+
+        .. code:: yaml
+
+           proxies:
+               - all://:
+                 - socks5h://localhost:4000
+
+        With such a setup, the generator would return the same (one) tuple with
+        every ``next`` call.
+
+        .. code:: python
+
+           # first one (and only)
+           ( ('all://', 'socks5h://localhost:4000'), )
         """
         # for each pattern, turn each list of proxy into a cycle
         proxy_settings = {pattern: cycle(proxy_urls) for pattern, proxy_urls in (self._settings.proxies).items()}
@@ -224,7 +388,25 @@ class Network:
             yield tuple((pattern, next(proxy_url_cycle)) for pattern, proxy_url_cycle in proxy_settings.items())
 
     def _log_response(self, response: httpx.Response):
-        """Logs from httpx are disabled. Log the HTTP response with the logger from the network"""
+        """Logging function that is registered in the event-hooks_ of the
+        httpx-client.
+
+        .. todo::
+
+           A major disadvantage of this implementation (which logs the request
+           in the response) is that a request is only logged if there is a
+           response to it.  However, these are precisely the cases that you want
+           to debug where there is no response to the request.
+
+           It would be better if the network instance defines loggers for
+           request and response in an event-map and passes the event-map
+           directly to the http-client's event-hooks_.
+
+        Logs from httpx are disabled. Log the HTTP response with the logger from the network
+
+        .. _event-hooks: https://www.python-httpx.org/advanced/#event-hooks
+        """
+
         request = response.request
         status = f"{response.status_code} {response.reason_phrase}"
         response_line = f"{response.http_version} {status}"
@@ -233,13 +415,18 @@ class Network:
         self._logger.debug(f'HTTP Request: {request.method} {request.url} "{response_line}"{content_type}')
 
     def _log_trace(self, name: str, info: Mapping[str, Any]) -> None:
-        """Log the actual source / dest IPs and SSL cipher.
+        """Logs the actual source & dest IPs and the SSL cipher.  This method is
+        registered in the `httpcore request-extensions`_.
 
-        Note: does not work with socks proxy
+        .. _httpcore request-extensions: https://www.encode.io/httpcore/extensions/#request-extensions
 
-        See
-        * https://www.encode.io/httpcore/extensions/
-        * https://github.com/encode/httpx/blob/e874351f04471029b2c5dcb2d0b50baccc7b9bc0/httpx/_main.py#L207
+        .. note::
+
+           Does not work with socks proxy / see:
+
+           - https://www.encode.io/httpcore/extensions/
+           - https://github.com/encode/httpx/blob/e874351f04471029b2c5dcb2d0b50baccc7b9bc0/httpx/_main.py#L207
+
         """
         if name == "connection.connect_tcp.complete":
             stream = info["return_value"]
@@ -377,6 +564,7 @@ class NetworkManager:
         return self.networks[name or NetworkManager.DEFAULT_NAME]
 
     def initialize_from_settings(self, settings_engines, settings_outgoing, check=True):
+
         # pylint: disable=too-many-branches
         from searx.engines import engines  # pylint: disable=import-outside-toplevel
 
@@ -503,3 +691,4 @@ class NetworkManager:
 
 
 NETWORKS = NetworkManager()
+"""Global :py:obj:`NetworkManager`"""
