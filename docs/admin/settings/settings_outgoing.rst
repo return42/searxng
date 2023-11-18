@@ -39,6 +39,8 @@ Communication with search engines.
      #  extra_proxy_timeout: 10.0
      #
 
+.. _outgoing.request_timeout:
+
 ``request_timeout`` :
   Global timeout of the requests made to others engines in seconds.  A bigger
   timeout will allow to wait for answers from slow engines, but in consequence
@@ -51,13 +53,19 @@ Communication with search engines.
 
 .. _Pool limit configuration: https://www.python-httpx.org/advanced/#pool-limit-configuration
 
+.. _outgoing.pool_maxsize:
+
 ``pool_maxsize``:
   Number of allowable keep-alive connections, or ``null`` to always allow.  The
   default is 10.  See ``max_keepalive_connections`` `Pool limit configuration`_.
 
+.. _outgoing.pool_connections:
+
 ``pool_connections`` :
   Maximum number of allowable connections, or ``null`` # for no limits.  The
   default is 100.  See ``max_connections`` `Pool limit configuration`_.
+
+.. _outgoing.keepalive_expiry:
 
 ``keepalive_expiry`` :
   Number of seconds to keep a connection in the pool.  By default 5.0 seconds.
@@ -65,10 +73,14 @@ Communication with search engines.
 
 .. _httpx proxies: https://www.python-httpx.org/advanced/#http-proxying
 
+.. _outgoing.proxies:
+
 ``proxies`` :
   Define one or more proxies you wish to use, see `httpx proxies`_.
   If there are more than one proxy for one protocol (http, https),
   requests to the engines are distributed in a round-robin fashion.
+
+.. _outgoing.source_ips:
 
 ``source_ips`` :
   If you use multiple network interfaces, define from which IP the requests must
@@ -82,15 +94,22 @@ Communication with search engines.
   * ``fe80::60a2:1691:e5a2:ee1f/126`` all IP addresses in this network.
   * ``[ 192.168.0.1, fe80::/126 ]``
 
+.. _outgoing.retries:
+
 ``retries`` :
   Number of retry in case of an HTTP error.  On each retry, SearXNG uses an
   different proxy and source ip.
 
-``enable_http2`` :
-  Enable by default. Set to ``false`` to disable HTTP/2.
+.. _outgoing.enable_http2:
 
+``enable_http2`` :
+  Enabled by default.  Set to ``false`` to disable HTTP/2 (`httpx http2`_).
+
+.. _httpx http2: https://www.python-httpx.org/http2/
 .. _httpx verification defaults: https://www.python-httpx.org/advanced/#changing-the-verification-defaults
 .. _httpx ssl configuration: https://www.python-httpx.org/compatibility/#ssl-configuration
+
+.. _outgoing.verify:
 
 ``verify``: : ``$SSL_CERT_FILE``, ``$SSL_CERT_DIR``
   Allow to specify a path to certificate.
@@ -100,8 +119,12 @@ Communication with search engines.
   ``$SSL_CERT_DIR`` (for a directory) OpenSSL variables.
   see `httpx ssl configuration`_.
 
+.. _outgoing.max_redirects:
+
 ``max_redirects`` :
   30 by default. Maximum redirect before it is an error.
+
+.. _outgoing.using_tor_proxy:
 
 ``using_tor_proxy`` :
   Using tor proxy (``true``) or not (``false``) for all engines.  The default is

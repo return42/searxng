@@ -1,40 +1,53 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # lint: pylint
 # pyright: basic
-"""This module implements various NetworkContext which deals with
+"""This module implements various :py:obj:`NetworkContext` which deals with
 
-* retry strategies: what to do when an HTTP request fails and retries>0
-* record HTTP runtime
-* timeout: In engines, the user query starts at one point in time,
-  the engine timeout is the starting point plus a defined value.
-  NetworkContext sends HTTP requests following the request timeout and the engine timeouts.
+- retry strategies: what to do when an HTTP request fails and retries>0
+- record HTTP runtime
+- timeout: In engines, the user query starts at one point in time, the engine
+  timeout is the starting point plus a defined value.  NetworkContext sends HTTP
+  requests following the request timeout and the engine timeouts.
 
 Example of usage:
 
-```
-context = NetworkContextRetryFunction(...)  # or another implementation
+.. code:: python
 
-def my_engine():
-    http_client = context.get_http_client()
-    ip_ifconfig = http_client.request("GET", "https://ifconfig.me/")
-    print("ip from ifconfig.me ", ip_ifconfig)
-    ip_myip = http_client.request("GET", "https://api.myip.com").json()["ip"]
-    print("ip from api.myip.com", ip_myip)
-    assert ip_ifconfig == ip_myip
-    # ^^ always true with NetworkContextRetryFunction and NetworkContextRetrySameHTTPClient
+   context = NetworkContextRetryFunction(...)  # or another implementation
 
-result = context.call(my_engine)
-print('HTTP runtime:', context.get_total_time())
-```
+   def my_engine():
+       http_client = context.get_http_client()
+       ip_ifconfig = http_client.request("GET", "https://ifconfig.me/")
+       print("ip from ifconfig.me ", ip_ifconfig)
+       ip_myip = http_client.request("GET", "https://api.myip.com").json()["ip"]
+       print("ip from api.myip.com", ip_myip)
+       assert ip_ifconfig == ip_myip
+       # ^^ always true with NetworkContextRetryFunction and NetworkContextRetrySameHTTPClient
 
-Note in the code above NetworkContextRetryFunction is instanced directly for the sake of simplicity.
-NetworkContext are actually instanciated using Network.get_context(...)
+   result = context.call(my_engine)
+   print('HTTP runtime:', context.get_total_time())
 
-Various implementations define what to do when there is an exception in the function `my_engine`:
+Note in the code above :py:obj:`NetworkContextRetryFunction` is instanced
+directly for the sake of simplicity.  A ``NetworkContext`` are actually
+instanciated using :py:obj:`network.Network.get_context`.  The default strategy
+is :py:obj:`DIFFERENT_HTTP_CLIENT <NetworkContextRetryDifferentHTTPClient>`.
 
-* `NetworkContextRetryFunction` gets another HTTP client and tries the whole function again.
-* `NetworkContextRetryDifferentHTTPClient` gets another HTTP client and tries the query again.
-* `NetworkContextRetrySameHTTPClient` tries the query again with the same HTTP client.
+Various implementations define what to do when there is an exception in the
+function ``my_engine``:
+
+- :py:obj:`NetworkContextRetryFunction` gets another HTTP client and tries the
+  whole function again.
+
+- :py:obj:`NetworkContextRetryDifferentHTTPClient` gets another HTTP client and
+  tries the query again.
+
+- :py:obj:`NetworkContextRetrySameHTTPClient` tries the query again with the
+  same HTTP client.
+
+.. autoclasstree:: searx.network.context
+   :namespace: searx.network.context
+   :zoom:
+
 """
 import functools
 import ssl
@@ -58,16 +71,15 @@ R = TypeVar('R')
 HTTPCLIENTFACTORY = Callable[[], ABCHTTPClient]
 
 DEFAULT_TIMEOUT = 120.0
-
-
-## NetworkContext
+"""Default timeout used in a network context"""
 
 
 class NetworkContext(ABC):
-    """Abstract implementation: the call must defined in concrete classes.
+    """Abstract implementation of a network context.  The network context is the
+    construct with which the retry strategies are implemented
+    (:py:obj:`network.RetryStrategy`).  Instances of context are created by the
+    method :py:obj:`network.Network._get_context`."""
 
-    Lifetime: one engine request or initialization of an engine.
-    """
 
     __slots__ = ('_retries', '_http_client_factory', '_http_client', '_start_time', '_http_time', '_timeout')
 
@@ -78,57 +90,111 @@ class NetworkContext(ABC):
         start_time: Optional[float],
         timeout: Optional[float],
     ):
+        """For a desscription of the arguments see :ref:`network examples` and
+        :py:obj:`searx.network.networkcontext_decorator`."""
+
+
         self._retries: int = retries
         # wrap http_client_factory here, so we can forget about this wrapping
         self._http_client_factory = _TimeHTTPClientWrapper.wrap_factory(http_client_factory, self)
         self._http_client: Optional[ABCHTTPClient] = None
         self._start_time: float = start_time or default_timer()
         self._http_time: float = 0.0
-        self._timeout: Optional[float] = timeout
+        self._timeout: Optional[float] = timeout or DEFAULT_TIMEOUT
 
     @abstractmethod
     def call(self, func: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
-        """Call func within the network context.
+        """*Call* ``func`` within the network context.  This method must be
+        implemented by the inheriting classes -- by the retry strategies.  In
+        short: the implementation of this method IS the retry policy.
 
-        The retry policy might call func multiple times.
+        The retry policy might:
 
-        Within the function self.get_http_client() returns an HTTP client to use.
+        - returns the result of ``func`` call
 
-        The retry policy might send multiple times the same HTTP request
-        until it works or the retry count falls to zero.
+        - call ``func`` multiple times and then return the result or ..
+
+        - return a :py:obj:`SoftRetryHTTPException`
+
+        - raise an :py:obj:`ssl.SSLError`, :py:obj:`httpx.RequestError` or
+          :py:obj:`httpx.HTTPStatusError` exception when max retries has been
+          reached.
+
+        - raise an :py:obj:`httpx.TimeoutException` when max timeout of the
+          context has been reached (:py:obj:`self.get_remaining_time`).
+
+        Within the ``call`` method (within the retry strategy) a HTTP client can
+        be set by :py:obj:`self._set_http_client`.  This client will be used
+        fore instance in :py:obj:`searx.network.get`:
+
+        .. code:: python
+
+           from searx import network
+
+           def net_time(timezone):
+
+               # this HTTP "get" will use the HTTP client set by the retry
+               # strategy in the network context, which is largely determined by
+               # the settings and in which the retry strategy was also set.
+
+               return network.get(f'https://worldtimeapi.org/api/timezone/{timezone}').json()
+
+           with network.networkcontext_manager('worldtime', timeout=3.0) as net_ctx:
+               json_response = net_ctx.call(net_time, 'GMT')
+           print(json_response)
+
         """
 
     @final
     def request(self, *args, **kwargs):
-        """Convenient method to wrap a call to request inside the call method.
+        """Convenient method to wrap a call to *HTTP request* inside the the
+        ``call`` method (within the retry strategy).
 
-        Use a new HTTP client to wrap a call to the request method using self.call
-        """
+        Sets a new HTTP client (:py:obj:`self._set_http_client`) before passing
+        the *HTTP request* to the :py:obj:`self.call` method."""
+
         self._set_http_client()
         return self.call(self._get_http_client().request, *args, **kwargs)
 
     @final
     def stream(self, *args, **kwargs):
-        """Convenient method to wrap a call to stream inside the call method.
+        """Convenient method to wrap a call to *HTTP stream* inside the the
+        ``call`` method (within the retry strategy).
 
-        Use a new HTTP client to wrap a call to the stream method using self.call
+        Sets a new HTTP client (:py:obj:`self._set_http_client`) before passing
+        the *HTTP send* to the :py:obj:`self.call` method.
+
+        .. code:: python
+
+           network_context = NETWORKS.get('image_proxy').get_context()
+           resp = network_context.stream(method='GET', url=url ..., timeout=30)
+
         """
         self._set_http_client()
         return self.call(self._get_http_client().stream, *args, **kwargs)
 
     @final
     def get_http_runtime(self) -> Optional[float]:
-        """Return the amount of time spent on HTTP requests"""
+        """Return the amount of time spent on the HTTP requests (inside the
+        ``call`` method).  Compare :py:obj:`record_http_time` and
+        :py:obj:`_TimeHTTPClientWrapper.send`"""
         return self._http_time
 
     @final
     def get_remaining_time(self, _override_timeout: Optional[float] = None) -> float:
-        """Return the remaining time for the context.
+        """Return the remaining time for the context.  Takes into account the
+        offset resulting from the ``start_time``. ``_override_timeout`` is not
+        intended to be used outside this module.
 
-        _override_timeout is not intended to be used outside this module.
+        .. todo::
+
+           Why does this functions adds a offset of ``timeout += 0.2``, is the
+           value of 0.2 seconds arbitrary, how can this value be explained?
+
         """
-        timeout = _override_timeout or self._timeout or DEFAULT_TIMEOUT
-        timeout += 0.2  # overhead
+
+        timeout = _override_timeout or self._timeout
+        timeout += 0.2
         timeout -= default_timer() - self._start_time
         return timeout
 
@@ -182,21 +248,18 @@ class NetworkContext(ABC):
         return f"<{common_attributes} http_client_factory={factory!r}>"
 
 
-## Measure time and deal with timeout
-
-
 class _TimeHTTPClientWrapper(ABCHTTPClient):
-    """Wrap an ABCHTTPClient:
-    * to record the HTTP runtime
-    * to override the timeout to make sure the total time does not exceed the timeout set on the NetworkContext
-    """
+    """Wrap an :py:obj:`ABCHTTPClient` to measure time and deal with timeout to
+    make sure the total time does not exceed the timeout set on the
+    NetworkContext"""
 
     __slots__ = ('http_client', 'network_context')
 
-    @staticmethod
-    def wrap_factory(http_client_factory: HTTPCLIENTFACTORY, network_context: NetworkContext):
-        """Return a factory which wraps the result of http_client_factory with _TimeHTTPClientWrapper instance."""
-        functools.wraps(http_client_factory)
+    @classmethod
+    def wrap_factory(cls, network_context: NetworkContext):
+        """Return a factory which wraps the result of
+        :py::obj:`.network.Network.get_http_client` with
+        :py::obj:`_TimeHTTPClientWrapper` instance."""
 
         def wrapped_factory():
             return _TimeHTTPClientWrapper(http_client_factory(), network_context)
@@ -209,10 +272,18 @@ class _TimeHTTPClientWrapper(ABCHTTPClient):
         self.network_context = network_context
 
     def send(self, stream, method, url, **kwargs) -> httpx.Response:
-        """Send the HTTP request using self.http_client
+        """Send the HTTP request using :py:obj:`self.http_client`.  The
+        remaining timeout for the HTTP request is calculated
+        :py:obj:`NetworkContext.get_remaining_time`.  The time taken by the HTTP
+        request is recorded by the :key:`with` context manager
+        :py:obj:`NetworkContext.record_http_time`.
 
-        Inaccurate with stream: the method must record HTTP time with the close method of httpx.Response.
-        It is not a problem since stream are used only for the image proxy.
+        .. todo::
+
+           Inaccurate with stream: the method must record HTTP time with the
+           close method of httpx.Response.  It is not a problem since stream are
+           used only for the image proxy.
+
         """
         with self.network_context._record_http_time():  # pylint: disable=protected-access
             timeout = self._extract_timeout(kwargs)
@@ -226,12 +297,10 @@ class _TimeHTTPClientWrapper(ABCHTTPClient):
         return self.http_client.is_closed
 
     def _extract_timeout(self, kwargs):
-        """Extract the timeout parameter and adjust it according to the remaining time"""
+        """Extract the timeout parameter and adjust it according to the
+        remaining time"""
         timeout = kwargs.pop('timeout', None)
         return self.network_context.get_remaining_time(timeout)
-
-
-## NetworkContextRetryFunction
 
 
 class NetworkContextRetryFunction(NetworkContext):
@@ -296,9 +365,6 @@ class _RetryFunctionHTTPClient(ABCHTTPClient):
         return self.http_client.is_closed
 
 
-## NetworkContextRetrySameHTTPClient
-
-
 class NetworkContextRetrySameHTTPClient(NetworkContext):
     """When an HTTP request fails, this NetworkContext tries again
     the same HTTP request with the same HTTP client
@@ -348,9 +414,6 @@ class _RetrySameHTTPClient(ABCHTTPClient):
     @property
     def is_closed(self) -> bool:
         return self.http_client.is_closed
-
-
-## NetworkContextRetryDifferentHTTPClient
 
 
 class NetworkContextRetryDifferentHTTPClient(NetworkContext):

@@ -3,54 +3,193 @@
 # pyright: basic
 # pylint: disable=redefined-outer-name
 # ^^ because there is the raise_for_httperror function and the raise_for_httperror parameter.
-"""HTTP for SearXNG.
+"""
+A network stack for SearXNG's engines
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In httpx and similar libraries, a client (also named session) contains a pool of HTTP connections.
-The client reuses these HTTP connections and automatically recreates them when the server at the other
-end closes the connections. Whatever the library, each client uses only one proxy (eventually none) and only
-one local IP address.
+In httpx_ and similar libraries, a client (also named session) contains a pool
+of HTTP connections.  The client reuses these HTTP connections and automatically
+recreates them when the server at the other end closes the connections.
 
-SearXNG's primary use case is an engine sending one (or more) outgoing HTTP request(s). The admin can configure
-an engine to use multiple proxies and/or IP addresses:  SearXNG sends the outgoing HTTP requests through these
-different proxies/IP addresses ( = HTTP clients ) on a rotational basis.
+Whatever the library, each HTTP client uses only one proxy (eventually none) and
+only one local IP address.
 
-In addition, when SearXNG runs an engine request, there is a hard timeout: the engine runtime must not exceed
-a defined value.
+.. _httpx: https://www.python-httpx.org/
 
-Moreover, an engine can ask SearXNG to retry a failed HTTP request.
+The primary use case of SearXNG is an engine that sends one or more outgoing
+HTTP requests.  The :ref:`outgoing <settings outgoing>` HTTP requests are
+largely determined by the following variables:
 
-However, we want to keep the engine codes simple and keep the complexity either in the configuration or the
-core component components (here, in this module).
+outgoing IPs (:ref:`source_ips <outgoing.source_ips>`) and :ref:`proxies <outgoing.proxies>`:
+  The admin can configure an engine to use multiple proxies or IP addresses:
+  SearXNG sends the outgoing HTTP requests through these different proxies and
+  IP-addresses on a rotational basis. Its important to note here: one HTTP
+  client can still use only one proxy or IP.
 
-To answer the above requirements, the `searx.network` module introduces three components:
-* HTTPClient and TorHTTPClient are two classes that wrap one or multiple httpx.Client
-* NetworkManager, a set of named Network. Each Network
-    * holds the configuration defined in settings.yml
-    * creates NetworkContext fed with an HTTPClient (or TorHTTPClient).
-      This is where the rotation between the proxies and IP addresses happens.
-* NetworkContext to provide a runtime context for the engines. The constructor needs a global timeout
-  and an HTTPClient factory. NetworkContext is an abstract class with three implementations,
-  one for each retry policy.
+engine timeout (:ref:`request_timeout <outgoing.request_timeout>`):
+  When SearXNG executes an engine request, there is also a hard timeout: The
+  total runtime of the engine must not exceed a certain value.  Its important to
+  note here: the total runtime is largely determined by the HTTP requests.
 
-It is only possible to send an HTTP request with a NetworkContext
-(otherwise, SearXNG raises a NetworkContextNotFound exception).
-Two helpers set a NetworkContext for the current thread:
+:ref:`retries <outgoing.retries>` of a HTTP request:
+  In addition, an engine can ask the SearXNG network to repeat a failed HTTP
+  request one or more times. Its important to note here: the first request and
+  all retries run in the same total runtime timeout.
 
-* The decorator `@networkcontext_decorator`, the intended usage is an external script (see searxng_extra)
-* The context manager `networkcontext_manager`, for the generic use case.
+However, we want to keep the engine code simple and keep the complexity either
+in the configuration or the core components (here in SearXNG's network stack).
+To answer the above requirements, the :py:obj:`searx.network` module introduces
+three components:
 
-Inside the thread, the caller can use `searx.network.get`, `searx.network.post` and similar functions without
-caring about the HTTP client. However, if the caller creates a new thread, it must initialize a new NetworkContext.
-A NetworkContext is most probably thread-safe, but this has not been tested.
+- :py:obj:`.client.HTTPClient` and :py:obj:`.client.TorHTTPClient` are two
+  classes that wrap one or multiple httpx.Client_
+
+- :py:obj:`.context.NetworkContext` to provide a runtime context for the
+  engines.  The constructor needs a global timeout and an HTTPClient factory.
+  :py:obj:`.context.NetworkContext` is an abstract class with three
+  implementations, one for each retry policy.
+
+  - :py:obj:`context.NetworkContextRetryFunction`
+  - :py:obj:`context.NetworkContextRetrySameHTTPClient`
+  - :py:obj:`context.NetworkContextRetryDifferentHTTPClient`
+
+- :py:obj:`.network.NetworkManager`, the global instance of this manager is
+  :py:obj:`.network.NETWORKS` where each network:
+
+  - holds the configuration defined in settings.yml
+
+  - creates :py:obj:`context.NetworkContext` fed with a
+    :py:obj:`client.HTTPClient` or :py:obj:`client.TorHTTPClient`.  This is
+    where the rotation between the proxies and IP addresses happens.
+
+.. _network examples:
+
+Network Context & Request
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Two helpers set a :py:obj:`context.NetworkContext`:
+
+- The context manager :py:obj:`networkcontext_manager`, for the generic use
+  case.
+
+- The decorator :py:obj:`networkcontext_decorator`, the intended usage is an
+  external script (see :ref:`searxng_extra`).
+
+.. tabs::
+
+  .. group-tab:: networkcontext_manager
+
+     .. code:: python
+
+        from searx import network
+        from time import sleep
+
+        def net_time(timezone):
+            return network.get(f'https://worldtimeapi.org/api/timezone/{timezone}').json()
+
+        with network.networkcontext_manager('worldtime', timeout=3.0) as net_ctx:
+            sleep(1) # there are 2 sec left for the function call ..
+            json_response = net_ctx.call(net_time, 'GMT')
+            print(json_response)
+
+        print("End of network-context")
+
+  .. group-tab:: networkcontext_decorator
+
+     .. code:: python
+
+        from searx import network
+        from time import sleep
+
+        @network.networkcontext_decorator('ifconfig', timeout=3.0)
+        def main()
+            sleep(1) # there are 2 sec left for the function call ..
+            my_ip = network.get("https://ifconfig.me/ip").text
+            print(my_ip)
+
+       if __name__ == '__main__':
+           main()
+
+
+In both examples above the :py:obj:`get` function is used to send a HTTP ``GET``
+request, alternatively :py:obj:`post` can be used to send a HTTP ``POST``
+request.  Both functions are simply wrapper around the central HTTP
+:py:obj:`network.request <request>` function.
+
+.. hint::
+
+   A HTTP :py:obj:`network.request <request>` can only be called in a
+   :py:obj:`context.NetworkContext`, otherwise SearXNG raises a
+   :py:obj:`NetworkContextNotFound` exception!
+
+   - HTTP ``GET`` :py:obj:`get`
+   - HTTP ``POST`` :py:obj:`post`
+   - HTTP ``PUT`` :py:obj:`put`
+   - HTTP ``PATCH`` :py:obj:`patch`
+   - HTTP ``DELETE`` :py:obj:`delete`
+   - HTTP ``OPTIONS`` :py:obj:`options`
+   - HTTP ``HEAD`` :py:obj:`head`
+
+
+Architecture
+~~~~~~~~~~~~
 
 The overall architecture:
-* searx.network.network.NETWORKS contains all the networks.
-    The method `NetworkManager.get(network_name)` returns an initialized Network.
-* searx.network.network.Network defines a network (a set of proxies, local IP address, etc...).
-    They are defined in settings.yml.
-    The method `Network.get_context()` creates a new NetworkContext.
-* searx.network.context contains three different implementations of NetworkContext. One for each retry policy.
-* searx.network.client.HTTPClient and searx.network.client.TorHTTPClient implement wrappers around httpx.Client.
+
+:py:obj:`searx.network.network.NETWORKS`:
+  Contains all the networks
+
+  .. code:: python
+
+     NETWORKS = NetworkManager()
+
+  The method :py:obj:`NETWORKS.get('network_name') <network.NetworkManager.get>`
+  returns an initialized Network named ``network_name``.  As long as no value is
+  specified for engine's :ref:`engine network` in the engine setup, SearXNG
+  creates a new network for each :ref:`engine name`.
+
+:py:obj:`searx.network.network.Network`:
+  Defines a network (a set of proxies, local IP address, etc...).
+
+  - The *networks* are defined in ``settings.yml`` / the global defaults are
+    defined in the :ref:`outgoing <settings outgoing>` settings.
+
+  - The method :py:obj:`network.Network.get_context` creates a new
+    :py:obj:`context.NetworkContext`.  However, this context will not usually be
+    created directly, usually the decorator or the ``with`` context will be
+    used, which then sets up the context.
+
+    .. code:: python
+
+       network = NETWORKS.get(network_name)
+       network_context = network.get_context(timeout=timeout, start_time=start_time)
+
+:py:obj:`searx.network.context`:
+  Contains three different implementations of
+  :py:obj:`context.NetworkContext`. One for each retry policy.
+
+:py:obj:`searx.network.client`:
+  :py:obj:`client.HTTPClient` and :py:obj:`client.TorHTTPClient` implement
+  wrappers around httpx.Client_.
+
+Threads
+~~~~~~~
+
+Within the same thread, the caller can use :py:obj:`network.request <request>`
+and similar functions without worrying about the HTTP client through which the
+HTTP request is sent.  However, if the caller creates a new thread, it must
+initialize a new :py:obj:`searx.network.context.NetworkContext`.
+
+.. todo::
+
+   A :py:obj:`context.NetworkContext` is most probably thread-safe, but this
+   has not been tested.
+
+.. _httpx.Client: https://www.python-httpx.org/api/#client
+
+API ``searx.network``
+~~~~~~~~~~~~~~~~~~~~~
+
 """
 import threading
 from contextlib import contextmanager
@@ -82,55 +221,36 @@ __all__ = [
 
 
 _THREADLOCAL = threading.local()
-"""Thread-local that contains only one field: network_context."""
+"""Thread-local that contains only one field: ``network_context``.
+"""
 
 _NETWORK_CONTEXT_KEY = 'network_context'
-"""Key to access _THREADLOCAL"""
+"""Key to access :py:obj:`_THREADLOCAL`"""
 
 DEFAULT_MAX_REDIRECTS = httpx._config.DEFAULT_MAX_REDIRECTS  # pylint: disable=protected-access
 
 
 class NetworkContextNotFound(Exception):
-    """A NetworkContext is expected to exist for the current thread.
+    """Exception, a :py:obj:`context.NetworkContext` is expected to exist for
+    the current network request.  Use :py:obj:`networkcontext_decorator` or
+    :py:obj:`networkcontext_manager` to set a :py:obj:`NetworkContext`
 
-    Use searx.network.networkcontext_manager or searx.network.networkcontext_decorator
-    to set a NetworkContext
     """
 
 
 @contextmanager
 def networkcontext_manager(
-    network_name: Optional[str] = None, timeout: Optional[float] = None, start_time: Optional[float] = None
+    network_name: Optional[str] = None,
+    timeout: Optional[float] = None,
+    start_time: Optional[float] = None,
 ):
-    """Context manager to set a NetworkContext for the current thread
+    """Python (:keyword:`with`) context manager for network requests in a
+    :py:obj:`context.NetworkContext`.  The arguments of the
+    :py:obj:`contextlib.contextmanager` are analogous to
+    :py:obj:`networkcontext_decorator`, a description can be found there and a
+    example usage is shown in :ref:`network examples`.  The yielded
+    :py:obj:`context.NetworkContext` instance is *thread local*.
 
-    The timeout is for the whole function and is infinite by default (None).
-    The timeout is counted from the current time or start_time if different from None.
-
-    Example of usage:
-
-    ```python
-    from time import sleep
-    from searx.network import networkcontext_manager, get
-
-    def search(query):
-        # the timeout is automatically set to 2.0 seconds (the remaining time for the NetworkContext)
-        # 2.0 because the timeout for the NetworkContext is 3.0 and one second has elllapsed with sleep(1.0)
-        auckland_time = get("http://worldtimeapi.org/api/timezone/Pacific/Auckland").json()
-        # the timeout is automatically set to 2.0 - (runtime of the previous HTTP request)
-        ip_time = get("http://worldtimeapi.org/api/ip").json()
-        return auckland_time, ip_time
-
-    # "worldtimeapi" is network defined in settings.yml
-    # network_context.call might call multiple times the search function,
-    # however the timeout will be respected.
-    with networkcontext_manager('worldtimeapi', timeout=3.0) as network_context:
-        sleep(1.0)
-        auckland_time, ip_time = network_context.call(search(query))
-        print("Auckland time: ", auckland_time["datetime"])
-        print("My time: ", ip_time["datetime"])
-        print("HTTP runtime:", network_context.get_http_runtime())
-    ```
     """
     network = NETWORKS.get(network_name)
     network_context = network.get_context(timeout=timeout, start_time=start_time)
@@ -145,29 +265,46 @@ def networkcontext_manager(
 def networkcontext_decorator(
     network_name: Optional[str] = None, timeout: Optional[float] = None, start_time: Optional[float] = None
 ):
-    """Set the NetworkContext, then call the wrapped function using searx.network.context.NetworkContext.call
+    """A :external:term:`decorator` (aka *wrapper function*) to set a
+    :py:obj:`context.NetworkContext` for network requests in the *decorated*
+    function. A example usage is shown in :ref:`network examples`.
 
-    The timeout is for the whole function and is infinite by default (None).
-    The timeout is counted from the current time or start_time if different from None
+    :param timeout: The timeout (in sec) is for the whole function and is infinite
+        by default (``None``).  The timeout is counted from the current time or
+        ``start_time`` if different from ``None``.
 
-    Intended usage: to provide a NetworkContext for scripts in searxng_extra.
+    :param start_time: The start time (*offset in sec from now*) of the
+      timeout. The remaining time is calculated in
+      :py:obj:`context.NetworkContext.get_remaining_time`.
 
-    Example of usage:
+    :param network_name: Name of the network for which the context is created.
 
-    ```python
-    from time import sleep
-    from searx import network
+    The global :py:obj:`.network.NETWORKS` manager serves networks according to
+    their ``network_name``.  In the case of the engines, the networks to the
+    engines (:ref:`engine network`) are managed here. For example, there is a
+    network named ``google`` for the google engine, the context for this would
+    be built roughly as follows:
 
-    @network.networkcontext_decorator(timeout=3.0)
-    def main()
-        sleep(1.0)
-        # the timeout is automatically set to 2.0 (the remaining time for the NetworkContext).
-        my_ip = network.get("https://ifconfig.me/ip").text
-        print(my_ip)
+    .. tabs::
 
-    if __name__ == '__main__':
-        main()
-    ```
+       .. group-tab:: exemplary
+
+          .. code:: python
+
+             google_net = NETWORKS.get('google')
+             google_net_context = google_net.get_context(timeout, start_time)
+             resp = network.get("https://google.com/...")
+
+
+       .. group-tab:: @networkcontext_decorator
+
+          .. code:: python
+
+             @networkcontext_decorator('google', timeout=3.0)
+             def main()
+                 resp = network.get("https://google.com/...")
+                 ...
+
     """
 
     def func_outer(func: Callable[P, R]):
@@ -198,36 +335,60 @@ def request(
     verify: Union[_NotSetClass, httpx._types.VerifyTypes] = NOTSET,
     raise_for_httperror: bool = False,
 ) -> httpx.Response:
-    """Similar to httpx.request ( https://www.python-httpx.org/api/ ) with some differences:
+    """HTTP request in the *network stack*
 
-    * proxies:
-        it is not available and has to be defined in the Network configuration (in settings.yml)
-    * cert:
-        it is not available and is always None.
-    * trust_env:
-        it is not available and is always True.
-    * timeout:
-        the implementation uses the lowest timeout between this parameter and remaining time for the NetworkContext.
-    * allow_redirects:
-        it replaces the follow_redirects parameter to be compatible with the requests API.
-    * raise_for_httperror:
-        when True, this function calls searx.network.raise_for_httperror.raise_for_httperror.
+    This function requires a :py:obj`NetworkContext` provided by either
+    :py:obj:`networkcontext_decorator` or :py:obj:`networkcontext_manager`.  The
+    implementation uses one or more httpx.Client_
 
-    Some parameters from httpx.Client ( https://www.python-httpx.org/api/#client) are available:
+    A HTTP request in the *network stack* is similar to httpx.request_ with some
+    differences:
 
-    * max_redirects:
-        Set to None to use the value from the Network configuration.
-        The maximum number of redirect responses that should be followed.
-    * verify:
-        Set to None to use the value from the Network configuration.
-    * limits:
-        it has to be defined in the Network configuration (in settings.yml)
-    * default_encoding:
-        this parameter is not available and is always "utf-8".
+    ``proxies``:
+      Is not available and has to be defined in the Network configuration
+      (:ref:`proxies <outgoing.proxies>`).
 
-    This function requires a NetworkContext provided by either networkcontext_decorator or networkcontext_manager.
+    ``cert``:
+        Is not available and is always ``None``.
 
-    The implementation uses one or more httpx.Client
+    ``trust_env``:
+        it is not available and is always ``True``.
+
+    ``timeout``:
+        The implementation uses the lowest timeout between this parameter and
+        remaining time for the :py:obj:`context.NetworkContext`.
+
+    ``allow_redirects``:
+       Replaces the ``follow_redirects`` parameter to be compatible with the
+       requests API.
+
+    ``raise_for_httperror``:
+        When ``True``, this function calls
+        :py:obj:`searx.network.raise_for_httperror.raise_for_httperror`.
+
+    Some parameters from httpx.Client_ are available:
+
+    ``max_redirects``:
+        Set to ``None`` to use the value from the Network configuration.  The
+        maximum number of redirect responses that should be followed.
+
+    ``verify``:
+        Set to ``None`` to use the value from the :py:obj:`network.NetworkSettings`.
+
+    ``limits``:
+        Has to be defined in the :py:obj:`network.NetworkSettings` /
+        compare `httpx pool limits`_.  :py:obj:`httpx.Limits`:
+
+        - ``max_connections`` / :ref:`outgoing.pool_connections`
+        - ``max_keepalive_connections`` / :ref:`outgoing.pool_maxsize`
+        - ``keepalive_expiry`` / :ref:`outgoing.keepalive_expiry`
+
+    ``default_encoding``:
+        This parameter is not available and is always ``utf-8``.
+
+    .. _httpx.request: https://www.python-httpx.org/api/#client
+    .. _httpx pool limits: https://www.python-httpx.org/advanced/#pool-limit-configuration
+
     """
     # pylint: disable=too-many-arguments
     network_context: Optional[NetworkContext] = getattr(_THREADLOCAL, _NETWORK_CONTEXT_KEY, None)
