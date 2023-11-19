@@ -191,14 +191,17 @@ API ``searx.network``
 ~~~~~~~~~~~~~~~~~~~~~
 
 """
+
+from __future__ import annotations
+
 import threading
 from contextlib import contextmanager
 from functools import wraps
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable
 
 import httpx
 
-from searx.network.client import NOTSET, _NotSetClass
+from searx.utils import NOTSET, NOTSET_TYPE
 from searx.network.context import NetworkContext, P, R
 from searx.network.network import NETWORKS
 from searx.network.raise_for_httperror import raise_for_httperror
@@ -240,9 +243,9 @@ class NetworkContextNotFound(Exception):
 
 @contextmanager
 def networkcontext_manager(
-    network_name: Optional[str] = None,
-    timeout: Optional[float] = None,
-    start_time: Optional[float] = None,
+    network_name: str | None = None,
+    timeout: float | None = None,
+    start_time: float | None = None,
 ):
     """Python (:keyword:`with`) context manager for network requests in a
     :py:obj:`context.NetworkContext`.  The arguments of the
@@ -263,7 +266,7 @@ def networkcontext_manager(
 
 
 def networkcontext_decorator(
-    network_name: Optional[str] = None, timeout: Optional[float] = None, start_time: Optional[float] = None
+    network_name: str | None = None, timeout: float | None = None, start_time: float | None = None
 ):
     """A :external:term:`decorator` (aka *wrapper function*) to set a
     :py:obj:`context.NetworkContext` for network requests in the *decorated*
@@ -321,18 +324,18 @@ def networkcontext_decorator(
 def request(
     method: str,
     url: str,
-    params: Optional[httpx._types.QueryParamTypes] = None,
-    content: Optional[httpx._types.RequestContent] = None,
-    data: Optional[httpx._types.RequestData] = None,
-    files: Optional[httpx._types.RequestFiles] = None,
-    json: Optional[Any] = None,
-    headers: Optional[httpx._types.HeaderTypes] = None,
-    cookies: Optional[httpx._types.CookieTypes] = None,
-    auth: Optional[httpx._types.AuthTypes] = None,
+    params: httpx._types.QueryParamTypes | None = None,
+    content: httpx._types.RequestContent | None = None,
+    data: httpx._types.RequestData | None = None,
+    files: httpx._types.RequestFiles | None = None,
+    json: Any | None = None,
+    headers: httpx._types.HeaderTypes | None = None,
+    cookies: httpx._types.CookieTypes | None = None,
+    auth: httpx._types.AuthTypes | None = None,
     timeout: httpx._types.TimeoutTypes = None,
     allow_redirects: bool = False,
-    max_redirects: Union[_NotSetClass, int] = NOTSET,
-    verify: Union[_NotSetClass, httpx._types.VerifyTypes] = NOTSET,
+    max_redirects: NOTSET_TYPE | int = NOTSET,
+    verify: NOTSET_TYPE | httpx._types.VerifyTypes = NOTSET,
     raise_for_httperror: bool = False,
 ) -> httpx.Response:
     """HTTP request in the *network stack*
@@ -391,7 +394,7 @@ def request(
 
     """
     # pylint: disable=too-many-arguments
-    network_context: Optional[NetworkContext] = getattr(_THREADLOCAL, _NETWORK_CONTEXT_KEY, None)
+    network_context: NetworkContext | None = getattr(_THREADLOCAL, _NETWORK_CONTEXT_KEY, None)
     if network_context is None:
         raise NetworkContextNotFound()
     http_client = network_context._get_http_client()  # pylint: disable=protected-access
@@ -416,13 +419,13 @@ def request(
 
 def get(
     url: str,
-    params: Optional[httpx._types.QueryParamTypes] = None,
-    headers: Optional[httpx._types.HeaderTypes] = None,
-    cookies: Optional[httpx._types.CookieTypes] = None,
-    auth: Optional[httpx._types.AuthTypes] = None,
+    params: httpx._types.QueryParamTypes | None = None,
+    headers: httpx._types.HeaderTypes | None = None,
+    cookies: httpx._types.CookieTypes | None = None,
+    auth: httpx._types.AuthTypes | None = None,
     allow_redirects: bool = True,
-    max_redirects: Union[_NotSetClass, int] = NOTSET,
-    verify: Union[_NotSetClass, httpx._types.VerifyTypes] = NOTSET,
+    max_redirects: NOTSET_TYPE | int = NOTSET,
+    verify: NOTSET_TYPE | httpx._types.VerifyTypes = NOTSET,
     timeout: httpx._types.TimeoutTypes = None,
     raise_for_httperror: bool = False,
 ) -> httpx.Response:
@@ -448,13 +451,13 @@ def get(
 
 def options(
     url: str,
-    params: Optional[httpx._types.QueryParamTypes] = None,
-    headers: Optional[httpx._types.HeaderTypes] = None,
-    cookies: Optional[httpx._types.CookieTypes] = None,
-    auth: Optional[httpx._types.AuthTypes] = None,
+    params: httpx._types.QueryParamTypes | None = None,
+    headers: httpx._types.HeaderTypes | None = None,
+    cookies: httpx._types.CookieTypes | None = None,
+    auth: httpx._types.AuthTypes | None = None,
     allow_redirects: bool = False,
-    max_redirects: Union[_NotSetClass, int] = NOTSET,
-    verify: Union[_NotSetClass, httpx._types.VerifyTypes] = NOTSET,
+    max_redirects: NOTSET_TYPE | int = NOTSET,
+    verify: NOTSET_TYPE | httpx._types.VerifyTypes = NOTSET,
     timeout: httpx._types.TimeoutTypes = None,
     raise_for_httperror: bool = False,
 ) -> httpx.Response:
@@ -477,13 +480,13 @@ def options(
 
 def head(
     url: str,
-    params: Optional[httpx._types.QueryParamTypes] = None,
-    headers: Optional[httpx._types.HeaderTypes] = None,
-    cookies: Optional[httpx._types.CookieTypes] = None,
-    auth: Optional[httpx._types.AuthTypes] = None,
+    params: httpx._types.QueryParamTypes | None = None,
+    headers: httpx._types.HeaderTypes | None = None,
+    cookies: httpx._types.CookieTypes | None = None,
+    auth: httpx._types.AuthTypes | None = None,
     allow_redirects: bool = False,
-    max_redirects: Union[_NotSetClass, int] = NOTSET,
-    verify: Union[_NotSetClass, httpx._types.VerifyTypes] = NOTSET,
+    max_redirects: NOTSET_TYPE | int = NOTSET,
+    verify: NOTSET_TYPE | httpx._types.VerifyTypes = NOTSET,
     timeout: httpx._types.TimeoutTypes = None,
     raise_for_httperror: bool = False,
 ) -> httpx.Response:
@@ -506,17 +509,17 @@ def head(
 
 def post(
     url: str,
-    content: Optional[httpx._types.RequestContent] = None,
-    data: Optional[httpx._types.RequestData] = None,
-    files: Optional[httpx._types.RequestFiles] = None,
-    json: Optional[Any] = None,
-    params: Optional[httpx._types.QueryParamTypes] = None,
-    headers: Optional[httpx._types.HeaderTypes] = None,
-    cookies: Optional[httpx._types.CookieTypes] = None,
-    auth: Optional[httpx._types.AuthTypes] = None,
+    content: httpx._types.RequestContent | None = None,
+    data: httpx._types.RequestData | None = None,
+    files: httpx._types.RequestFiles | None = None,
+    json: Any | None = None,
+    params: httpx._types.QueryParamTypes | None = None,
+    headers: httpx._types.HeaderTypes | None = None,
+    cookies: httpx._types.CookieTypes | None = None,
+    auth: httpx._types.AuthTypes | None = None,
     allow_redirects: bool = False,
-    max_redirects: Union[_NotSetClass, int] = NOTSET,
-    verify: Union[_NotSetClass, httpx._types.VerifyTypes] = NOTSET,
+    max_redirects: NOTSET_TYPE | int = NOTSET,
+    verify: NOTSET_TYPE | httpx._types.VerifyTypes = NOTSET,
     timeout: httpx._types.TimeoutTypes = None,
     raise_for_httperror: bool = False,
 ) -> httpx.Response:
@@ -543,17 +546,17 @@ def post(
 
 def put(
     url: str,
-    content: Optional[httpx._types.RequestContent] = None,
-    data: Optional[httpx._types.RequestData] = None,
-    files: Optional[httpx._types.RequestFiles] = None,
-    json: Optional[Any] = None,
-    params: Optional[httpx._types.QueryParamTypes] = None,
-    headers: Optional[httpx._types.HeaderTypes] = None,
-    cookies: Optional[httpx._types.CookieTypes] = None,
-    auth: Optional[httpx._types.AuthTypes] = None,
+    content: httpx._types.RequestContent | None = None,
+    data: httpx._types.RequestData | None = None,
+    files: httpx._types.RequestFiles | None = None,
+    json: Any | None = None,
+    params: httpx._types.QueryParamTypes | None = None,
+    headers: httpx._types.HeaderTypes | None = None,
+    cookies: httpx._types.CookieTypes | None = None,
+    auth: httpx._types.AuthTypes | None = None,
     allow_redirects: bool = False,
-    max_redirects: Union[_NotSetClass, int] = NOTSET,
-    verify: Union[_NotSetClass, httpx._types.VerifyTypes] = NOTSET,
+    max_redirects: NOTSET_TYPE | int = NOTSET,
+    verify: NOTSET_TYPE | httpx._types.VerifyTypes = NOTSET,
     timeout: httpx._types.TimeoutTypes = None,
     raise_for_httperror: bool = False,
 ) -> httpx.Response:
@@ -580,17 +583,17 @@ def put(
 
 def patch(
     url: str,
-    content: Optional[httpx._types.RequestContent] = None,
-    data: Optional[httpx._types.RequestData] = None,
-    files: Optional[httpx._types.RequestFiles] = None,
-    json: Optional[Any] = None,
-    params: Optional[httpx._types.QueryParamTypes] = None,
-    headers: Optional[httpx._types.HeaderTypes] = None,
-    cookies: Optional[httpx._types.CookieTypes] = None,
-    auth: Optional[httpx._types.AuthTypes] = None,
+    content: httpx._types.RequestContent | None = None,
+    data: httpx._types.RequestData | None = None,
+    files: httpx._types.RequestFiles | None = None,
+    json: Any | None = None,
+    params: httpx._types.QueryParamTypes | None = None,
+    headers: httpx._types.HeaderTypes | None = None,
+    cookies: httpx._types.CookieTypes | None = None,
+    auth: httpx._types.AuthTypes | None = None,
     allow_redirects: bool = False,
-    max_redirects: Union[_NotSetClass, int] = NOTSET,
-    verify: Union[_NotSetClass, httpx._types.VerifyTypes] = NOTSET,
+    max_redirects: NOTSET_TYPE | int = NOTSET,
+    verify: NOTSET_TYPE | httpx._types.VerifyTypes = NOTSET,
     timeout: httpx._types.TimeoutTypes = None,
     raise_for_httperror: bool = False,
 ) -> httpx.Response:
@@ -617,13 +620,13 @@ def patch(
 
 def delete(
     url: str,
-    params: Optional[httpx._types.QueryParamTypes] = None,
-    headers: Optional[httpx._types.HeaderTypes] = None,
-    cookies: Optional[httpx._types.CookieTypes] = None,
-    auth: Optional[httpx._types.AuthTypes] = None,
+    params: httpx._types.QueryParamTypes | None = None,
+    headers: httpx._types.HeaderTypes | None = None,
+    cookies: httpx._types.CookieTypes | None = None,
+    auth: httpx._types.AuthTypes | None = None,
     allow_redirects: bool = False,
-    max_redirects: Union[_NotSetClass, int] = NOTSET,
-    verify: Union[_NotSetClass, httpx._types.VerifyTypes] = NOTSET,
+    max_redirects: NOTSET_TYPE | int = NOTSET,
+    verify: NOTSET_TYPE | httpx._types.VerifyTypes = NOTSET,
     timeout: httpx._types.TimeoutTypes = None,
     raise_for_httperror: bool = False,
 ) -> httpx.Response:

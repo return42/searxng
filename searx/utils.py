@@ -11,6 +11,7 @@ import json
 import types
 
 from typing import Optional, Union, Any, Set, List, Dict, MutableMapping, Tuple, Callable
+from enum import Enum
 from numbers import Number
 from os.path import splitext, join
 from random import choice
@@ -62,12 +63,16 @@ SEARCH_LANGUAGE_CODES = frozenset([searxng_locale[0].split('-')[0] for searxng_l
 """Languages supported by most searxng engines (:py:obj:`searx.sxng_locales.sxng_locales`)."""
 
 
-class _NotSetClass:  # pylint: disable=too-few-public-methods
-    """Internal class for this module, do not create instance of this class.
-    Replace the None value, allow explicitly pass None as a function argument"""
+class NOTSET_TYPE(Enum):  # pylint: disable=invalid-name
+    """type of :py:obj:`NOTSET`"""
+
+    # https://peps.python.org/pep-0484/#support-for-singleton-types-in-unions
+    SINGLETON = 0
 
 
-_NOTSET = _NotSetClass()
+NOTSET = NOTSET_TYPE.SINGLETON
+"""Value of a setting that is *not set*, which is different from ``None``, since
+a setting can also be ``None``. """
 
 
 def searx_useragent() -> str:
@@ -553,7 +558,7 @@ def eval_xpath_list(element: ElementBase, xpath_spec: XPathSpecType, min_len: Op
     return result
 
 
-def eval_xpath_getindex(elements: ElementBase, xpath_spec: XPathSpecType, index: int, default=_NOTSET):
+def eval_xpath_getindex(elements: ElementBase, xpath_spec: XPathSpecType, index: int, default=NOTSET):
     """Call eval_xpath_list then get one element using the index parameter.
     If the index does not exist, either raise an exception is default is not set,
     other return the default value (can be None).
@@ -575,7 +580,7 @@ def eval_xpath_getindex(elements: ElementBase, xpath_spec: XPathSpecType, index:
     result = eval_xpath_list(elements, xpath_spec)
     if -len(result) <= index < len(result):
         return result[index]
-    if default == _NOTSET:
+    if default == NOTSET:
         # raise an SearxEngineXPathException instead of IndexError
         # to record xpath_spec
         raise SearxEngineXPathException(xpath_spec, 'index ' + str(index) + ' not found')

@@ -16,12 +16,13 @@ individual :py:obj:`NetworkSettings` and they are managed in the
 :py:obj:`NetworkManager`.
 
 """
+from __future__ import annotations
 
 import ipaddress
 from dataclasses import dataclass, field
 from enum import Enum
 from itertools import cycle
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
+from typing import Any, Mapping
 
 import httpx
 
@@ -46,14 +47,11 @@ class RetryStrategy(Enum):
     DIFFERENT_HTTP_CLIENT = NetworkContextRetryDifferentHTTPClient
 
 
-TYPE_IP_ANY = Union[  # pylint: disable=invalid-name
-    ipaddress.IPv4Address,
-    ipaddress.IPv6Address,
-    ipaddress.IPv4Network,
-    ipaddress.IPv6Network,
-]
+TYPE_IP_ANY = (
+    ipaddress.IPv4Address | ipaddress.IPv6Address | ipaddress.IPv4Network | ipaddress.IPv6Network
+)  # pylint: disable=invalid-name
 
-TYPE_RETRY_ON_ERROR = Union[List[int], int, bool]  # pylint: disable=invalid-name
+TYPE_RETRY_ON_ERROR = list[int] | int | bool  # pylint: disable=invalid-name
 
 
 @dataclass(order=True, frozen=True)
@@ -97,19 +95,19 @@ class NetworkSettings:
     """see :ref:`outgoing.enable_http2`"""
 
     # limits
-    max_connections: Optional[int] = 10
+    max_connections: int | None = 10
     """see :ref:`outgoing.pool_connections`"""
 
-    max_keepalive_connections: Optional[int] = 100
+    max_keepalive_connections: int | None = 100
     """see :ref:`outgoing.pool_maxsize`"""
 
-    keepalive_expiry: Optional[float] = 5.0
+    keepalive_expiry: float | None = 5.0
     """see :ref:`outgoing.keepalive_expiry`"""
 
-    local_addresses: List[TYPE_IP_ANY] = field(default_factory=list)
+    local_addresses: list[TYPE_IP_ANY] = field(default_factory=list)
     """see :ref:`outgoing.source_ips`"""
 
-    proxies: Dict[str, List[str]] = field(default_factory=dict)
+    proxies: dict[str, list[str]] = field(default_factory=dict)
     """see :ref:`outgoing.proxies`"""
 
     using_tor_proxy: bool = False
@@ -123,10 +121,10 @@ class NetworkSettings:
     :py:obj:`Network`.  The default strategy is :py:obj:`DIFFERENT_HTTP_CLIENT
     <NetworkContextRetryDifferentHTTPClient>`."""
 
-    retry_on_http_error: Optional[TYPE_RETRY_ON_ERROR] = None
+    retry_on_http_error: TYPE_RETRY_ON_ERROR | None = None
     """see :ref:`engine.retry_on_http_error`"""
 
-    logger_name: Optional[str] = None
+    logger_name: str | None = None
     """Name of the network's logger.  The :py:obj:`NetworkManager` sets it to
     the name of the network."""
 
@@ -172,7 +170,7 @@ class Network:
         self._settings = settings
         self._local_addresses_cycle = self._get_local_addresses_cycle()
         self._proxies_cycle = self._get_proxy_cycles()
-        self._clients: Dict[Tuple, HTTPClient] = {}
+        self._clients: dict[tuple, HTTPClient] = {}
         self._logger = logger.getChild(settings.logger_name) if settings.logger_name else logger
 
     @staticmethod
@@ -192,7 +190,9 @@ class Network:
         return Network(NetwortSettingsDecoder.from_dict(kwargs))
 
     def close(self):
-        """Close all the ABCHTTPClient hold by the Network"""
+        """Closes all :py:obj:`HTTPClient` instances that are managed in this
+        network."""
+
         for client in self._clients.values():
             client.close()
 
@@ -207,7 +207,7 @@ class Network:
             self._logger.exception('Error')
             return False
 
-    def get_context(self, timeout: Optional[float] = None, start_time: Optional[float] = None) -> NetworkContext:
+    def get_context(self, timeout: float | None = None, start_time: float | None = None) -> NetworkContext:
         """Creates a new :py:obj:`NetworkContext` object from the configured
         :py:obj:`NetworkSettings.retry_strategy`."""
 
@@ -250,9 +250,9 @@ class Network:
         .. _proxies (httpx): https://www.python-httpx.org/advanced/#http-proxying
 
         """
-        local_addresses = next(self._local_addresses_cycle)
+        local_address = next(self._local_addresses_cycle)
         proxies = next(self._proxies_cycle)  # is a tuple so it can be part of the key
-        key = (local_addresses, proxies)
+        key = (local_address, proxies)
 
         if key not in self._clients or self._clients[key].is_closed:
             http_client_cls = TorHTTPClient if self._settings.using_tor_proxy else HTTPClient
@@ -266,7 +266,7 @@ class Network:
                 max_keepalive_connections=self._settings.max_keepalive_connections,
                 keepalive_expiry=self._settings.keepalive_expiry,
                 proxies=dict(proxies),
-                local_addresses=local_addresses,
+                local_address=local_address,
                 retry_on_http_error=self._settings.retry_on_http_error,
                 hook_log_response=hook_log_response,
                 log_trace=log_trace,
@@ -465,7 +465,7 @@ class NetwortSettingsDecoder:
     }
 
     @classmethod
-    def from_dict(cls, network_settings: Dict[str, Any]) -> NetworkSettings:
+    def from_dict(cls, network_settings: dict[str, Any]) -> NetworkSettings:
         # Decode the parameters that require it; the other parameters are left as they are
         decoders = {
             "proxies": cls._decode_proxies,
@@ -484,7 +484,7 @@ class NetwortSettingsDecoder:
         return NetworkSettings(**network_settings)
 
     @classmethod
-    def _decode_proxies(cls, proxies) -> Dict[str, List[str]]:
+    def _decode_proxies(cls, proxies) -> dict[str, list[str]]:
         if isinstance(proxies, str):
             # for example:
             # proxies: socks5://localhost:8000
@@ -521,7 +521,7 @@ class NetwortSettingsDecoder:
         return result
 
     @staticmethod
-    def _decode_local_addresses(ip_addresses: Union[str, List[str]]) -> List[TYPE_IP_ANY]:
+    def _decode_local_addresses(ip_addresses: str | list[str]) -> list[TYPE_IP_ANY]:
         if isinstance(ip_addresses, str):
             ip_addresses = [ip_addresses]
 
@@ -558,9 +558,9 @@ class NetworkManager:
 
     def __init__(self):
         # Create a default network so scripts in searxng_extra don't have load settings.yml
-        self.networks: Dict[str, Network] = {NetworkManager.DEFAULT_NAME: Network.from_dict()}
+        self.networks: dict[str, Network] = {NetworkManager.DEFAULT_NAME: Network.from_dict()}
 
-    def get(self, name: Optional[str] = None):
+    def get(self, name: str | None = None):
         return self.networks[name or NetworkManager.DEFAULT_NAME]
 
     def initialize_from_settings(self, settings_engines, settings_outgoing, check=True):
@@ -585,14 +585,14 @@ class NetworkManager:
             'retry_on_http_error': None,
         }
 
-        def new_network(network_settings: Dict[str, Any], logger_name: Optional[str] = None):
+        def new_network(network_settings: dict[str, Any], logger_name: str | None = None):
             nonlocal default_network_settings
-            result = {}
-            result.update(default_network_settings)
-            result.update(network_settings)
+            kwargs = {}
+            kwargs.update(default_network_settings)
+            kwargs.update(network_settings)
             if logger_name:
-                result['logger_name'] = logger_name
-            return Network.from_dict(**result)
+                kwargs['logger_name'] = logger_name
+            return Network.from_dict(**kwargs)
 
         # ipv4 and ipv6 are always defined
         self.networks = {
