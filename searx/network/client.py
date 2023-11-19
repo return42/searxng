@@ -27,7 +27,9 @@ import httpx
 from httpx_socks import SyncProxyTransport
 from python_socks import ProxyConnectionError, ProxyError, ProxyTimeoutError, parse_proxy_url
 
+from searx.utils import NOTSET
 from .raise_for_httperror import raise_for_httperror
+
 
 CertTypes = Union[
     # certfile
@@ -39,14 +41,6 @@ CertTypes = Union[
 ]
 
 SSLCONTEXTS: Dict[Any, SSLContext] = {}
-
-
-class _NotSetClass:  # pylint: disable=too-few-public-methods
-    """Internal class for this module, do not create instance of this class.
-    Replace the None value, allow explicitly pass None as a function argument"""
-
-
-NOTSET = _NotSetClass()
 
 
 class SoftRetryHTTPException(Exception):
@@ -258,7 +252,7 @@ class OneHTTPClient(ABCHTTPClient):
         max_keepalive_connections=None,
         keepalive_expiry=None,
         proxies=None,
-        local_addresses=None,
+        local_address=None,
         max_redirects=30,
         hook_log_response=None,
         log_trace=None,
@@ -272,7 +266,7 @@ class OneHTTPClient(ABCHTTPClient):
         self.max_keepalive_connections = max_keepalive_connections
         self.keepalive_expiry = keepalive_expiry
         self.proxies = proxies or {}
-        self.local_address = local_addresses
+        self.local_address = local_address
         self.max_redirects = max_redirects
         self.hook_log_response = hook_log_response
         self.allow_redirects = allow_redirects
@@ -513,17 +507,12 @@ class TorHTTPClient(HTTPClient):
 
     _TOR_CHECK_RESULT = {}
 
-    def __init__(self, proxies=None, local_addresses=None, **kwargs):
-        self.proxies = proxies
-        self.local_addresses = local_addresses
-        super().__init__(proxies=proxies, local_addresses=local_addresses, **kwargs)
-
     def _check_configuration(self):
-        if not self._is_connected_through_tor(self.proxies, self.local_addresses):
+        if not self._is_connected_through_tor():
             self.close()
             raise httpx.HTTPError('Network configuration problem: not using Tor')
 
-    def _is_connected_through_tor(self, proxies, local_addresses) -> bool:
+    def _is_connected_through_tor(self) -> bool:
         """
         .. todo::
 
@@ -532,10 +521,13 @@ class TorHTTPClient(HTTPClient):
 
         """
 
+        proxies = self.default_kwargs['proxies']
         if proxies is None:
             return False
 
-        cache_key = (local_addresses, tuple(proxies.items()))
+        local_address = self.default_kwargs.get('local_address')
+
+        cache_key = (local_address, tuple(proxies.items()))
         if cache_key in TorHTTPClient._TOR_CHECK_RESULT:
             return TorHTTPClient._TOR_CHECK_RESULT[cache_key]
 
