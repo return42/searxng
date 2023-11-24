@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from itertools import cycle
 from typing import Any, Mapping
+from copy import deepcopy
 
 import httpx
 
@@ -36,6 +37,11 @@ from searx.network.context import (
 )
 
 logger = logger.getChild('network')
+
+
+def new_network(**config: dict[str, Any]) -> Network:
+    setup = NetworkSettings.from_config(**config)
+    return Network(setup)
 
 
 class RetryStrategy(Enum):
@@ -53,6 +59,20 @@ TYPE_IP_ANY = (
 
 TYPE_RETRY_ON_ERROR = list[int] | int | bool  # pylint: disable=invalid-name
 
+PROXY_PATTERN_MAPPING = {
+    'http': 'http://',
+    'https': 'https://',
+    'socks4': 'socks4://',
+    'socks5': 'socks5://',
+    'socks5h': 'socks5h://',
+    'http:': 'http://',
+    'https:': 'https://',
+    'socks4:': 'socks4://',
+    'socks5:': 'socks5://',
+    'socks5h:': 'socks5h://',
+}
+"""Requests compatibility when reading proxy settings from ``settings.yml``"""
+
 
 @dataclass(order=True, frozen=True)
 class NetworkSettings:
@@ -61,19 +81,7 @@ class NetworkSettings:
     defined in ``settings.yml`` / the global defaults are defined in the
     :ref:`outgoing <settings outgoing>` settings.
 
-    If the network configuration is read from the ``settings.yml``, the
-    instances of this class are created via a helper class
-    :py:obj:`NetwortSettingsDecoder`.
-
     .. todo::
-
-       - Is a separation of dataclass and methods really necessary?
-
-         TLDR: It should be considered whether the construct of an auxiliary
-         class for object creation can be dispensed with. The
-         :py:obj:`NetwortSettingsDecoder` only has class methods and static
-         methods, these can actually also be all methods of
-         :py:obj:`NetworkSettings`.
 
        - check if we need order=True
 
@@ -108,7 +116,9 @@ class NetworkSettings:
     """see :ref:`outgoing.source_ips`"""
 
     proxies: dict[str, list[str]] = field(default_factory=dict)
-    """see :ref:`outgoing.proxies`"""
+    """Proxies can be configured in the :ref:`outgoing.proxies` and be
+    overwritten in a :ref:`engine network`.  See :py:obj:`self.iter_engines` for
+    a more detailed description of the configuration."""
 
     using_tor_proxy: bool = False
     """see :ref:`outgoing.using_tor_proxy`"""
@@ -127,6 +137,338 @@ class NetworkSettings:
     logger_name: str | None = None
     """Name of the network's logger.  The :py:obj:`NetworkManager` sets it to
     the name of the network."""
+
+    @classmethod
+    def from_config(cls, **config: dict[str, Any]) -> NetworkSettings:
+        """Creates a :py:obj:`NetworkSetting` object from a configuration with
+        simple data types.  The values from configurations such as those from
+        ``settings.yml`` usually consist of simple data types (``str``, ``int``,
+        ``list``, ``dict`` etc.).  To build a :py:obj:`NetworkSetting` object
+        from those simple types:
+
+        - simple data types must be converted into complex data types such as
+          :py:obj:`RetryStrategy`.
+
+        - different variants (simplified & and complex configurations) of
+          a setting must be normalized.
+        """
+
+        # the config must not be manipulated in the side effect of this
+        # function, the caller may wish to continue using the config
+        kwargs = deepcopy(config)
+
+        # Decode the parameters that require it; the other parameters are left
+        # as they are.
+
+        decoders = {
+            "proxies": cls.decode_proxies,
+            "local_addresses": cls._decode_local_addresses,
+            "retry_strategy": cls._decode_retry_strategy,
+        }
+
+        for key, func in decoders.items():
+            if key not in kwargs:
+                continue
+            if kwargs[key] is None:
+                # None is seen as not set: we rely on the default values from
+                # NetworkSettings
+                del kwargs[key]
+            else:
+                kwargs[key] = func(kwargs[key])
+        # Relies on the default values of NetworkSettings for unset parameters
+        return NetworkSettings(**kwargs)  # type: ignore
+
+    @classmethod
+    def default_settings(cls, settings_outgoing):
+        """Builds :py:obj:`dict` from the :ref:`settings outgoing` settings.
+        These settings are used as default network settings."""
+
+        # pylint: disable=line-too-long
+        # Default parameters for HTTPTransport
+        # see https://github.com/encode/httpx/blob/e05a5372eb6172287458b37447c30f650047e1b8/httpx/_transports/default.py#L108-L121
+
+        kwargs = {
+            'retry_on_http_error': None,
+            # different because of historical reason
+            'local_addresses': settings_outgoing['source_ips'],
+            'max_connections': settings_outgoing['pool_connections'],
+            'max_keepalive_connections': settings_outgoing['pool_maxsize'],
+        }
+
+        for k in [
+            'verify',
+            'enable_http',
+            'enable_http2',
+            'keepalive_expiry',
+            'max_redirects',
+            'retries',
+            'proxies',
+            'using_tor_proxy',
+        ]:
+            kwargs[k] = settings_outgoing[k]
+
+        return kwargs
+
+    @classmethod
+    def iter_networks(cls, settings_outgoing):
+        """Iterates over the networks from :ref:`settings outgoing`.
+        Example of a configuration:
+
+        .. code:: yaml
+
+           outgoing:
+             networks:
+               my_proxy:
+                 proxies: http://localhost:1337
+
+        The default settings of these networks are taken from the
+        :py:obj:`NetworkSettings.default_settings`.
+
+        """
+        defaults = cls.default_settings(settings_outgoing)
+
+        for name, d in settings_outgoing['networks'].items():
+            setting = deepcopy(defaults)
+            setting.update(d)
+            setting['logger_name'] = name
+
+            yield name, setting
+
+    @classmethod
+    def iter_engines(cls, settings_outgoing, settings_engines, engines):
+        """Iterates over the list of :ref:`settings engine` and yields a network
+        setting for every engine.
+
+        The ``name`` of the network is the ``name`` of the engine, the
+        :py:obj:`default settings <NetworkSettings.default_settings>` settings
+        and can be overwritten by configuring a ``network:`` section in a engine
+        configuration.  Example of a network configuration for a engine:
+
+        .. code:: yaml
+
+           - name: arxiv
+             engine: arxiv
+             network:
+               http2: false
+               proxies: socks5h://localhost:1337
+
+        Old style config (network settings are mixed along with the other engine
+        settings):
+
+        .. code:: yaml
+
+           - name: arxiv
+             engine: arxiv
+             http2: false
+             proxies: socks5h://localhost:1337
+
+        """
+        defaults = cls.default_settings(settings_outgoing)
+
+        for eng_setup in settings_engines:
+
+            eng_name = eng_setup['name']
+            engine = engines.get(eng_name)
+            if engine is None:
+                continue
+
+            settings = deepcopy(defaults)
+            settings['logger_name'] = eng_name
+
+            if hasattr(engine, 'network'):
+                d = getattr(engine, 'network', None)
+                if not isinstance(d, dict):
+                    continue
+                settings.update(d)
+                yield eng_name, settings
+
+            else:
+                # The network settings are mixed with the other engine settings.
+                # The code checks if the keys from default network settings are
+                # defined in the engine module.
+                for name in settings.keys():
+                    if hasattr(engine, name):
+                        settings[name] = getattr(engine, name)
+                yield eng_name, settings
+
+    @classmethod
+    def iter_network_refs(cls, settings_engines, engines):
+        """Iterates over the list of :ref:`settings engine` and yields network
+        references.
+
+        .. code:: yaml
+
+           - name: piped
+             engine: piped
+
+           - name: piped.music
+             engine: piped
+             network: piped
+
+        In the example above ``piped.music`` uses the network from engine
+        ``piped`, the value for this definition will be:
+
+        .. code:: python
+
+           ('piped.music', 'piped')
+        """
+
+        for eng_setup in settings_engines:
+            name = eng_setup['name']
+            engine = engines.get(name)
+            if engine is None:
+                continue
+            if hasattr(engine, 'network'):
+                ref = getattr(engine, 'network', None)
+                if not isinstance(ref, str):
+                    continue
+                yield name, ref
+
+    @staticmethod
+    def decode_proxies(proxies) -> dict[str, list[str]]:
+        """The proxy config can be a :key:`str`, a :key:`list` or a:key:`dict`
+         type (:ref:`outgoing.proxies`).
+
+         .. todo::
+
+            This description and its implementation must be proofread thoroughly:
+
+            - Which new configurations do we want to introduce?
+
+            - Which existing old notations do we need to support to be backwards
+              compatible?
+
+            - Are there configurations that we want to mark as "depricated"?
+
+         Probably the simplest form, where there is only one proxy for all
+         requests, would be of type :key:`str`:
+
+         .. code:: yaml
+
+            proxies: socks5://localhost:8000
+
+         Here is a configuration of type :key:`list` in which ``all://`` requests
+         are dispatched to two proxies (`httpx routing`_ & `proxy-keys`_).
+
+         .. code:: yaml
+
+            proxies:
+               - socks5h://localhost:8000
+               - socks5h://localhost:8001
+
+         In the next example configuration of type :key:`list` in which the the
+         values of each list item is directly passed to the `httpx routing`_:
+
+         .. code:: yaml
+
+            proxies:
+              - https://www.google.com: http://127.0.0.1:1337
+                all://: http://127.0.0.1:1338
+              - https://www.google.com: http://127.0.0.1:1339
+                all://: http://127.0.0.1:1340
+
+         An alternative notation with identical configuration is of type
+         :key:`dict`, where the proxies (value) for the URL routing (key) are
+         specified.  In both configurations requests to
+         ``https://www.google.com`` are sent via port 1337 and port 1339, while
+         all other requests are sent via port 1338 and 1340.
+
+         .. code:: yaml
+
+            proxies:
+              all://:
+                - http://127.0.0.1:1338
+                - http://127.0.0.1:1340
+              https://www.google.com:
+                - http://127.0.0.1:1337
+                - http://127.0.0.1:1339
+
+         .. attention::
+
+            URL routing is not recommended without deep knowledge.  Without
+            knowing exactly which engine uses which URLs, there is always a risk
+            that routing will prevent the requests of an engine from being sent:
+            You do not know which URLs the implementation uses for the google
+            engine (google.com, google.de ..?).
+
+         As a rule, it should be sufficient to assign the proxies to an engine by
+         configuring the engine's network accordingly:
+
+        .. code:: yaml
+
+           engines:
+             # ...
+             - name: google
+               engine: google
+               network:
+                 proxies:
+                   - http://127.0.0.1:1337
+                   - http://127.0.0.1:1339
+
+         .. _httpx routing: https://www.python-httpx.org/advanced/#routing
+         .. _proxy-keys: https://www.python-httpx.org/compatibility/#proxy-keys
+
+        """
+
+        if isinstance(proxies, str):
+            # proxies: socks5://localhost:8000
+            proxies = {'all://': [proxies]}
+
+        elif isinstance(proxies, list):
+            # proxies:
+            #   - socks5h://localhost:8000
+            #   - socks5h://localhost:8001
+            proxies = {'all://': proxies}
+
+        if not isinstance(proxies, dict):
+            raise ValueError('proxies type has to be str, list, dict or None')
+
+        # Here we are sure to have
+        # proxies = {
+        #   pattern: a_value
+        # }
+        # with a_value that can be either a string or a list.
+        # Now, we make sure that a_value is always a list of strings.
+        # Also, we keep compatibility with requests regarding the patterns:
+        # see https://www.python-httpx.org/compatibility/#proxy-keys
+        result = {}
+        for pattern, proxy_list in proxies.items():
+            pattern = PROXY_PATTERN_MAPPING.get(pattern, pattern)
+            if isinstance(proxy_list, str):
+                proxy_list = [proxy_list]
+            if not isinstance(proxy_list, list):
+                raise ValueError('proxy list')
+            for proxy in proxy_list:
+                if not isinstance(proxy, str):
+                    raise ValueError(f'{repr(proxy)} : an URL is expected')
+            result[pattern] = proxy_list
+        return result
+
+    @staticmethod
+    def _decode_local_addresses(ip_addresses: str | list[str]) -> list[TYPE_IP_ANY]:
+        if isinstance(ip_addresses, str):
+            ip_addresses = [ip_addresses]
+
+        if not isinstance(ip_addresses, list):
+            raise ValueError('IP address must be either None or a string or a list of strings')
+
+        # check IP address syntax
+        result = []
+        for address in ip_addresses:
+            if not isinstance(address, str):
+                raise ValueError(f'An {address!r} must be an IP address written as a string')
+            if '/' in address:
+                result.append(ipaddress.ip_network(address, False))
+            else:
+                result.append(ipaddress.ip_address(address))
+        return result
+
+    @staticmethod
+    def _decode_retry_strategy(retry_strategy: str) -> RetryStrategy:
+        for member in RetryStrategy:
+            if member.name.lower() == retry_strategy.lower():
+                return member
+        raise ValueError(f"{retry_strategy} is not a RetryStrategy")
 
 
 class Network:
@@ -172,22 +514,6 @@ class Network:
         self._proxies_cycle = self._get_proxy_cycles()
         self._clients: dict[tuple, HTTPClient] = {}
         self._logger = logger.getChild(settings.logger_name) if settings.logger_name else logger
-
-    @staticmethod
-    def from_dict(**kwargs):
-        """Creates a Network from a keys/values
-
-        .. todo::
-
-           We should consider dropping this factory method as it bypasses the
-           typing we did in :py:obj:`NetworkSettings`.  The typing is only
-           re-established by the decoder .. when a decoder is needed, then the
-           caller should use the decoder directly to generate a
-           :py:obj:`NetworkSettings` instance. / Too many indirections impair
-           the readability of the code.
-
-        """
-        return Network(NetwortSettingsDecoder.from_dict(kwargs))
 
     def close(self):
         """Closes all :py:obj:`HTTPClient` instances that are managed in this
@@ -447,106 +773,6 @@ class Network:
         return f"<{self.__class__.__name__} logger_name={self._settings.logger_name!r}>"
 
 
-class NetwortSettingsDecoder:
-    """Convert a description of a network in settings.yml to a NetworkSettings instance"""
-
-    # requests compatibility when reading proxy settings from settings.yml
-    PROXY_PATTERN_MAPPING = {
-        'http': 'http://',
-        'https': 'https://',
-        'socks4': 'socks4://',
-        'socks5': 'socks5://',
-        'socks5h': 'socks5h://',
-        'http:': 'http://',
-        'https:': 'https://',
-        'socks4:': 'socks4://',
-        'socks5:': 'socks5://',
-        'socks5h:': 'socks5h://',
-    }
-
-    @classmethod
-    def from_dict(cls, network_settings: dict[str, Any]) -> NetworkSettings:
-        # Decode the parameters that require it; the other parameters are left as they are
-        decoders = {
-            "proxies": cls._decode_proxies,
-            "local_addresses": cls._decode_local_addresses,
-            "retry_strategy": cls._decode_retry_strategy,
-        }
-        for key, decode_func in decoders.items():
-            if key not in network_settings:
-                continue
-            if network_settings[key] is None:
-                # None is seen as not set: rely on the default values from NetworkSettings
-                del network_settings[key]
-            else:
-                network_settings[key] = decode_func(network_settings[key])
-        # Relies on the default values of NetworkSettings for unset parameters
-        return NetworkSettings(**network_settings)
-
-    @classmethod
-    def _decode_proxies(cls, proxies) -> dict[str, list[str]]:
-        if isinstance(proxies, str):
-            # for example:
-            # proxies: socks5://localhost:8000
-            proxies = {'all://': [proxies]}
-        elif isinstance(proxies, list):
-            # for example:
-            # proxies:
-            #   - socks5h://localhost:8000
-            #   - socks5h://localhost:8001
-            proxies = {'all://': proxies}
-
-        if not isinstance(proxies, dict):
-            raise ValueError('proxies type has to be str, list, dict or None')
-
-        # Here we are sure to have
-        # proxies = {
-        #   pattern: a_value
-        # }
-        # with a_value that can be either a string or a list.
-        # Now, we make sure that a_value is always a list of strings.
-        # Also, we keep compatibility with requests regarding the patterns:
-        # see https://www.python-httpx.org/compatibility/#proxy-keys
-        result = {}
-        for pattern, proxy_list in proxies.items():
-            pattern = cls.PROXY_PATTERN_MAPPING.get(pattern, pattern)
-            if isinstance(proxy_list, str):
-                proxy_list = [proxy_list]
-            if not isinstance(proxy_list, list):
-                raise ValueError('proxy list')
-            for proxy in proxy_list:
-                if not isinstance(proxy, str):
-                    raise ValueError(f'{repr(proxy)} : an URL is expected')
-            result[pattern] = proxy_list
-        return result
-
-    @staticmethod
-    def _decode_local_addresses(ip_addresses: str | list[str]) -> list[TYPE_IP_ANY]:
-        if isinstance(ip_addresses, str):
-            ip_addresses = [ip_addresses]
-
-        if not isinstance(ip_addresses, list):
-            raise ValueError('IP address must be either None or a string or a list of strings')
-
-        # check IP address syntax
-        result = []
-        for address in ip_addresses:
-            if not isinstance(address, str):
-                raise ValueError(f'An {address!r} must be an IP address written as a string')
-            if '/' in address:
-                result.append(ipaddress.ip_network(address, False))
-            else:
-                result.append(ipaddress.ip_address(address))
-        return result
-
-    @staticmethod
-    def _decode_retry_strategy(retry_strategy: str) -> RetryStrategy:
-        for member in RetryStrategy:
-            if member.name.lower() == retry_strategy.lower():
-                return member
-        raise ValueError(f"{retry_strategy} is not a RetryStrategy")
-
-
 class NetworkManager:
     """Contains all the Network instances.
 
@@ -558,91 +784,54 @@ class NetworkManager:
 
     def __init__(self):
         # Create a default network so scripts in searxng_extra don't have load settings.yml
-        self.networks: dict[str, Network] = {NetworkManager.DEFAULT_NAME: Network.from_dict()}
+        self.networks: dict[str, Network] = {NetworkManager.DEFAULT_NAME: Network(NetworkSettings())}
 
     def get(self, name: str | None = None):
         return self.networks[name or NetworkManager.DEFAULT_NAME]
 
     def initialize_from_settings(self, settings_engines, settings_outgoing, check=True):
-
-        # pylint: disable=too-many-branches
         from searx.engines import engines  # pylint: disable=import-outside-toplevel
 
-        # Default parameters for HTTPTransport
-        # see https://github.com/encode/httpx/blob/e05a5372eb6172287458b37447c30f650047e1b8/httpx/_transports/default.py#L108-L121  # pylint: disable=line-too-long
-        default_network_settings = {
-            'verify': settings_outgoing['verify'],
-            'enable_http': settings_outgoing['enable_http'],
-            'enable_http2': settings_outgoing['enable_http2'],
-            'max_connections': settings_outgoing['pool_connections'],  # different because of historical reason
-            'max_keepalive_connections': settings_outgoing['pool_maxsize'],  # different because of historical reason
-            'keepalive_expiry': settings_outgoing['keepalive_expiry'],
-            'max_redirects': settings_outgoing['max_redirects'],
-            'retries': settings_outgoing['retries'],
-            'proxies': settings_outgoing['proxies'],
-            'local_addresses': settings_outgoing['source_ips'],  # different because of historical reason
-            'using_tor_proxy': settings_outgoing['using_tor_proxy'],
-            'retry_on_http_error': None,
-        }
+        self.networks = {}
 
-        def new_network(network_settings: dict[str, Any], logger_name: str | None = None):
-            nonlocal default_network_settings
-            kwargs = {}
-            kwargs.update(default_network_settings)
-            kwargs.update(network_settings)
-            if logger_name:
-                kwargs['logger_name'] = logger_name
-            return Network.from_dict(**kwargs)
+        # default, ipv4 and ipv6 are always defined
+        s = NetworkSettings.default_settings(settings_outgoing)
+        s['logger_name'] = 'default'
+        self.networks[NetworkManager.DEFAULT_NAME] = new_network(**s)
 
-        # ipv4 and ipv6 are always defined
-        self.networks = {
-            NetworkManager.DEFAULT_NAME: new_network({}, logger_name='default'),
-            'ipv4': new_network({'local_addresses': '0.0.0.0'}, logger_name='ipv4'),
-            'ipv6': new_network({'local_addresses': '::'}, logger_name='ipv6'),
-        }
+        s = NetworkSettings.default_settings(settings_outgoing)
+        s['local_addresses'] = '0.0.0.0'
+        s['logger_name'] = 'ipv4'
+        self.networks['ipv4'] = new_network(**s)
 
-        # define networks from outgoing.networks. Example of configuration:
-        #
-        # outgoing:
-        #   networks:
-        #     my_proxy:
-        #       proxies: http://localhost:1337
-        #
-        for network_name, network_dict in settings_outgoing['networks'].items():
-            self.networks[network_name] = new_network(network_dict, logger_name=network_name)
+        s = NetworkSettings.default_settings(settings_outgoing)
+        s['local_addresses'] = '::'
+        s['logger_name'] = 'ipv6'
+        self.networks['ipv6'] = new_network(**s)
 
-        # Get the engine network settings directly from the engine modules and settings.yml (not as NetworkSettings)
-        engine_network_dict_settings = {}
-        for engine_spec in settings_engines:
-            engine_name = engine_spec['name']
-            engine = engines.get(engine_name)
-            if engine is None:
-                continue
-            engine_network_dict_settings[engine_name] = self._get_engine_network_settings(
-                engine_name, engine, default_network_settings
-            )
+        for name, s in NetworkSettings.iter_networks(settings_outgoing):
+            self.networks[name] = new_network(**s)
 
-        # Define networks from engines.[i].network (except references)
-        for engine_name, network_dict in engine_network_dict_settings.items():
-            if isinstance(network_dict, dict):
-                self.networks[engine_name] = new_network(network_dict, logger_name=engine_name)
+        for name, s in NetworkSettings.iter_engines(settings_outgoing, settings_engines, engines):
+            self.networks[name] = new_network(**s)
 
-        # Define networks from engines.[i].network (only references)
-        for engine_name, network_dict in engine_network_dict_settings.items():
-            if isinstance(network_dict, str):
-                self.networks[engine_name] = self.networks[network_dict]
+        for name, ref in NetworkSettings.iter_network_refs(settings_engines, engines):
+            self.networks[name] = self.networks[ref]
 
         # The /image_proxy endpoint has a dedicated network using the same parameters
         # as the default network, but HTTP/2 is disabled. It decreases the CPU load average,
         # and the total time is more or less the same.
         if 'image_proxy' not in self.networks:
-            image_proxy_params = default_network_settings.copy()
-            image_proxy_params['enable_http2'] = False
-            self.networks['image_proxy'] = new_network(image_proxy_params, logger_name='image_proxy')
+            s = NetworkSettings.default_settings(settings_outgoing)
+            s['enable_http2'] = False
+            s['logger_name'] = 'image_proxy'
+            self.networks['image_proxy'] = new_network(**s)
 
         # Define a network the autocompletion
         if 'autocomplete' not in self.networks:
-            self.networks['autocomplete'] = new_network(default_network_settings, logger_name='autocomplete')
+            s = NetworkSettings.default_settings(settings_outgoing)
+            s['logger_name'] = 'autocomplete'
+            self.networks['autocomplete'] = new_network(**s)
 
         # Check if each network is valid:
         # * one HTTP client is instantiated
@@ -654,40 +843,6 @@ class NetworkManager:
                     exception_count += 1
             if exception_count > 0:
                 raise RuntimeError("Invalid network configuration")
-
-    @staticmethod
-    def _get_engine_network_settings(engine_name, engine, default_network_settings):
-        if hasattr(engine, 'network'):
-            # The network configuration is defined in settings.yml inside a network key.
-            # For example:
-            #
-            #  - name: arxiv
-            #    engine: arxiv
-            #    shortcut: arx
-            #    network:
-            #      http2: false
-            #      proxies: socks5h://localhost:1337
-            #
-            network = getattr(engine, 'network', None)
-            if not isinstance(network, (dict, str)):
-                raise ValueError(f'Engine {engine_name}: network must be a dictionnary or string')
-            return network
-        # The network settings are mixed with the other engine settings.
-        # The code checks if the keys from default_network_settings are defined in the engine module
-        #
-        # For example:
-        #
-        #  - name: arxiv
-        #    engine: arxiv
-        #    shortcut: arx
-        #    http2: false
-        #    proxies: socks5h://localhost:1337
-        #
-        return {
-            attribute_name: getattr(engine, attribute_name)
-            for attribute_name in default_network_settings.keys()
-            if hasattr(engine, attribute_name)
-        }
 
 
 NETWORKS = NetworkManager()

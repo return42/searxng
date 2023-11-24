@@ -10,7 +10,7 @@ import searx.network
 import searx.network.context
 from searx import settings
 from searx.network.client import BaseHTTPClient, HTTPClient, TorHTTPClient, _HTTPMultiClientConf
-from searx.network.network import Network, NETWORKS
+from searx.network.network import new_network, NETWORKS
 from tests import SearxTestCase
 
 
@@ -38,7 +38,7 @@ class TestNetwork(SearxTestCase):
         NETWORKS.initialize_from_settings(settings_engines=settings["engines"], settings_outgoing=settings["outgoing"])
 
     def test_simple(self):
-        network = Network.from_dict()
+        network = new_network()
 
         self.assertEqual(next(network._local_addresses_cycle), None)
         self.assertEqual(next(network._proxies_cycle), ())
@@ -52,30 +52,30 @@ class TestNetwork(SearxTestCase):
         self.assertEqual(next(network._local_addresses_cycle), '0.0.0.0')
         self.assertEqual(next(network._local_addresses_cycle), '0.0.0.0')
 
-        network = Network.from_dict(local_addresses=['192.168.0.1', '192.168.0.2'])
+        network = new_network(local_addresses=['192.168.0.1', '192.168.0.2'])
         self.assertEqual(next(network._local_addresses_cycle), '192.168.0.1')
         self.assertEqual(next(network._local_addresses_cycle), '192.168.0.2')
         self.assertEqual(next(network._local_addresses_cycle), '192.168.0.1')
 
-        network = Network.from_dict(local_addresses=['192.168.0.0/30'])
+        network = new_network(local_addresses=['192.168.0.0/30'])
         self.assertEqual(next(network._local_addresses_cycle), '192.168.0.1')
         self.assertEqual(next(network._local_addresses_cycle), '192.168.0.2')
         self.assertEqual(next(network._local_addresses_cycle), '192.168.0.1')
         self.assertEqual(next(network._local_addresses_cycle), '192.168.0.2')
 
-        network = Network.from_dict(local_addresses=['fe80::/10'])
+        network = new_network(local_addresses=['fe80::/10'])
         self.assertEqual(next(network._local_addresses_cycle), 'fe80::1')
         self.assertEqual(next(network._local_addresses_cycle), 'fe80::2')
         self.assertEqual(next(network._local_addresses_cycle), 'fe80::3')
 
         with self.assertRaises(ValueError):
-            Network.from_dict(local_addresses=['not_an_ip_address'])
+            new_network(local_addresses=['not_an_ip_address'])
 
     def test_proxy_cycles(self):
-        network = Network.from_dict(proxies='http://localhost:1337')
+        network = new_network(proxies='http://localhost:1337')
         self.assertEqual(next(network._proxies_cycle), (('all://', 'http://localhost:1337'),))
 
-        network = Network.from_dict(proxies={'https': 'http://localhost:1337', 'http': 'http://localhost:1338'})
+        network = new_network(proxies={'https': 'http://localhost:1337', 'http': 'http://localhost:1338'})
         self.assertEqual(
             next(network._proxies_cycle), (('https://', 'http://localhost:1337'), ('http://', 'http://localhost:1338'))
         )
@@ -83,7 +83,7 @@ class TestNetwork(SearxTestCase):
             next(network._proxies_cycle), (('https://', 'http://localhost:1337'), ('http://', 'http://localhost:1338'))
         )
 
-        network = Network.from_dict(
+        network = new_network(
             proxies={'https': ['http://localhost:1337', 'http://localhost:1339'], 'http': 'http://localhost:1338'}
         )
         self.assertEqual(
@@ -94,7 +94,7 @@ class TestNetwork(SearxTestCase):
         )
 
         with self.assertRaises(ValueError):
-            Network.from_dict(proxies=1)
+            new_network(proxies=1)
 
     def test_get_kwargs_clients(self):
         kwargs = {
@@ -114,7 +114,7 @@ class TestNetwork(SearxTestCase):
         self.assertEqual(kwargs_client.max_redirects, 5)
 
     def test_close(self):
-        network = Network.from_dict(verify=True)
+        network = new_network(verify=True)
         network._get_http_client()
         network.close()
 
@@ -122,7 +122,7 @@ class TestNetwork(SearxTestCase):
         a_text = 'Lorem Ipsum'
         response = httpx.Response(status_code=200, text=a_text)
         with patch.object(httpx.Client, 'request', return_value=response):
-            network = Network.from_dict(enable_http=True)
+            network = new_network(enable_http=True)
             http_client = network._get_http_client()
             response = http_client.request('GET', 'https://example.com/')
             self.assertEqual(response.text, a_text)
@@ -157,7 +157,7 @@ class TestNetworkRequestRetries(SearxTestCase):
 
     def test_retries_ok(self):
         with patch.object(httpx.Client, 'request', new=TestNetworkRequestRetries.get_response_403_then_200()):
-            network = Network.from_dict(
+            network = new_network(
                 enable_http=True, retries=1, retry_on_http_error=403, retry_strategy=self.RETRY_STRATEGY
             )
             context = network.get_context(timeout=3600.0)
@@ -168,7 +168,7 @@ class TestNetworkRequestRetries(SearxTestCase):
 
     def test_retries_fail_int(self):
         with patch.object(httpx.Client, 'request', new=TestNetworkRequestRetries.get_response_403_then_200()):
-            network = Network.from_dict(
+            network = new_network(
                 enable_http=True, retries=0, retry_on_http_error=403, retry_strategy=self.RETRY_STRATEGY
             )
             context = network.get_context(timeout=2.0)
@@ -178,7 +178,7 @@ class TestNetworkRequestRetries(SearxTestCase):
 
     def test_retries_fail_list(self):
         with patch.object(httpx.Client, 'request', new=TestNetworkRequestRetries.get_response_403_then_200()):
-            network = Network.from_dict(
+            network = new_network(
                 enable_http=True, retries=0, retry_on_http_error=[403, 429], retry_strategy=self.RETRY_STRATEGY
             )
             context = network.get_context(timeout=2.0)
@@ -188,7 +188,7 @@ class TestNetworkRequestRetries(SearxTestCase):
 
     def test_retries_fail_bool(self):
         with patch.object(httpx.Client, 'request', new=TestNetworkRequestRetries.get_response_403_then_200()):
-            network = Network.from_dict(
+            network = new_network(
                 enable_http=True, retries=0, retry_on_http_error=True, retry_strategy=self.RETRY_STRATEGY
             )
             context = network.get_context(timeout=2.0)
@@ -207,7 +207,7 @@ class TestNetworkRequestRetries(SearxTestCase):
             return httpx.Response(status_code=200, text=TestNetworkRequestRetries.TEXT)
 
         with patch.object(httpx.Client, 'request', new=get_response):
-            network = Network.from_dict(enable_http=True, retries=3, retry_strategy=self.RETRY_STRATEGY)
+            network = new_network(enable_http=True, retries=3, retry_strategy=self.RETRY_STRATEGY)
             context = network.get_context(timeout=2.0)
             response = context.request('GET', 'https://example.com/', raise_for_httperror=False)
             self.assertEqual(response.status_code, 200)
@@ -219,7 +219,7 @@ class TestNetworkRequestRetries(SearxTestCase):
             raise httpx.RequestError('fake exception', request=None)
 
         with patch.object(httpx.Client, 'request', new=get_response):
-            network = Network.from_dict(enable_http=True, retries=0, retry_strategy=self.RETRY_STRATEGY)
+            network = new_network(enable_http=True, retries=0, retry_strategy=self.RETRY_STRATEGY)
             context = network.get_context(timeout=2.0)
             with self.assertRaises(httpx.RequestError):
                 context.request('GET', 'https://example.com/', raise_for_httperror=False)
@@ -251,7 +251,7 @@ class TestNetworkStreamRetries(SearxTestCase):
 
     def test_retries_ok(self):
         with patch.object(httpx.Client, 'send', new=TestNetworkStreamRetries.get_response_exception_then_200()):
-            network = Network.from_dict(enable_http=True, retries=1, retry_on_http_error=403)
+            network = new_network(enable_http=True, retries=1, retry_on_http_error=403)
             context = network.get_context(timeout=3600.0)
             response = context.stream('GET', 'https://example.com/')
             btext = b"".join(btext for btext in response.iter_bytes())
@@ -261,7 +261,7 @@ class TestNetworkStreamRetries(SearxTestCase):
 
     def test_retries_fail(self):
         with patch.object(httpx.Client, 'send', new=TestNetworkStreamRetries.get_response_exception_then_200()):
-            network = Network.from_dict(enable_http=True, retries=0, retry_on_http_error=403)
+            network = new_network(enable_http=True, retries=0, retry_on_http_error=403)
             context = network.get_context(timeout=2.0)
             with self.assertRaises(httpx.RequestError):
                 context.stream('GET', 'https://example.com/')
@@ -278,7 +278,7 @@ class TestNetworkStreamRetries(SearxTestCase):
             return httpx.Response(status_code=200, text=TestNetworkRequestRetries.TEXT)
 
         with patch.object(httpx.Client, 'send', new=send):
-            network = Network.from_dict(enable_http=True, retries=0, retry_on_http_error=403)
+            network = new_network(enable_http=True, retries=0, retry_on_http_error=403)
             context = network.get_context(timeout=2.0)
             response = context.stream('GET', 'https://example.com/', raise_for_httperror=False)
             self.assertEqual(response.status_code, 403)
@@ -401,7 +401,7 @@ class TestNetworkApi(SearxTestCase):
 
 class TestNetworkRepr(SearxTestCase):
     def test_repr(self):
-        network = Network.from_dict(logger_name="test", retry_strategy="ENGINE")
+        network = new_network(logger_name="test", retry_strategy="ENGINE")
         network_context = network.get_context(5.0)
         network_context._set_http_client()
         http_client = network_context._get_http_client()

@@ -136,11 +136,25 @@ engine is shown.  Most of the options have a default value or even are optional.
 .. _engine network:
 
 ``network`` : optional
-  Use the network configuration from another engine.
-  In addition, there are two default networks:
+  Use the network configuration from another :ref:`engine (by name) <engine name>`.
+  In addition networks from engines, there are two default networks:
 
   - ``ipv4`` set ``local_addresses`` to ``0.0.0.0`` (use only IPv4 local addresses)
   - ``ipv6`` set ``local_addresses`` to ``::`` (use only IPv6 local addresses)
+
+  The default :py:obj:`NetworkSettings` of a engine are comming from the
+  :ref:`settings outgoing` and can be overwritten by configuring a ``network:``
+  section in a engine configuration (:py:obj:`NetworkSettings.iter_engines`):
+
+  .. code:: yaml
+
+     engines:
+       # ...
+       - name: google
+         engine: google
+         network:
+           http2: ENGINE
+           proxies: socks5h://localhost:1337
 
 ``enable_http`` : optional
   Enable HTTP for this engine (by default only HTTPS is enabled).
