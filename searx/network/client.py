@@ -91,6 +91,14 @@ def _get_sslcontexts(
     trust_env: bool,
     http2: bool,
 ):
+    # FIXME: recreate new ssl context when cache_http_clients==False
+
+    if not network._settings.cache_http_clients:
+        # if present in the cache, delete the client from the cache
+        ssl_ctx = httpx.create_ssl_context(cert, verify, trust_env, http2)
+        _shuffle_ciphers(network, ssl_ctx)
+        return ssl_ctx
+
     key = (local_address, proxy_url, cert, verify, trust_env, http2)
     if key not in SSLCONTEXTS:
         SSLCONTEXTS[key] = httpx.create_ssl_context(cert, verify, trust_env, http2)
@@ -230,6 +238,23 @@ class ABCHTTPClient(ABC):
 class OneHTTPClient(ABCHTTPClient):
     """Wrap a httpx.Client
 
+    .. _event-hooks: https://www.python-httpx.org/advanced/#event-hooks
+
+    .. todo::
+
+       The httpx client has two event-hooks_ (``request``, ``response``), ATM we
+       only register a handler ``hook_log_response`` .. we should consider to
+       register also a handler for the request event .. or better we replace the
+       ``hook_log_response`` argument in the constructor of the OneHTTPClient by
+       a ``event`` argument that is pased through to the httpx-client
+       constructor.  This would allow the network instance to set the events
+       directly in the httpx client and it would no longer be necessary to pass
+       through dedicated callables
+
+       Something similar could be done for the extensions of the httpcore
+       (compare ``self.extensions = {"trace": log_trace}``).
+
+
     Use httpx_socks for socks proxies.
 
     Deal with httpx.RemoteProtocolError exception: httpx raises this exception when the
@@ -244,6 +269,34 @@ class OneHTTPClient(ABCHTTPClient):
 
         * allow_redirects is accepted
           See https://www.python-httpx.org/compatibility/#redirects
+
+
+    XXXXXXXXXXXXXXXXxx
+
+
+    :ivar proxies: a `proxies (httpx)`_ setting. This setting is build up from
+
+    :ref:`outgoing.proxies`
+
+
+        proxies:
+            - all://: socks5h://localhost:1337
+            - https://bing.com:
+                    - socks5h://localhost:4000
+                    - socks5h://localhost:5000
+        ```
+
+        In this example, this method alternately returns these two responses:
+
+        * `(('all://', 'socks5h://localhost:1337'), ('https://bing.com', 'socks5h://localhost:4000'))`
+        * `(('all://', 'socks5h://localhost:1337'), ('https://bing.com', 'socks5h://localhost:5000'))`
+
+
+
+    XXXXXXXXXXXXXXXXXXXXXXXX
+
+    .. _proxies (httpx): https://www.python-httpx.org/advanced/#http-proxying
+
     """
 
     def __init__(
@@ -280,6 +333,7 @@ class OneHTTPClient(ABCHTTPClient):
         self.logger = logger
         self.extensions = None
         if log_trace:
+            # https://www.encode.io/httpcore/extensions/#request-extensions
             self.extensions = {"trace": log_trace}
         self._new_client()
 

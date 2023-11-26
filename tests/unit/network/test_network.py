@@ -451,7 +451,7 @@ class TestTorHTTPClient(SearxTestCase):
             TorHTTPClient._clear_cache()
             TorHTTPClient._TOR_CHECK_RESULT = {}
             with self.assertRaises(httpx.HTTPError):
-                TorHTTPClient(proxies=proxies)
+                TorHTTPClient(proxies=proxies)  ###
                 self.assertTrue(check_done)
 
     @parameterized.expand(
