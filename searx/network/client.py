@@ -59,7 +59,7 @@ class SoftRetryHTTPException(Exception):
         super().__init__(message)
 
 
-def _shuffle_ciphers(ssl_context):
+def _shuffle_ciphers(network, ssl_context):
     """Shuffle httpx's default ciphers of a SSL context randomly.
 
     From `What Is TLS Fingerprint and How to Bypass It`_
@@ -83,6 +83,7 @@ def _shuffle_ciphers(ssl_context):
 
 
 def _get_sslcontexts(
+    network,
     local_address: str,
     proxy_url: Optional[str],
     cert: Optional[CertTypes],
@@ -93,7 +94,7 @@ def _get_sslcontexts(
     key = (local_address, proxy_url, cert, verify, trust_env, http2)
     if key not in SSLCONTEXTS:
         SSLCONTEXTS[key] = httpx.create_ssl_context(cert, verify, trust_env, http2)
-    _shuffle_ciphers(SSLCONTEXTS[key])
+    _shuffle_ciphers(network, SSLCONTEXTS[key])
     return SSLCONTEXTS[key]
 
 
@@ -149,7 +150,7 @@ class _CustomSyncProxyTransport(SyncProxyTransport):
             raise httpx.ProxyError("ProxyError: " + e.args[0], request=request) from e
 
 
-def _get_transport_for_socks_proxy(verify, http2, local_address, proxy_url, limit, retries):
+def _get_transport_for_socks_proxy(network, verify, http2, local_address, proxy_url, limit, retries):
     # support socks5h (requests compatibility):
     # https://requests.readthedocs.io/en/master/user/advanced/#socks
     # socks5://   hostname is resolved on client side
@@ -161,7 +162,7 @@ def _get_transport_for_socks_proxy(verify, http2, local_address, proxy_url, limi
         rdns = True
 
     proxy_type, proxy_host, proxy_port, proxy_username, proxy_password = parse_proxy_url(proxy_url)
-    verify = _get_sslcontexts(local_address, proxy_url, None, verify, True, http2) if verify is True else verify
+    verify = _get_sslcontexts(network, local_address, proxy_url, None, verify, True, http2) if verify is True else verify
 
     # About verify: in ProxyTransportFixed, verify is of type httpx._types.VerifyTypes
     return _CustomSyncProxyTransport(
@@ -179,8 +180,8 @@ def _get_transport_for_socks_proxy(verify, http2, local_address, proxy_url, limi
     )
 
 
-def _get_transport(verify, http2, local_address, proxy_url, limit, retries):
-    verify = _get_sslcontexts(local_address, None, None, verify, True, http2) if verify is True else verify
+def _get_transport(network, verify, http2, local_address, proxy_url, limit, retries):
+    verify = _get_sslcontexts(network, local_address, None, None, verify, True, http2) if verify is True else verify
     return httpx.HTTPTransport(
         # pylint: disable=protected-access
         verify=verify,
@@ -202,6 +203,9 @@ class ABCHTTPClient(ABC):
     There are like an onion: each implementation relies on the previous one
     and bring new feature.
     """
+
+    def __init__(self, network):
+        self.network = network
 
     @abstractmethod
     def send(self, stream: bool, method: str, url: str, **kwargs) -> httpx.Response:
@@ -245,6 +249,7 @@ class OneHTTPClient(ABCHTTPClient):
     def __init__(
         # pylint: disable=too-many-arguments
         self,
+        network,
         verify=True,
         enable_http=True,
         enable_http2=False,
@@ -259,6 +264,8 @@ class OneHTTPClient(ABCHTTPClient):
         allow_redirects=True,
         logger=None,
     ):
+        super().__init__(network)
+
         self.enable_http = enable_http
         self.verify = verify
         self.enable_http2 = enable_http2
@@ -406,8 +413,11 @@ class BaseHTTPClient(ABCHTTPClient):
 
     def __init__(
         self,
+        network,
         **default_kwargs,
     ):
+        super().__init__(network)
+
         # set the default values
         self.default = _HTTPMultiClientConf(True, 30)
         # extract the values from the HTTPCient constructor
@@ -436,6 +446,7 @@ class BaseHTTPClient(ABCHTTPClient):
         http_multi_client_conf, kwargs = self._extract_kwargs_clients(kwargs)
         if http_multi_client_conf not in self.clients:
             self.clients[http_multi_client_conf] = OneHTTPClient(
+                self.network,
                 verify=http_multi_client_conf.verify,
                 max_redirects=http_multi_client_conf.max_redirects,
                 **self.default_kwargs,
@@ -457,8 +468,13 @@ class BaseHTTPClient(ABCHTTPClient):
 class HTTPClient(BaseHTTPClient):
     """Inherit from BaseHTTPClient, raise an exception according to the retry_on_http_error parameter"""
 
-    def __init__(self, retry_on_http_error=None, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(
+        self,
+        network,
+        retry_on_http_error=None,
+        **kwargs,
+    ):
+        super().__init__(network, **kwargs)
         self.retry_on_http_error = retry_on_http_error
         self._check_configuration()
 

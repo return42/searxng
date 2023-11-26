@@ -85,10 +85,11 @@ class NetworkContext(ABC):
     TODO describe __slots__
     """
 
-    __slots__ = ('_retries', '_http_client_factory', '_http_client', '_start_time', '_http_time', '_timeout')
+    __slots__ = ('network', '_retries', '_http_client_factory', '_http_client', '_start_time', '_http_time', '_timeout')
 
     def __init__(
         self,
+        network,
         retries: int,
         http_client_factory: HTTPCLIENTFACTORY,
         start_time: Optional[float],
@@ -104,7 +105,7 @@ class NetworkContext(ABC):
         :returns: ??
 
         """
-
+        self.network = network
         self._retries: int = retries
         # wrap http_client_factory here, so we can forget about this wrapping
         self._http_client_factory = _TimeHTTPClientWrapper.wrap_factory(http_client_factory, self)
@@ -187,7 +188,7 @@ class NetworkContext(ABC):
         self._http_client = None
 
     def _get_new_client_from_factory(self):
-        return self._http_client_factory()
+        return self._http_client_factory(self)
 
     @contextmanager
     def _record_http_time(self):
@@ -234,7 +235,7 @@ class _TimeHTTPClientWrapper(ABCHTTPClient):
         functools.wraps(http_client_factory)
 
         def wrapped_factory():
-            return _TimeHTTPClientWrapper(http_client_factory(), network_context)
+            return _TimeHTTPClientWrapper(http_client_factory(network_context), network_context)
 
         wrapped_factory.__wrapped__ = http_client_factory
         return wrapped_factory
@@ -417,7 +418,7 @@ class _RetryDifferentHTTPClient(ABCHTTPClient):
         # so the exit condition is self._retries must be equal or above zero
         # to allow two iteration
         while retries >= 0 and self.network_context.get_remaining_time() > 0:
-            http_client = self.network_context._http_client_factory()  # pylint: disable=protected-access
+            http_client = self.network_context._http_client_factory(self.network_context)  # pylint: disable=protected-access
             try:
                 return http_client.send(stream, method, url, **kwargs)
             except SoftRetryHTTPException as e:

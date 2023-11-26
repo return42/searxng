@@ -560,7 +560,7 @@ class Network:
         :py:obj:`NetworkSettings.retry_strategy`."""
 
         context_cls = self._settings.retry_strategy.value
-        return context_cls(self._settings.retries, self._get_http_client, start_time, timeout)
+        return context_cls(self, self._settings.retries, self._get_http_client, start_time, timeout)
 
     def _get_http_client(self) -> HTTPClient:
         """Returns a HTTP client.
