@@ -138,6 +138,22 @@ class NetworkSettings:
     """Name of the network's logger.  The :py:obj:`NetworkManager` sets it to
     the name of the network."""
 
+    cache_http_clients: bool = True
+    """Cache the HTTP clients (default).  If ``False``, then the caching of the
+    HTTP clients is switched off.  As a rule, the clients can be reused from a
+    cache.  However, this can also lead to problems with some engines (problems
+    have been observed with bing, for example).
+
+    .. code:: yaml
+
+       engines:
+         # ...
+         - name: bing
+           engine: bing
+           network:
+              cache_http_clients = False
+    """
+
     @classmethod
     def from_config(cls, **config: dict[str, Any]) -> NetworkSettings:
         """Creates a :py:obj:`NetworkSetting` object from a configuration with
@@ -232,6 +248,9 @@ class NetworkSettings:
             setting.update(d)
             setting['logger_name'] = name
 
+            if not setting.get('cache_http_clients', False):
+                logger.debug('disabled cache_http_clients in network "%s"', name)
+
             yield name, setting
 
     @classmethod
@@ -280,7 +299,6 @@ class NetworkSettings:
                 if not isinstance(d, dict):
                     continue
                 settings.update(d)
-                yield eng_name, settings
 
             else:
                 # The network settings are mixed with the other engine settings.
@@ -289,7 +307,11 @@ class NetworkSettings:
                 for name in settings.keys():
                     if hasattr(engine, name):
                         settings[name] = getattr(engine, name)
-                yield eng_name, settings
+
+            if not settings.get('cache_http_clients', False):
+                logger.debug('disabled cache_http_clients in network "%s"', eng_name)
+
+            yield eng_name, settings
 
     @classmethod
     def iter_network_refs(cls, settings_engines, engines):
@@ -580,11 +602,17 @@ class Network:
         proxies = next(self._proxies_cycle)  # is a tuple so it can be part of the key
         key = (local_address, proxies)
 
+        if not self._settings.cache_http_clients:
+            # if present in the cache, delete the client from the cache
+            if key in self._clients:
+                del self._clients[key]
+
+        client = False
         if key not in self._clients or self._clients[key].is_closed:
             http_client_cls = TorHTTPClient if self._settings.using_tor_proxy else HTTPClient
             hook_log_response = self._log_response if searx_debug else None
             log_trace = self._log_trace if searx_debug else None
-            self._clients[key] = http_client_cls(
+            client = http_client_cls(
                 verify=self._settings.verify,
                 enable_http=self._settings.enable_http,
                 enable_http2=self._settings.enable_http2,
@@ -598,7 +626,13 @@ class Network:
                 log_trace=log_trace,
                 logger=self._logger,
             )
-        return self._clients[key]
+        else:
+            client = self._clients[key]
+
+        if self._settings.cache_http_clients:
+            self._clients[key] = client
+
+        return client
 
     def _get_local_addresses_cycle(self):
         """Generator that rotates infinitely over the local IP addresses from

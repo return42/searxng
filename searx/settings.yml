@@ -386,19 +386,24 @@ engines:
   - name: bing
     engine: bing
     shortcut: bi
+    network:
+      cache_http_clients: false
     disabled: true
 
   - name: bing images
     engine: bing_images
     shortcut: bii
+    network: bing
 
   - name: bing news
     engine: bing_news
     shortcut: bin
+    network: bing
 
   - name: bing videos
     engine: bing_videos
     shortcut: biv
+    network: bing
 
   - name: bitbucket
     engine: xpath

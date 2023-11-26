@@ -156,6 +156,10 @@ engine is shown.  Most of the options have a default value or even are optional.
            http2: ENGINE
            proxies: socks5h://localhost:1337
 
+``cache_http_clients``: default ``true``
+  Cache the HTTP clients (default).  For more details read
+  :py:obj:`searx.network.network.NetworkSettings.cache_http_clients`.
+
 ``enable_http`` : optional
   Enable HTTP for this engine (by default only HTTPS is enabled).
 
