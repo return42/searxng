@@ -514,7 +514,7 @@ class Network:
 
     :ivar _clients: A mapping in which the :py:obj:`HTTPClient` are managed on
       the basis of selected client properties
-      (:py:obj:`Network._get_http_client`).
+      (:py:obj:`Network.get_http_client`).
 
     :ivar _logger: A logger that is passed to the :py:obj:`HTTPClient`.  The
       name of the logger comes from :py:obj:`NetworkSettings.logger_name`
@@ -522,7 +522,7 @@ class Network:
     """
 
     __slots__ = (
-        '_settings',
+        'settings',
         '_local_addresses_cycle',
         '_proxies_cycle',
         '_clients',
@@ -531,7 +531,7 @@ class Network:
 
     def __init__(self, settings: NetworkSettings):
         """Creates a Network from a NetworkSettings"""
-        self._settings = settings
+        self.settings = settings
         self._local_addresses_cycle = self._get_local_addresses_cycle()
         self._proxies_cycle = self._get_proxy_cycles()
         self._clients: dict[tuple, HTTPClient] = {}
@@ -549,7 +549,7 @@ class Network:
         check if the proxy is really a Tor proxy."""
 
         try:
-            self._get_http_client()
+            self.get_http_client()
             return True
         except Exception:  # pylint: disable=broad-except
             self._logger.exception('Error')
@@ -559,10 +559,10 @@ class Network:
         """Creates a new :py:obj:`NetworkContext` object from the configured
         :py:obj:`NetworkSettings.retry_strategy`."""
 
-        context_cls = self._settings.retry_strategy.value
-        return context_cls(self._settings.retries, self._get_http_client, start_time, timeout)
+        context_cls = self.settings.retry_strategy.value
+        return context_cls(self, start_time, timeout)
 
-    def _get_http_client(self) -> HTTPClient:
+    def get_http_client(self) -> HTTPClient:
         """Returns a HTTP client.
 
         The network manages instances of :py:obj:`HTTPClient` by local IP
@@ -602,26 +602,26 @@ class Network:
         proxies = next(self._proxies_cycle)  # is a tuple so it can be part of the key
         key = (local_address, proxies)
 
-        if not self._settings.cache_http_clients:
+        if not self.settings.cache_http_clients:
             # if present in the cache, delete the client from the cache
             if key in self._clients:
                 del self._clients[key]
 
         client = False
         if key not in self._clients or self._clients[key].is_closed:
-            http_client_cls = TorHTTPClient if self._settings.using_tor_proxy else HTTPClient
+            http_client_cls = TorHTTPClient if self.settings.using_tor_proxy else HTTPClient
             hook_log_response = self._log_response if searx_debug else None
             log_trace = self._log_trace if searx_debug else None
             client = http_client_cls(
-                verify=self._settings.verify,
-                enable_http=self._settings.enable_http,
-                enable_http2=self._settings.enable_http2,
-                max_connections=self._settings.max_connections,
-                max_keepalive_connections=self._settings.max_keepalive_connections,
-                keepalive_expiry=self._settings.keepalive_expiry,
+                verify=self.settings.verify,
+                enable_http=self.settings.enable_http,
+                enable_http2=self.settings.enable_http2,
+                max_connections=self.settings.max_connections,
+                max_keepalive_connections=self.settings.max_keepalive_connections,
+                keepalive_expiry=self.settings.keepalive_expiry,
                 proxies=dict(proxies),
                 local_address=local_address,
-                retry_on_http_error=self._settings.retry_on_http_error,
+                retry_on_http_error=self.settings.retry_on_http_error,
                 hook_log_response=hook_log_response,
                 log_trace=log_trace,
                 logger=self._logger,
@@ -629,7 +629,7 @@ class Network:
         else:
             client = self._clients[key]
 
-        if self._settings.cache_http_clients:
+        if self.settings.cache_http_clients:
             self._clients[key] = client
 
         return client
@@ -641,7 +641,7 @@ class Network:
 
         while True:
             at_least_one = False
-            for address in self._settings.local_addresses:
+            for address in self.settings.local_addresses:
                 if isinstance(address, (ipaddress.IPv4Network, ipaddress.IPv6Network)):
                     for a in address.hosts():
                         yield str(a)
@@ -713,7 +713,7 @@ class Network:
            )
 
         Semantically, these are dict-types, but this generator use tuple-types
-        because the :py:obj:`Network._get_http_client` method can use them
+        because the :py:obj:`Network.get_http_client` method can use them
         directly as keys for caching the HTTP clients.  A dict-type can be build
         by ``dict(next(self._proxies_cycle))``.
 
@@ -741,7 +741,7 @@ class Network:
            ( ('all://', 'socks5h://localhost:4000'), )
         """
         # for each pattern, turn each list of proxy into a cycle
-        proxy_settings = {pattern: cycle(proxy_urls) for pattern, proxy_urls in (self._settings.proxies).items()}
+        proxy_settings = {pattern: cycle(proxy_urls) for pattern, proxy_urls in (self.settings.proxies).items()}
         while True:
             # pylint: disable=stop-iteration-return
             # ^^ is it a pylint bug ?
@@ -804,7 +804,7 @@ class Network:
             self._logger.debug(f"* HTTP/2 stream_id: {info['stream_id']}")
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} logger_name={self._settings.logger_name!r}>"
+        return f"<{self.__class__.__name__} logger_name={self.settings.logger_name!r}>"
 
 
 class NetworkManager:

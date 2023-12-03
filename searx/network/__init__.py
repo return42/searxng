@@ -397,8 +397,7 @@ def request(
     network_context: NetworkContext | None = getattr(_THREADLOCAL, _NETWORK_CONTEXT_KEY, None)
     if network_context is None:
         raise NetworkContextNotFound()
-    http_client = network_context._get_http_client()  # pylint: disable=protected-access
-    return http_client.request(
+    return network_context.http_client.request(
         method,
         url,
         params=params,
