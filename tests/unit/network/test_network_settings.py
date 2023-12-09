@@ -23,7 +23,7 @@ class TestDefaultSettings(SearxTestCase):
             network_manager.initialize_from_settings(settings["engines"], settings["outgoing"], check=True)
 
             network_enginea = network_manager.get("enginea")
-            http_client = network_enginea._get_http_client()
+            http_client = network_enginea.get_http_client()
 
             repr_network = "<Network logger_name='enginea'>"
 
