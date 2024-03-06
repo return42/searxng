@@ -127,8 +127,15 @@ def request(query, params):
     )
 
     params['url'] = query_url
-    params['cookies'] = google_info['cookies']
+    params['cookies'] = {
+        # 'CONSENT' : 'PENDING+',
+        # 'OTZ': '7457068_52_52_123900_48_436380',
+        # 'SOCS': 'CAESNQgLEitib3FfaWRlbnRpdHlmcm9udGVuZHVpc2VydmVyXzIwMjQwMzAzLjA4X3AwGgJkZSACGgYIgOSerwY',
+        # '__Secure-ENID': 'LhDZ0HZAPPcdtptFsZEQPh1763wdw2KEG8PknurfxMLWPQJ3dXdGibp1R1ML77p5fl6xnRgaSdC8hjBD6fdFyLa28fjsKeLXN4',
+    }
     params['headers'].update(google_info['headers'])
+
+    logger.debug("query_url --> %s", params['url'])
     return params
 
 
