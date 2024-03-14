@@ -166,7 +166,7 @@ def response(resp):
 
             message = 'HTTP status: %s' % resp.status_code
             error = json_data.get('error')
-            s_key = json_data.get('suggestions', {}).get('key', '')  # type: ignore
+            s_key = json_data.get('suggestions', {}).getxxx('key', '')
 
             if error and s_key:
                 message = "%s (%s)" % (error, s_key)

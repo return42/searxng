@@ -20,7 +20,7 @@ logger = logging.getLogger('searx')
 OUTPUT_FORMATS = ['html', 'csv', 'json', 'rss']
 SXNG_LOCALE_TAGS = ['all', 'auto'] + list(l[0] for l in sxng_locales)
 SIMPLE_STYLE = ('auto', 'light', 'dark')
-CATEGORIES_AS_TABS = {
+CATEGORIES_AS_TABS = {  # type: ignore[var-annotated]
     'general': {},
     'images': {},
     'videos': {},
@@ -52,6 +52,8 @@ class SettingsValue:
         default: typing.Any = None,
         environ_name: str | None = None,
     ):
+        # type_definition=None means there is no type definition (aka Any)?
+        # .. or is the defined type None? (later makes no sense I think)
         self.type_definition = (
             type_definition if type_definition is None or isinstance(type_definition, tuple) else (type_definition,)
         )
@@ -60,13 +62,13 @@ class SettingsValue:
 
     @property
     def type_definition_repr(self):
-        types_str = [t.__name__ if isinstance(t, type) else repr(t) for t in self.type_definition]  # type: ignore
+        types_str = [t.__name__ if isinstance(t, type) else repr(t) for t in self.type_definition]
         return ', '.join(types_str)
 
     def check_type_definition(self, value: typing.Any) -> None:
-        if value in self.type_definition:
+        if self.type_definition is None or value in self.type_definition:
             return
-        type_list = tuple(t for t in self.type_definition if isinstance(t, type))  # type: ignore
+        type_list = tuple(t for t in self.type_definition if isinstance(t, type))
         if not isinstance(value, type_list):
             raise ValueError('The value has to be one of these types/values: {}'.format(self.type_definition_repr))
 

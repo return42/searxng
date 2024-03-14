@@ -9,5 +9,7 @@
     ],
     "reportPossiblyUnboundVariable": false,
     "reportArgumentType": false,
-    "reportOptionalMemberAccess": false
+    "reportOptionalMemberAccess": false,
+    "reportOptionalContextManager": false,
+    "reportOptionalIterable": false
 }

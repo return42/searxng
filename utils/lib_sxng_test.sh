@@ -43,6 +43,17 @@ test.pylint() {
     dump_return $?
 }
 
+test.mypy() {
+    (   set -e
+        pyenv.activate
+        MYPY_OPTIONS=""
+        build_msg TEST "[pyright] static type check of python sources"
+        # shellcheck disable=SC2086
+        mypy ${MYPY_OPTIONS} ${MYPY_VERBOSE}
+    )
+    dump_return $?
+}
+
 test.pyright() {
     # We run Pyright in the virtual environment because Pyright
     # executes "python" to determine the Python version.
