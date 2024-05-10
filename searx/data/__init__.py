@@ -29,7 +29,6 @@ from threading import local
 from pathlib import Path
 
 data_dir = Path(__file__).parent
-data_connection_local = local()
 
 
 def _load(filename):
@@ -37,31 +36,21 @@ def _load(filename):
         return json.load(f)
 
 
-def _get_connection(filename: str) -> sqlite3.Connection:
-    """Return a read only SQLite connection to filename.
-    The filename is relative to searx/data
-
-    Multiple calls to this function in the same thread,
-    already return the same connection.
+def connect_ro(filename: str) -> sqlite3.Connection:
+    """Return a read only SQLite connection to ``filename``.  The ``filename``
+    is relative to ``searx/data``.  The caller has to close the connection
     """
-    connection = data_connection_local.__dict__.get(filename)
-    if connection is not None:
-        return connection
-
-    data_filename = str(data_dir / filename)
-    # open database in read only mode
-    data_connection = sqlite3.connect(f'file:{data_filename}?mode=ro', uri=True)
-
-    data_connection_local.__dict__[filename] = data_connection
-    return data_connection
+    con = sqlite3.connect(f'file:{str(data_dir / filename)}?mode=ro', uri=True)
+    con.executescript("pragma mmap_size = 0;")
+    return con
 
 
 def fetch_engine_descriptions(language) -> Dict[str, List[str]]:
     """Return engine description and source for each engine name."""
-    res = _get_connection("engine_descriptions.db").execute(
-        "SELECT engine, description, source FROM engine_descriptions WHERE language=?", (language,)
-    )
-    return {result[0]: [result[1], result[2]] for result in res.fetchall()}
+
+    with connect_ro("engine_descriptions.db") as con:
+        res = con.execute("SELECT engine, description, source FROM engine_descriptions WHERE language=?", (language,))
+        return {result[0]: [result[1], result[2]] for result in res.fetchall()}
 
 
 def _normalize_name(name):
@@ -72,34 +61,35 @@ def _normalize_name(name):
 
 @lru_cache(10)
 def fetch_iso4217_from_user(name: str) -> Optional[str]:
-    connection = _get_connection("currencies.db")
 
-    # try the iso4217
-    res = connection.execute("SELECT iso4217 FROM currencies WHERE lower(iso4217)=? LIMIT 1", (name.lower(),))
-    result = res.fetchone()
-    if result:
-        return result[0]
+    with connect_ro("currencies.db") as con:
+        # try the iso4217
+        res = con.execute("SELECT iso4217 FROM currencies WHERE lower(iso4217)=? LIMIT 1", (name.lower(),))
+        result = res.fetchone()
+        if result:
+            return result[0]
 
-    # try the currency names
-    name = _normalize_name(name)
-    res = connection.execute("SELECT iso4217 FROM currencies WHERE name=?", (name,))
-    result = list(set(result[0] for result in res.fetchall()))
-    if len(result) == 1:
-        return result[0]
+        # try the currency names
+        name = _normalize_name(name)
+        res = con.execute("SELECT iso4217 FROM currencies WHERE name=?", (name,))
+        result = list(set(result[0] for result in res.fetchall()))
+        con.close()
+        if len(result) == 1:
+            return result[0]
 
-    # ambiguity --> return nothing
-    return None
+        # ambiguity --> return nothing
+        return None
 
 
 @lru_cache(10)
 def fetch_name_from_iso4217(iso4217: str, language: str) -> Optional[str]:
-    res = _get_connection("currencies.db").execute(
-        "SELECT name FROM currencies WHERE iso4217=? AND language=?", (iso4217, language)
-    )
-    result = [result[0] for result in res.fetchall()]
-    if len(result) == 1:
-        return result[0]
-    return None
+
+    with connect_ro("currencies.db") as con:
+        res = con.execute("SELECT name FROM currencies WHERE iso4217=? AND language=?", (iso4217, language))
+        result = [result[0] for result in res.fetchall()]
+        if len(result) == 1:
+            return result[0]
+        return None
 
 
 @lru_cache(100)
@@ -119,24 +109,27 @@ def fetch_osm_key_label(key_name: str, language: str) -> Optional[str]:
 
     language = language.lower()
     language_short = language.split('-')[0]
-    res = _get_connection("osm_keys_tags.db").execute(
-        "SELECT language, label FROM osm_keys WHERE name=? AND language in (?, ?, 'en')",
-        (key_name, language, language_short),
-    )
-    result = {result[0]: result[1] for result in res.fetchall()}
-    return result.get(language) or result.get(language_short) or result.get('en')
+
+    with connect_ro("osm_keys_tags.db") as con:
+        res = con.execute(
+            "SELECT language, label FROM osm_keys WHERE name=? AND language in (?, ?, 'en')",
+            (key_name, language, language_short),
+        )
+        result = {result[0]: result[1] for result in res.fetchall()}
+        return result.get(language) or result.get(language_short) or result.get('en')
 
 
 @lru_cache(100)
 def fetch_osm_tag_label(tag_key: str, tag_value: str, language: str) -> Optional[str]:
     language = language.lower()
     language_short = language.split('-')[0]
-    res = _get_connection("osm_keys_tags.db").execute(
-        "SELECT language, label FROM osm_tags WHERE tag_key=? AND tag_value=? AND language in (?, ?, 'en')",
-        (tag_key, tag_value, language, language_short),
-    )
-    result = {result[0]: result[1] for result in res.fetchall()}
-    return result.get(language) or result.get(language_short) or result.get('en')
+    with connect_ro("osm_keys_tags.db") as con:
+        res = con.execute(
+            "SELECT language, label FROM osm_tags WHERE tag_key=? AND tag_value=? AND language in (?, ?, 'en')",
+            (tag_key, tag_value, language, language_short),
+        )
+        result = {result[0]: result[1] for result in res.fetchall()}
+        return result.get(language) or result.get(language_short) or result.get('en')
 
 
 def ahmia_blacklist_loader():
