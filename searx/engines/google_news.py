@@ -24,6 +24,8 @@ The google news API ignores some parameters from the common :ref:`google API`:
 .. _save: https://developers.google.com/custom-search/docs/xml_results#safesp
 """
 
+# FIXME !!!
+
 from typing import TYPE_CHECKING
 
 from urllib.parse import urlencode

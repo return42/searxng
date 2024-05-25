@@ -310,6 +310,7 @@ engines:
     engine: annas_archive
     disabled: true
     shortcut: aa
+    timeout: 10.0
 
   # - name: annas articles
   #   engine: annas_archive
@@ -1530,7 +1531,7 @@ engines:
   #   password: ''
   #   db: 0
 
-  # tmp suspended: bad certificate
+  # tmp suspended: bad certificate (FIXME!!)
   #  - name: scanr structures
   #    shortcut: scs
   #    engine: scanr_structures
