@@ -52,9 +52,6 @@ def _eval(node):
 
 
 def post_search(_request, search):
-    # don't run on public instances due to possible attack surfaces
-    if settings['server']['public_instance']:
-        return True
 
     # only show the result of the expression on the first page
     if search.search_query.pageno > 1:
@@ -85,4 +82,4 @@ def post_search(_request, search):
 
 
 def is_allowed():
-    return not settings['server']['public_instance']
+    return True
