@@ -808,10 +808,20 @@ engines:
 
   - name: gitlab
     engine: gitlab
-    # base_url: https://gitlab.com
+    base_url: https://gitlab.com
     shortcut: gl
     disabled: true
-    timeout: 10
+    about:
+      website: https://gitlab.com/
+      wikidata_id: Q16639197
+
+  # - name: gnome
+  #   engine: gitlab
+  #   base_url: https://gitlab.gnome.org
+  #   shortcut: gn
+  #   about:
+  #     website: https://gitlab.gnome.org
+  #     wikidata_id: Q44316
 
   - name: github
     engine: github

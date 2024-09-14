@@ -1,5 +1,41 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Gitlab (IT)
+"""Engine to search in collaborative software platforms based on GitLab_ with
+the `GitLab REST API`_.
+
+.. _GitLab: https://about.gitlab.com/install/
+.. _GitLab REST API: https://docs.gitlab.com/ee/api/
+
+Configuration
+=============
+
+The engine has the following mandatory setting:
+
+- :py:obj:`base_url`
+
+Optional settings are:
+
+- :py:obj:`api_path`
+
+.. code:: yaml
+
+  - name: gitlab
+    engine: gitlab
+    base_url: https://gitlab.com
+    shortcut: gl
+    about:
+      website: https://gitlab.com/
+      wikidata_id: Q16639197
+
+  - name: gnome
+    engine: gitlab
+    base_url: https://gitlab.gnome.org
+    shortcut: gn
+    about:
+      website: https://gitlab.gnome.org
+      wikidata_id: Q44316
+
+Implementations
+===============
 
 """
 
@@ -7,10 +43,10 @@ from urllib.parse import urlencode
 from dateutil import parser
 
 about = {
-    "website": 'https://gitlab.com/',
-    "wikidata_id": "Q16639197",
+    "website": None,
+    "wikidata_id": None,
     "official_api_documentation": "https://docs.gitlab.com/ee/api/",
-    "use_official_api": False,
+    "use_official_api": True,
     "require_api_key": False,
     "results": "JSON",
 }
@@ -18,12 +54,19 @@ about = {
 categories = ['it', 'repos']
 paging = True
 
-base_url = "https://gitlab.com"
+base_url: str = ""
+"""Base URL of the GitLab host."""
+
+api_path: str = 'api/v4/projects'
+"""Path to the `project API <https://docs.gitlab.com/ee/api/projects.html>`_.
+
+The default path should work fine usually.
+"""
 
 
 def request(query, params):
     args = {'search': query, 'page': params['pageno']}
-    params['url'] = f"{base_url}/api/v4/projects?{urlencode(args)}"
+    params['url'] = f"{base_url}/{api_path}?{urlencode(args)}"
 
     return params
 
