@@ -5,6 +5,7 @@
 import ast
 import operator
 from multiprocessing import Process, Queue
+from typing import Callable
 
 from flask_babel import gettext
 
@@ -19,7 +20,7 @@ plugin_id = 'calculator'
 
 logger = logger.getChild(plugin_id)
 
-operators = {
+operators: dict[type, Callable] = {
     ast.Add: operator.add,
     ast.Sub: operator.sub,
     ast.Mult: operator.mul,
@@ -43,7 +44,7 @@ def _eval_expr(expr):
 
 
 def _eval(node):
-    if isinstance(node, ast.Constant) and isinstance(node.value, int):
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
         return node.value
 
     if isinstance(node, ast.BinOp):

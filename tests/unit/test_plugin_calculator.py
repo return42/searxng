@@ -59,6 +59,23 @@ class PluginCalculator(SearxTestCase):  # pylint: disable=missing-class-docstrin
 
     @parameterized.expand(
         [
+            "1.0+1.0",
+            "1.0-1.0",
+            "1.0*1.0",
+            "1.0/1.0",
+            "1.0**1.0",
+            "1.0^1.0",
+        ]
+    )
+    def test_float_operations(self, operation):
+        request = Mock(remote_addr='127.0.0.1')
+        search = get_search_mock(query=operation, pageno=1)
+        result = self.store.call(self.store.plugins, 'post_search', request, search)
+        self.assertTrue(result)
+        self.assertIn('calculate', search.result_container.answers)
+
+    @parameterized.expand(
+        [
             "1/0",
         ]
     )
