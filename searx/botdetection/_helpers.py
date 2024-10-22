@@ -31,6 +31,7 @@ def dump_request(request: flask.Request):
         + " || Content-Length: %s" % request.headers.get('Content-Length')
         + " || Connection: %s" % request.headers.get('Connection')
         + " || User-Agent: %s" % request.headers.get('User-Agent')
+        + " || Sec-Fetch-Mode: %s" % request.headers.get('Sec-Fetch-Mode')
     )
 
 
