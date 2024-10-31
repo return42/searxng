@@ -114,6 +114,7 @@ EOF
 if [ "$VERBOSE" = "1" ]; then
     SPHINX_VERBOSE="-v"
     PYLINT_VERBOSE="-v"
+    UNIT_TEST_VERBOSE="-v"
 fi
 
 # needed by sphinx-docs

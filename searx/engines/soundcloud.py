@@ -63,14 +63,12 @@ def get_client_id():
     return ""
 
 
-def init(engine_settings=None):  # pylint: disable=unused-argument
-    global guest_client_id  # pylint: disable=global-statement
-    # api-key
-    guest_client_id = get_client_id()
-
-
 # do search-request
 def request(query, params):
+    global guest_client_id  # pylint: disable=global-statement
+    if not guest_client_id:
+        guest_client_id = get_client_id()
+
     offset = (params['pageno'] - 1) * 20
 
     params['url'] = search_url.format(query=urlencode({'q': query}), offset=offset, client_id=guest_client_id)

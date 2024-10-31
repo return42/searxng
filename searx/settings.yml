@@ -2047,7 +2047,7 @@ engines:
   #    username: user
   #    password: pass
   #    limit: 10
-  #    query_str: 'SELECT * from mytable WHERE fieldname=%(query)s'
+  #    query_str: 'SELECT * FROM mytable WHERE fieldname=%(query)s'
   #    shortcut: mdb
 
   - name: 1337x

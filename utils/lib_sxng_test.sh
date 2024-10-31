@@ -67,7 +67,7 @@ test.black() {
 
 test.unit() {
     build_msg TEST 'tests/unit'
-    pyenv.cmd python -m nose2 -s tests/unit
+    pyenv.cmd python -m nose2 $UNIT_TEST_VERBOSE -s tests/unit
     dump_return $?
 }
 

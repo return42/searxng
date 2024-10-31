@@ -13,7 +13,6 @@ from searx.engines import engines
 from searx.network import get_time_for_thread, get_network
 from searx.metrics import histogram_observe, counter_inc, count_exception, count_error
 from searx.exceptions import SearxEngineAccessDeniedException, SearxEngineResponseException
-from searx.utils import get_engine_from_settings
 
 logger = logger.getChild('searx.search.processor')
 SUSPENDED_STATUS: Dict[Union[int, str], 'SuspendedStatus'] = {}
@@ -70,6 +69,7 @@ class EngineProcessor(ABC):
 
     def initialize(self):
         try:
+            
             self.engine.init(get_engine_from_settings(self.engine_name))
         except SearxEngineResponseException as exc:
             self.logger.warning('Fail to initialize // %s', exc)

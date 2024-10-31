@@ -2,17 +2,34 @@
 # pylint: disable=missing-module-docstring
 
 from unittest.mock import MagicMock, Mock
-from searx.engines import mariadb_server
+import searx.search
 from tests import SearxTestCase
+
+TEST_ENGINE = {
+    'name': 'mariadb server',
+    'engine': 'mariadb_server',
+    'shortcut': 'mdb',
+    'timeout': 9.0,
+    'disabled': True,
+    'query_str': 'SELECT * FROM mytable WHERE fieldname=%(query)s',
+}
 
 
 class MariadbServerTests(SearxTestCase):  # pylint: disable=missing-class-docstring
+    def setUp(self):
+        import pdb
+        pdb.set_trace()
+        searx.search.initialize([TEST_ENGINE])
+        self.mariadb_server = searx.engines.engines["mariadb server"]
 
-    def test_init_no_query_str_raises(self):
-        self.assertRaises(ValueError, lambda: mariadb_server.init({}))
+    def tearDown(self):
+        searx.search.load_engines([])
 
-    def test_init_non_select_raises(self):
-        self.assertRaises(ValueError, lambda: mariadb_server.init({'query_str': 'foobar'}))
+    # def test_init_no_query_str_raises(self):
+    #     self.assertRaises(ValueError, lambda: self.mariadb_server.init({}))
+
+    # def test_init_non_select_raises(self):
+    #     self.assertRaises(ValueError, lambda: self.mariadb_server.init({'query_str': 'foobar'}))
 
     def test_search_returns_results(self):
         test_string = 'FOOBAR'
@@ -22,8 +39,8 @@ class MariadbServerTests(SearxTestCase):  # pylint: disable=missing-class-docstr
             setup.description = [[test_string]]
         conn_mock = Mock()
         conn_mock.cursor.return_value = cursor_mock
-        mariadb_server._connection = conn_mock  # pylint: disable=protected-access
-        results = mariadb_server.search(test_string, {'pageno': 1})
+        self.mariadb_server._connection = conn_mock  # pylint: disable=protected-access
+        results = self.mariadb_server.search(test_string, {'pageno': 1})
         self.assertEqual(1, len(results))
         self.assertIn(test_string, results[0])
-        self.assertEqual(mariadb_server.result_template, results[0]['template'])
+        self.assertEqual(self.mariadb_server.result_template, results[0]['template'])

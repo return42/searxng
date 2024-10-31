@@ -480,21 +480,6 @@ def get_string_replaces_function(replaces: Dict[str, str]) -> Callable[[str], st
     return func
 
 
-def get_engine_from_settings(name: str) -> Dict:
-    """Return engine configuration from settings.yml of a given engine name"""
-
-    if 'engines' not in settings:
-        return {}
-
-    for engine in settings['engines']:
-        if 'name' not in engine:
-            continue
-        if name == engine['name']:
-            return engine
-
-    return {}
-
-
 def get_xpath(xpath_spec: XPathSpecType) -> XPath:
     """Return cached compiled XPath
 
