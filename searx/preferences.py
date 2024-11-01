@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Searx preferences implementation.
 """
-from __future__ import annotations
-
 # pylint: disable=useless-object-inheritance
+from __future__ import annotations
 
 from base64 import urlsafe_b64encode, urlsafe_b64decode
 from zlib import compress, decompress
@@ -14,12 +13,12 @@ from collections import OrderedDict
 import flask
 import babel
 
+import searx.engines
 import searx.plugins
-
 from searx import settings, autocomplete, favicons
-from searx.enginelib import Engine
-from searx.engines import DEFAULT_CATEGORY
+from searx.enginelib import Engine, EngineMap
 from searx.extended_types import SXNG_Request
+
 from searx.locales import LOCALE_NAMES
 from searx.webutils import VALID_LANGUAGE_CODE
 
@@ -294,7 +293,9 @@ class EnginesSetting(BooleanChoices):
         choices = {}
         for engine in engines:
             for category in engine.categories:
-                if not category in list(settings['categories_as_tabs'].keys()) + [DEFAULT_CATEGORY]:
+                if not category in list(settings['categories_as_tabs'].keys()) + [
+                    searx.engines.ENGINE_MAP.DEFAULT_CATEGORY
+                ]:
                     continue
                 choices['{}__{}'.format(engine.name, category)] = not engine.disabled
         super().__init__(default_value, choices)
@@ -380,7 +381,7 @@ class Preferences:
         self,
         themes: list[str],
         categories: list[str],
-        engines: dict[str, Engine],
+        engines: EngineMap,
         plugins: searx.plugins.PluginStorage,
         client: ClientPref | None = None,
     ):

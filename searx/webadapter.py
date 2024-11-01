@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 from searx.exceptions import SearxParameterException
 from searx.webutils import VALID_LANGUAGE_CODE
 from searx.query import RawTextQuery
-from searx.engines import categories, engines
+import searx.engines
 from searx.search import SearchQuery, EngineRef
 from searx.preferences import Preferences, is_locked
 from searx.utils import detect_language
@@ -33,11 +33,11 @@ def validate_engineref_list(
     unknown = []
     no_token = []
     for engineref in engineref_list:
-        if engineref.name not in engines:
+        if engineref.name not in searx.engines.ENGINE_MAP:
             unknown.append(engineref)
             continue
 
-        engine = engines[engineref.name]
+        engine = searx.engines.ENGINE_MAP[engineref.name]
         if not preferences.validate_token(engine):
             no_token.append(engineref)
             continue
@@ -117,12 +117,14 @@ def parse_timeout(form: Dict[str, str], raw_text_query: RawTextQuery) -> Optiona
 
 def parse_category_form(query_categories: List[str], name: str, value: str) -> None:
     if name == 'categories':
-        query_categories.extend(categ for categ in map(str.strip, value.split(',')) if categ in categories)
+        query_categories.extend(
+            categ for categ in map(str.strip, value.split(',')) if categ in searx.engines.ENGINE_MAP.categories
+        )
     elif name.startswith('category_'):
         category = name[9:]
 
         # if category is not found in list, skip
-        if category not in categories:
+        if category not in searx.engines.ENGINE_MAP.categories:
             return
 
         if value != 'off':
@@ -164,7 +166,7 @@ def get_engineref_from_category_list(  # pylint: disable=invalid-name
     for categ in category_list:
         result.extend(
             EngineRef(engine.name, categ)
-            for engine in categories[categ]
+            for engine in searx.engines.ENGINE_MAP.categories[categ]
             if (engine.name, categ) not in disabled_engines
         )
     return result
@@ -181,9 +183,9 @@ def parse_generic(preferences: Preferences, form: Dict[str, str], disabled_engin
         for pd_name, pd in form.items():  # pylint: disable=invalid-name
             if pd_name == 'engines':
                 pd_engines = [
-                    EngineRef(engine_name, engines[engine_name].categories[0])
+                    EngineRef(engine_name, searx.engines.ENGINE_MAP[engine_name].categories[0])
                     for engine_name in map(str.strip, pd.split(','))
-                    if engine_name in engines
+                    if engine_name in searx.engines.ENGINE_MAP
                 ]
                 if pd_engines:
                     query_engineref_list.extend(pd_engines)

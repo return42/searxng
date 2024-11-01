@@ -21,7 +21,7 @@ from codecs import getincrementalencoder
 from flask_babel import gettext, format_date  # type: ignore
 
 from searx import logger, settings
-from searx.engines import DEFAULT_CATEGORY
+import searx.engines
 
 if TYPE_CHECKING:
     from searx.enginelib import Engine
@@ -338,7 +338,7 @@ def group_engines_in_tab(engines: Iterable[Engine]) -> List[Tuple[str, Iterable[
     """Groups an Iterable of engines by their first non tab category (first subgroup)"""
 
     def get_subgroup(eng):
-        non_tab_categories = [c for c in eng.categories if c not in tabs + [DEFAULT_CATEGORY]]
+        non_tab_categories = [c for c in eng.categories if c not in tabs + [searx.engines.ENGINE_MAP.DEFAULT_CATEGORY]]
         return non_tab_categories[0] if len(non_tab_categories) > 0 else NO_SUBGROUPING
 
     def group_sort_key(group):

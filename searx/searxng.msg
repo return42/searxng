@@ -4,7 +4,7 @@
 """
 
 from searx import webutils
-from searx import engines
+import searx.engines
 
 __all__ = [
     'CONSTANT_NAMES',
@@ -19,7 +19,7 @@ __all__ = [
 CONSTANT_NAMES = {
     # Constants defined in other modules
     'NO_SUBGROUPING': webutils.NO_SUBGROUPING,
-    'DEFAULT_CATEGORY': engines.DEFAULT_CATEGORY,
+    'DEFAULT_CATEGORY': searx.engines.ENGINE_MAP.DEFAULT_CATEGORY,
 }
 
 CATEGORY_NAMES = {

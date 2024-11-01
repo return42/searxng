@@ -17,9 +17,9 @@ __all__ = [
 import threading
 from typing import Dict
 
+import searx.engines
+import searx.enginelib
 from searx import logger
-from searx import engines
-
 from .online import OnlineProcessor
 from .offline import OfflineProcessor
 from .online_dictionary import OnlineDictionaryProcessor
@@ -35,7 +35,7 @@ PROCESSORS: Dict[str, EngineProcessor] = {}
 """
 
 
-def get_processor_class(engine_type):
+def get_processor_class(engine_type: str):
     """Return processor class according to the ``engine_type``"""
     for c in [
         OnlineProcessor,
@@ -49,12 +49,12 @@ def get_processor_class(engine_type):
     return None
 
 
-def get_processor(engine, engine_name):
+def get_processor(engine: searx.enginelib.Engine):
     """Return processor instance that fits to ``engine.engine.type``)"""
     engine_type = getattr(engine, 'engine_type', 'online')
     processor_class = get_processor_class(engine_type)
     if processor_class:
-        return processor_class(engine, engine_name)
+        return processor_class(engine)
     return None
 
 
@@ -63,7 +63,7 @@ def initialize_processor(processor):
 
     Call the init function of the engine
     """
-    if processor.has_initialize_function:
+    if processor.init_required:
         t = threading.Thread(target=processor.initialize, daemon=True)
         t.start()
 
@@ -72,9 +72,9 @@ def initialize(engine_list):
     """Initialize all engines and store a processor for each engine in :py:obj:`PROCESSORS`."""
     for engine_data in engine_list:
         engine_name = engine_data['name']
-        engine = engines.engines.get(engine_name)
+        engine = searx.engines.ENGINE_MAP.get(engine_name)
         if engine:
-            processor = get_processor(engine, engine_name)
+            processor = get_processor(engine)
             initialize_processor(processor)
             if processor is None:
                 engine.logger.error('Error get processor for engine %s', engine_name)

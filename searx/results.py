@@ -11,7 +11,8 @@ from typing import List, NamedTuple, Set
 from urllib.parse import urlparse, unquote
 
 from searx import logger
-from searx.engines import engines
+import searx.engines
+
 from searx.metrics import histogram_observe, counter_add, count_error
 
 from searx.result_types import Result, LegacyResult
@@ -62,12 +63,12 @@ def compare_urls(url_a, url_b):
 
 def merge_two_infoboxes(infobox1, infobox2):  # pylint: disable=too-many-branches, too-many-statements
     # get engines weights
-    if hasattr(engines[infobox1['engine']], 'weight'):
-        weight1 = engines[infobox1['engine']].weight
+    if hasattr(searx.engines.ENGINE_MAP[infobox1['engine']], 'weight'):
+        weight1 = searx.engines.ENGINE_MAP[infobox1['engine']].weight
     else:
         weight1 = 1
-    if hasattr(engines[infobox2['engine']], 'weight'):
-        weight2 = engines[infobox2['engine']].weight
+    if hasattr(searx.engines.ENGINE_MAP[infobox2['engine']], 'weight'):
+        weight2 = searx.engines.ENGINE_MAP[infobox2['engine']].weight
     else:
         weight2 = 1
 
@@ -136,8 +137,8 @@ def result_score(result, priority):
     weight = 1.0
 
     for result_engine in result['engines']:
-        if hasattr(engines.get(result_engine), 'weight'):
-            weight *= float(engines[result_engine].weight)
+        if hasattr(searx.engines.ENGINE_MAP[result_engine], 'weight'):
+            weight *= float(searx.engines.ENGINE_MAP[result_engine].weight)
 
     weight *= len(result['positions'])
     score = 0
@@ -262,10 +263,10 @@ class ResultContainer:
             for msg in error_msgs:
                 count_error(engine_name, 'some results are invalids: ' + msg, secondary=True)
 
-        if engine_name in engines:
+        if engine_name in searx.engines.ENGINE_MAP:
             histogram_observe(standard_result_count, 'engine', engine_name, 'result', 'count')
 
-        if not self.paging and engine_name in engines and engines[engine_name].paging:
+        if not self.paging and engine_name in searx.engines.ENGINE_MAP and searx.engines.ENGINE_MAP[engine_name].paging:
             self.paging = True
 
     def _merge_infobox(self, infobox):
@@ -386,7 +387,7 @@ class ResultContainer:
 
         for res in results:
             # do we need to handle more than one category per engine?
-            engine = engines[res['engine']]
+            engine = searx.engines.ENGINE_MAP[res['engine']]
             res['category'] = engine.categories[0] if len(engine.categories) > 0 else ''
 
             # do we need to handle more than one category per engine?
@@ -461,7 +462,7 @@ class ResultContainer:
             if self._closed:
                 logger.error("call to ResultContainer.add_unresponsive_engine after ResultContainer.close")
                 return
-            if engines[engine_name].display_error_messages:
+            if searx.engines.ENGINE_MAP[engine_name].display_error_messages:
                 self.unresponsive_engines.add(UnresponsiveEngine(engine_name, error_type, suspended))
 
     def add_timing(self, engine_name: str, engine_time: float, page_load_time: float):

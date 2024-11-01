@@ -60,6 +60,7 @@ from dateutil import parser
 
 from httpx import DigestAuth
 
+import searx.engines
 from searx.utils import html_to_text
 
 # about
@@ -113,9 +114,8 @@ def init(_):
 
 
 def _base_url() -> str:
-    from searx.engines import engines  # pylint: disable=import-outside-toplevel
 
-    url = engines['yacy'].base_url  # type: ignore
+    url = searx.engines.ENGINE_MAP['yacy'].base_url  # type: ignore
     if isinstance(url, list):
         url = random.choice(url)
     if url.endswith("/"):

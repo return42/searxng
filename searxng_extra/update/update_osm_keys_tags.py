@@ -45,15 +45,16 @@ Output file: :origin:`searx/data/osm_keys_tags` (:origin:`CI Update data ...
 import json
 import collections
 
+from searx import logger
 from searx.network import set_timeout_for_thread
-from searx.engines import wikidata, set_loggers
+from searx.engines import wikidata
 from searx.sxng_locales import sxng_locales
 from searx.engines.openstreetmap import get_key_rank, VALUE_TO_LINK
 from searx.data import data_dir
 
 DATA_FILE = data_dir / 'osm_keys_tags.json'
 
-set_loggers(wikidata, 'wikidata')
+wikidata.logger = logger.getChild("engines.wikidata")
 
 
 SPARQL_TAGS_REQUEST = """

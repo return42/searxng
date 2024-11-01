@@ -10,6 +10,7 @@ import ssl
 import httpx
 
 import searx.network
+from searx.enginelib.engine import EngineModule
 from searx.utils import gen_useragent
 from searx.exceptions import (
     SearxEngineAccessDeniedException,
@@ -132,20 +133,24 @@ class OnlineProcessor(EngineProcessor):
         return response
 
     def _search_basic(self, query, params):
-        # update request parameters dependent on
-        # search-engine (contained in engines folder)
-        self.engine.request(query, params)
 
-        # ignoring empty urls
-        if not params['url']:
-            return None
+        if isinstance(self.engine, EngineModule):
+            # update request parameters dependent on search-engine (contained in
+            # engines folder)
+            self.engine.request(query, params)
 
-        # send request
-        response = self._send_http_request(params)
+            # ignoring queries with an empty url
+            if not params.get("url"):
+                return None
 
-        # parse the response
-        response.search_params = params
-        return self.engine.response(response)
+            # send request
+            response = self._send_http_request(params)
+
+            # parse the response
+            response.search_params = params
+            return self.engine.response(response)
+
+        raise NotImplementedError(f"search is not implemented for engine of type: {self.engine.__class__.__name__}")
 
     def search(self, query, params, result_container, start_time, timeout_limit):
         # set timeout for all HTTP requests

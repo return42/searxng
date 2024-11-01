@@ -7,7 +7,7 @@ import re
 
 from searx import settings
 from searx.sxng_locales import sxng_locales
-from searx.engines import categories, engines, engine_shortcuts
+import searx.engines
 from searx.external_bang import get_bang_definition_and_autocomplete
 from searx.search import EngineRef
 from searx.webutils import VALID_LANGUAGE_CODE
@@ -193,21 +193,21 @@ class BangParser(QueryPartParser):
 
     def _parse(self, value):
         # check if prefix is equal with engine shortcut
-        if value in engine_shortcuts:  # pylint: disable=consider-using-get
-            value = engine_shortcuts[value]
+        if value in searx.engines.ENGINE_MAP.shortcuts:
+            value = searx.engines.ENGINE_MAP.shortcuts[value]
 
         # check if prefix is equal with engine name
-        if value in engines:
+        if value in searx.engines.ENGINE_MAP:
             self.raw_text_query.enginerefs.append(EngineRef(value, 'none'))
             return True
 
         # check if prefix is equal with category name
-        if value in categories:
+        if value in searx.engines.ENGINE_MAP.categories:
             # using all engines for that search, which
             # are declared under that category name
             self.raw_text_query.enginerefs.extend(
                 EngineRef(engine.name, value)
-                for engine in categories[value]
+                for engine in searx.engines.ENGINE_MAP.categories[value]
                 if (engine.name, value) not in self.raw_text_query.disabled_engines
             )
             return True
@@ -218,22 +218,25 @@ class BangParser(QueryPartParser):
         if not value:
             # show some example queries
             for suggestion in ['images', 'wikipedia', 'osm']:
-                if suggestion not in self.raw_text_query.disabled_engines or suggestion in categories:
+                if (
+                    suggestion not in self.raw_text_query.disabled_engines
+                    or suggestion in searx.engines.ENGINE_MAP.categories
+                ):
                     self._add_autocomplete(first_char + suggestion)
             return
 
         # check if query starts with category name
-        for category in categories:
+        for category in searx.engines.ENGINE_MAP.categories:
             if category.startswith(value):
                 self._add_autocomplete(first_char + category.replace(' ', '_'))
 
         # check if query starts with engine name
-        for engine in engines:
+        for engine in searx.engines.ENGINE_MAP:
             if engine.startswith(value):
                 self._add_autocomplete(first_char + engine.replace(' ', '_'))
 
         # check if query starts with engine shortcut
-        for engine_shortcut in engine_shortcuts:
+        for engine_shortcut in searx.engines.ENGINE_MAP.shortcuts:
             if engine_shortcut.startswith(value):
                 self._add_autocomplete(first_char + engine_shortcut)
 

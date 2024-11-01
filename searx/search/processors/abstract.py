@@ -9,11 +9,11 @@ from timeit import default_timer
 from typing import Dict, Union
 
 from searx import settings, logger
-from searx.engines import engines
+import searx.enginelib
+
 from searx.network import get_time_for_thread, get_network
 from searx.metrics import histogram_observe, counter_inc, count_exception, count_error
 from searx.exceptions import SearxEngineAccessDeniedException, SearxEngineResponseException
-from searx.utils import get_engine_from_settings
 
 logger = logger.getChild('searx.search.processor')
 SUSPENDED_STATUS: Dict[Union[int, str], 'SuspendedStatus'] = {}
@@ -60,17 +60,17 @@ class EngineProcessor(ABC):
 
     __slots__ = 'engine', 'engine_name', 'lock', 'suspended_status', 'logger'
 
-    def __init__(self, engine, engine_name: str):
+    def __init__(self, engine: searx.enginelib.Engine):
         self.engine = engine
-        self.engine_name = engine_name
-        self.logger = engines[engine_name].logger
+        self.engine_name = engine.name
+        self.logger = engine.logger
         key = get_network(self.engine_name)
         key = id(key) if key else self.engine_name
         self.suspended_status = SUSPENDED_STATUS.setdefault(key, SuspendedStatus())
 
     def initialize(self):
         try:
-            self.engine.init(get_engine_from_settings(self.engine_name))
+            self.engine.init()
         except SearxEngineResponseException as exc:
             self.logger.warning('Fail to initialize // %s', exc)
         except Exception:  # pylint: disable=broad-except
@@ -79,8 +79,8 @@ class EngineProcessor(ABC):
             self.logger.debug('Initialized')
 
     @property
-    def has_initialize_function(self):
-        return hasattr(self.engine, 'init')
+    def init_required(self):
+        return self.engine.init_required
 
     def handle_exception(self, result_container, exception_or_message, suspend=False):
         # update result_container

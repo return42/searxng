@@ -10,10 +10,10 @@ import importlib
 import importlib.util
 import json
 import types
+import pathlib
 
 from typing import Optional, Union, Any, Set, List, Dict, MutableMapping, Tuple, Callable
 from numbers import Number
-from os.path import splitext, join
 from random import choice
 from html.parser import HTMLParser
 from html import escape
@@ -207,7 +207,7 @@ def extract_text(xpath_results, allow_none: bool = False) -> Optional[str]:
         return result.strip()
     if isinstance(xpath_results, ElementBase):
         # it's a element
-        text: str = html.tostring(xpath_results, encoding='unicode', method='text', with_tail=False)
+        text: str = html.tostring(xpath_results, encoding='unicode', method='text', with_tail=False)  # type: ignore
         text = text.strip().replace('\n', ' ')
         return ' '.join(text.split())
     if isinstance(xpath_results, (str, Number, bool)):
@@ -426,17 +426,19 @@ def is_valid_lang(lang) -> Optional[Tuple[bool, str, str]]:
     return None
 
 
-def load_module(filename: str, module_dir: str) -> types.ModuleType:
-    modname = splitext(filename)[0]
-    modpath = join(module_dir, filename)
-    # and https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly
-    spec = importlib.util.spec_from_file_location(modname, modpath)
+def load_module(mod_name: str, mod_fname: pathlib.Path) -> types.ModuleType:
+    """Creates a :py:obj:`new module <importlib.util.module_from_spec>`.  The
+    method is described in: `Importing a source file directly
+    <https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly>`_.
+    """
+    spec = importlib.util.spec_from_file_location(mod_name, mod_fname)
     if not spec:
-        raise ValueError(f"Error loading '{modpath}' module")
+        raise ValueError(f"Error loading module's spec {mod_name}: {mod_fname}")
     module = importlib.util.module_from_spec(spec)
     if not spec.loader:
-        raise ValueError(f"Error loading '{modpath}' module")
+        raise ValueError(f"Error loading module {mod_name}: {mod_fname}")
     spec.loader.exec_module(module)
+
     return module
 
 
@@ -478,21 +480,6 @@ def get_string_replaces_function(replaces: Dict[str, str]) -> Callable[[str], st
         return pattern.sub(lambda m: rep[re.escape(m.group(0))], text)
 
     return func
-
-
-def get_engine_from_settings(name: str) -> Dict:
-    """Return engine configuration from settings.yml of a given engine name"""
-
-    if 'engines' not in settings:
-        return {}
-
-    for engine in settings['engines']:
-        if 'name' not in engine:
-            continue
-        if name == engine['name']:
-            return engine
-
-    return {}
 
 
 def get_xpath(xpath_spec: XPathSpecType) -> XPath:
@@ -610,7 +597,7 @@ def _get_fasttext_model() -> "fasttext.FastText._FastText":  # type: ignore
         import fasttext  # pylint: disable=import-outside-toplevel
 
         # Monkey patch: prevent fasttext from showing a (useless) warning when loading a model.
-        fasttext.FastText.eprint = lambda x: None
+        fasttext.FastText.eprint = lambda x: None  # type: ignore
         _FASTTEXT_MODEL = fasttext.load_model(str(data_dir / 'lid.176.ftz'))
     return _FASTTEXT_MODEL
 

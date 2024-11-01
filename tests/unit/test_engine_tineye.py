@@ -18,7 +18,7 @@ class TinEyeTests(SearxTestCase):
 
     def setUp(self):
         super().setUp()
-        self.tineye = searx.engines.engines['tineye']
+        self.tineye = searx.engines.ENGINE_MAP['tineye']
         self.tineye.logger.setLevel(logging.INFO)
 
     def tearDown(self):
