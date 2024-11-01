@@ -31,7 +31,7 @@ about = {
 _my_offline_engine = None
 
 
-def init(engine_settings=None):
+def init(engine_settings):
     """Initialization of the (offline) engine.  The origin of this demo engine is a
     simple json string which is loaded in this example while the engine is
     initialized.

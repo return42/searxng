@@ -4,7 +4,7 @@
 """
 
 from json import loads
-from searx.engines import categories as searx_categories
+import searx.engines
 
 # about
 about = {
@@ -16,11 +16,16 @@ about = {
     "results": 'JSON',
 }
 
-categories = searx_categories.keys()
+categories = []
 
 # search-url
 instance_urls = []
 instance_index = 0
+
+
+def init(engine_settings=None):  # pylint: disable=unused-argument
+    global categories  # pylint: disable=global-statement
+    categories = searx.engines.ENGINE_MAP.categories
 
 
 # do search-request

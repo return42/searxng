@@ -5,10 +5,10 @@ import typing
 import math
 import contextlib
 from timeit import default_timer
-from operator import itemgetter
 
-from searx.engines import engines
 from searx.openmetrics import OpenMetricsFamily
+import searx.engines
+
 from .models import HistogramStorage, CounterStorage, VoidHistogram, VoidCounterStorage
 from .error_recorder import count_error, count_exception, errors_per_engines
 
@@ -84,16 +84,16 @@ def initialize(engine_names=None, enabled=True):
 
     # max_timeout = max of all the engine.timeout
     max_timeout = 2
-    for engine_name in engine_names or engines:
-        if engine_name in engines:
-            max_timeout = max(max_timeout, engines[engine_name].timeout)
+    for engine_name in engine_names or searx.engines.ENGINE_MAP:
+        if engine_name in searx.engines.ENGINE_MAP:
+            max_timeout = max(max_timeout, searx.engines.ENGINE_MAP[engine_name].timeout)
 
     # histogram configuration
     histogram_width = 0.1
     histogram_size = int(1.5 * max_timeout / histogram_width)
 
     # engines
-    for engine_name in engine_names or engines:
+    for engine_name in engine_names or searx.engines.ENGINE_MAP:
         # search count
         counter_storage.configure('engine', engine_name, 'search', 'count', 'sent')
         counter_storage.configure('engine', engine_name, 'search', 'count', 'successful')

@@ -11,6 +11,7 @@ from typing import Dict
 import httpx
 
 from searx import logger, searx_debug
+import searx.engines
 from .client import new_client, get_loop, AsyncHTTPTransportNoHttp
 from .raise_for_httperror import raise_for_httperror
 
@@ -322,12 +323,11 @@ def check_network_configuration():
 
 def initialize(settings_engines=None, settings_outgoing=None):
     # pylint: disable=import-outside-toplevel)
-    from searx.engines import engines
     from searx import settings
 
     # pylint: enable=import-outside-toplevel)
 
-    settings_engines = settings_engines or settings['engines']
+    settings_engines: list[dict] = settings_engines or settings['engines']
     settings_outgoing = settings_outgoing or settings['outgoing']
 
     # default parameters for AsyncHTTPTransport
@@ -360,7 +360,7 @@ def initialize(settings_engines=None, settings_outgoing=None):
         nonlocal settings_engines
         for engine_spec in settings_engines:
             engine_name = engine_spec['name']
-            engine = engines.get(engine_name)
+            engine = searx.engines.ENGINE_MAP.get(engine_name)
             if engine is None:
                 continue
             network = getattr(engine, 'network', None)

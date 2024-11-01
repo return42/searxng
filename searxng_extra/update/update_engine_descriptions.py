@@ -15,7 +15,9 @@ from os.path import join
 
 from lxml.html import fromstring
 
-from searx.engines import wikidata, set_loggers
+from searx import logger
+import searx.engines
+from searx.engines import wikidata
 from searx.utils import extract_text, searx_useragent
 from searx.locales import LOCALE_NAMES, locales_initialize, match_locale
 from searx import searx_dir
@@ -26,7 +28,7 @@ from searx.data import data_dir
 
 DATA_FILE = data_dir / 'engine_descriptions.json'
 
-set_loggers(wikidata, 'wikidata')
+wikidata.logger = logger.getChild("engines.wikidata")
 locales_initialize()
 
 # you can run the query in https://query.wikidata.org
@@ -178,7 +180,7 @@ def get_website_description(url, lang1, lang2=None):
 def initialize():
     global IDS, LANGUAGES_SPARQL
     searx.search.initialize()
-    wikipedia_engine = searx.engines.engines['wikipedia']
+    wikipedia_engine = searx.engines.ENGINE_MAP['wikipedia']
 
     locale2lang = {'nl-BE': 'nl'}
     for sxng_ui_lang in LOCALE_NAMES:
@@ -196,7 +198,7 @@ def initialize():
         WIKIPEDIA_LANGUAGES[sxng_ui_lang] = wiki_lang
 
     LANGUAGES_SPARQL = ', '.join(f"'{l}'" for l in set(WIKIPEDIA_LANGUAGES.values()))
-    for engine_name, engine in searx.engines.engines.items():
+    for engine_name, engine in searx.engines.ENGINE_MAP.items():
         descriptions[engine_name] = {}
         wikidata_id = getattr(engine, "about", {}).get('wikidata_id')
         if wikidata_id is not None:
@@ -313,7 +315,7 @@ def fetch_website_description(engine_name, website):
 
 def fetch_website_descriptions():
     print('Fetching website descriptions')
-    for engine_name, engine in searx.engines.engines.items():
+    for engine_name, engine in searx.engines.ENGINE_MAP.items():
         website = getattr(engine, "about", {}).get('website')
         if website is None and hasattr(engine, "search_url"):
             website = normalize_url(getattr(engine, "search_url"))

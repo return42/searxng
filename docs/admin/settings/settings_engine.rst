@@ -9,8 +9,39 @@
    - :ref:`configured engines`
    - :ref:`engines-dev`
 
-In the code example below a *full fledged* example of a YAML setup from a dummy
-engine is shown.  Most of the options have a default value or even are optional.
+A **engine instance** is configured by an engine item in the ``engines:`` list:
+
+.. code:: yaml
+
+   engines:
+     - name: google
+       shortcut: go
+       engine: google
+
+In the example from above a search engine named ``google`` with the shortcut
+(aka !bang) ``!go`` is configured.  The python module with the engine
+implementation is taken from python module :origin:`google.py
+<searx/engines/google.py>`.
+
+Several instances can be configured for an ``engine`` implementation, a typical
+example being the :ref:`xpath engine` instances, or e.g. the the *codberg* and
+*gitea.com* instances in the example below:
+
+.. code:: yaml
+
+  - name: codeberg
+    engine: gitea
+    base_url: https://codeberg.org
+    shortcut: cb
+
+  - name: gitea.com
+    engine: gitea
+    base_url: https://gitea.com
+    shortcut: gitea
+
+In the code example below a *full fledged* example of a YAML setup from a
+dummy engine is shown.  Most of the options have a default value or even are
+optional.
 
 .. hint::
 
@@ -33,12 +64,12 @@ engine is shown.  Most of the options have a default value or even are optional.
      weight: 1
      display_error_messages: true
      about:
-        website: https://example.com
-        wikidata_id: Q306656
-        official_api_documentation: https://example.com/api-doc
-        use_official_api: true
-        require_api_key: true
-        results: HTML
+       website: https://example.com
+       wikidata_id: Q306656
+       official_api_documentation: https://example.com/api-doc
+       use_official_api: true
+       require_api_key: true
+       results: HTML
 
      # overwrite values from section 'outgoing:'
      enable_http2: false
@@ -62,115 +93,17 @@ engine is shown.  Most of the options have a default value or even are optional.
      retry_on_http_error: true # or 403 or [404, 429]
 
 
-``name`` :
-  Name that will be used across SearXNG to define this engine.  In settings, on
-  the result page...
+Engine options
+==============
 
-``engine`` :
-  Name of the python file used to handle requests and responses to and from this
-  search engine.
-
-``shortcut`` :
-  Code used to execute bang requests (in this case using ``!bi``)
-
-``base_url`` : optional
-  Part of the URL that should be stable across every request.  Can be useful to
-  use multiple sites using only one engine, or updating the site URL without
-  touching at the code.
-
-``send_accept_language_header`` :
-  Several engines that support languages (or regions) deal with the HTTP header
-  ``Accept-Language`` to build a response that fits to the locale.  When this
-  option is activated, the language (locale) that is selected by the user is used
-  to build and send a ``Accept-Language`` header in the request to the origin
-  search engine.
-
-.. _engine categories:
-
-``categories`` : optional
-  Specifies to which categories the engine should be added.  Engines can be
-  assigned to multiple categories.
-
-  Categories can be shown as tabs (:ref:`settings categories_as_tabs`) in the
-  UI.  A search in a tab (in the UI) will query all engines that are active in
-  this tab.  In the preferences page (``/preferences``) -- under *engines* --
-  users can select what engine should be active when querying in this tab.
-
-  Alternatively, :ref:`\!bang <search-syntax>` can be used to search all engines
-  in a category, regardless of whether they are active or not, or whether they
-  are in a tab of the UI or not.  For example, ``!dictionaries`` can be used to
-  query all search engines in that category (group).
-
-``timeout`` : optional
-  Timeout of the search with the current search engine.  Overwrites
-  ``request_timeout`` from :ref:`settings outgoing`.  **Be careful, it will
-  modify the global timeout of SearXNG.**
-
-``api_key`` : optional
-  In a few cases, using an API needs the use of a secret key.  How to obtain them
-  is described in the file.
-
-``disabled`` : optional
-  To disable by default the engine, but not deleting it.  It will allow the user
-  to manually activate it in the settings.
-
-``inactive``: optional
-  Remove the engine from the settings (*disabled & removed*).
-
-``language`` : optional
-  If you want to use another language for a specific engine, you can define it
-  by using the ISO code of language (and region), like ``fr``, ``en-US``,
-  ``de-DE``.
-
-``tokens`` : optional
-  A list of secret tokens to make this engine *private*, more details see
-  :ref:`private engines`.
-
-``weight`` : default ``1``
-  Weighting of the results of this engine.
-
-``display_error_messages`` : default ``true``
-  When an engine returns an error, the message is displayed on the user interface.
-
-``network`` : optional
-  Use the network configuration from another engine.
-  In addition, there are two default networks:
-
-  - ``ipv4`` set ``local_addresses`` to ``0.0.0.0`` (use only IPv4 local addresses)
-  - ``ipv6`` set ``local_addresses`` to ``::`` (use only IPv6 local addresses)
-
-``enable_http`` : optional
-  Enable HTTP for this engine (by default only HTTPS is enabled).
-
-``retry_on_http_error`` : optional
-  Retry request on some HTTP status code.
-
-  Example:
-
-  * ``true`` : on HTTP status code between 400 and 599.
-  * ``403`` : on HTTP status code 403.
-  * ``[403, 429]``: on HTTP status code 403 and 429.
-
-``proxies`` :
-  Overwrites proxy settings from :ref:`settings outgoing`.
-
-``using_tor_proxy`` :
-  Using tor proxy (``true``) or not (``false``) for this engine.  The default is
-  taken from ``using_tor_proxy`` of the :ref:`settings outgoing`.
-
-.. _Pool limit configuration: https://www.python-httpx.org/advanced/#pool-limit-configuration
-
-``max_keepalive_connection#s`` :
-  `Pool limit configuration`_, overwrites value ``pool_maxsize`` from
-   :ref:`settings outgoing` for this engine.
-
-``max_connections`` :
-  `Pool limit configuration`_, overwrites value ``pool_connections`` from
-  :ref:`settings outgoing` for this engine.
-
-``keepalive_expiry`` :
-  `Pool limit configuration`_, overwrites value ``keepalive_expiry`` from
-  :ref:`settings outgoing` for this engine.
+.. autoclass:: searx.enginelib.engine::Engine
+   :members: name, engine, shortcut, categories, timeout, disabled, inactive,
+             weight, display_error_messages, paging, max_page,
+             time_range_support, safesearch, language_support, language, region,
+             about, api_key, base_url, tokens, enable_http, network, proxies,
+             send_accept_language_header, retry_on_http_error, network, proxies,
+             using_tor_proxy, max_keepalive_connections, max_connections,
+             keepalive_expiry
 
 
 .. _private engines:
@@ -241,4 +174,3 @@ Example configuration in settings.yml for a German and English speaker:
 
 When searching, the default google engine will return German results and
 "google english" will return English results.
-

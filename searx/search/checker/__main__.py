@@ -10,7 +10,7 @@ import logging
 import searx.search
 import searx.search.checker
 from searx.search import PROCESSORS
-from searx.engines import engine_shortcuts
+import searx.engines
 
 
 # configure logging
@@ -49,7 +49,7 @@ stderr = io.TextIOWrapper(
 def iter_processor(engine_name_list):
     if len(engine_name_list) > 0:
         for name in engine_name_list:
-            name = engine_shortcuts.get(name, name)
+            name = searx.engines.ENGINE_MAP.shortcuts.get(name, name)
             processor = PROCESSORS.get(name)
             if processor is not None:
                 yield name, processor

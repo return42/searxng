@@ -4,12 +4,12 @@
 from mock import Mock
 from parameterized import parameterized
 
-from searx.answerers import answerers
+import searx.answerers
 from tests import SearxTestCase
 
 
 class AnswererTest(SearxTestCase):  # pylint: disable=missing-class-docstring
-    @parameterized.expand(answerers)
+    @parameterized.expand(searx.answerers.ANSWERERS_MAP)
     def test_unicode_input(self, answerer):
         query = Mock()
         unicode_payload = 'árvíztűrő tükörfúrógép'

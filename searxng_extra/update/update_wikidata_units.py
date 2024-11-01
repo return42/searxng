@@ -13,13 +13,13 @@ import collections
 # set path
 from os.path import join
 
-from searx import searx_dir
-from searx.engines import wikidata, set_loggers
+from searx import searx_dir, logger
+from searx.engines import wikidata
 from searx.data import data_dir
 
 DATA_FILE = data_dir / 'wikidata_units.json'
 
-set_loggers(wikidata, 'wikidata')
+wikidata.logger = logger.getChild("engines.wikidata")
 
 # the response contains duplicate ?item with the different ?symbol
 # "ORDER BY ?item DESC(?rank) ?symbol" provides a deterministic result

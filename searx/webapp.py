@@ -63,12 +63,7 @@ from searx.results import Timing
 from searx.settings_defaults import OUTPUT_FORMATS
 from searx.settings_loader import DEFAULT_SETTINGS_FILE
 from searx.exceptions import SearxParameterException
-from searx.engines import (
-    DEFAULT_CATEGORY,
-    categories,
-    engines,
-    engine_shortcuts,
-)
+import searx.engines
 
 from searx import webutils
 from searx.webutils import (
@@ -97,10 +92,7 @@ from searx.preferences import (
     ClientPref,
     ValidationException,
 )
-from searx.answerers import (
-    answerers,
-    ask,
-)
+import searx.answerers
 from searx.metrics import get_engines_stats, get_engine_errors, get_reliabilities, histogram, counter, openmetrics
 from searx.flaskfix import patch_application
 
@@ -335,7 +327,7 @@ def get_enabled_categories(category_names: Iterable[str]):
     enabled_engines = [item[0] for item in request.preferences.engines.get_enabled()]
     enabled_categories = set()
     for engine_name in enabled_engines:
-        enabled_categories.update(engines[engine_name].categories)
+        enabled_categories.update(searx.engines.ENGINE_MAP[engine_name].categories)
     return [x for x in category_names if x in enabled_categories]
 
 
@@ -403,7 +395,7 @@ def render(template_name: str, **kwargs):
     kwargs['method'] = request.preferences.get_value('method')
     kwargs['categories_as_tabs'] = list(settings['categories_as_tabs'].keys())
     kwargs['categories'] = get_enabled_categories(settings['categories_as_tabs'].keys())
-    kwargs['DEFAULT_CATEGORY'] = DEFAULT_CATEGORY
+    kwargs['DEFAULT_CATEGORY'] = searx.engines.ENGINE_MAP.DEFAULT_CATEGORY
 
     # i18n
     kwargs['sxng_locales'] = [l for l in sxng_locales if l[0] in settings['search']['languages']]
@@ -481,7 +473,9 @@ def pre_request():
 
     client_pref = ClientPref.from_http_request(request)
     # pylint: disable=redefined-outer-name
-    preferences = Preferences(themes, list(categories.keys()), engines, plugins, client_pref)
+    preferences = Preferences(
+        themes, list(searx.engines.ENGINE_MAP.categories.keys()), searx.engines.ENGINE_MAP, plugins, client_pref
+    )
 
     user_agent = request.headers.get('User-Agent', '').lower()
     if 'webkit' in user_agent and 'android' in user_agent:
@@ -866,7 +860,7 @@ def autocompleter():
         for autocomplete_text in raw_text_query.autocomplete_list:
             results.append(raw_text_query.get_autocomplete_full_query(autocomplete_text))
 
-    for answers in ask(raw_text_query):
+    for answers in searx.answerers.ask(raw_text_query):
         for answer in answers:
             results.append(str(answer['answer']))
 
@@ -911,12 +905,14 @@ def preferences():
     allowed_plugins = request.preferences.plugins.get_enabled()
 
     # stats for preferences page
-    filtered_engines = dict(filter(lambda kv: request.preferences.validate_token(kv[1]), engines.items()))
+    filtered_engines = dict(
+        filter(lambda kv: request.preferences.validate_token(kv[1]), searx.engines.ENGINE_MAP.items())
+    )
 
     engines_by_category = {}
 
-    for c in categories:  # pylint: disable=consider-using-dict-items
-        engines_by_category[c] = [e for e in categories[c] if e.name in filtered_engines]
+    for c in searx.engines.ENGINE_MAP.categories:  # pylint: disable=consider-using-dict-items
+        engines_by_category[c] = [e for e in searx.engines.ENGINE_MAP.categories[c] if e.name in filtered_engines]
         # sort the engines alphabetically since the order in settings.yml is meaningless.
         list.sort(engines_by_category[c], key=lambda e: e.name)
 
@@ -1026,12 +1022,12 @@ def preferences():
         supports = supports,
         answerers = [
             {'info': a.self_info(), 'keywords': a.keywords}
-            for a in answerers
+            for a in searx.answerers.ANSWERERS_MAP.values()
         ],
         disabled_engines = disabled_engines,
         autocomplete_backends = autocomplete_backends,
         favicon_resolver_names = favicons.proxy.CFG.resolver_map.keys(),
-        shortcuts = {y: x for x, y in engine_shortcuts.items()},
+        shortcuts = {y: x for x, y in searx.engines.ENGINE_MAP.shortcuts.items()},
         themes = themes,
         plugins = plugins,
         doi_resolvers = settings['doi_resolvers'],
@@ -1136,7 +1132,7 @@ def engine_descriptions():
         result[engine] = description
 
     # overwrite by about:description (from settings)
-    for engine_name, engine_mod in engines.items():
+    for engine_name, engine_mod in searx.engines.ENGINE_MAP.items():
         descr = getattr(engine_mod, 'about', {}).get('description', None)
         if descr is not None:
             result[engine_name] = [descr, "SearXNG config"]
@@ -1150,7 +1146,9 @@ def stats():
     sort_order = request.args.get('sort', default='name', type=str)
     selected_engine_name = request.args.get('engine', default=None, type=str)
 
-    filtered_engines = dict(filter(lambda kv: request.preferences.validate_token(kv[1]), engines.items()))
+    filtered_engines = dict(
+        filter(lambda kv: request.preferences.validate_token(kv[1]), searx.engines.ENGINE_MAP.items())
+    )
     if selected_engine_name:
         if selected_engine_name not in filtered_engines:
             selected_engine_name = None
@@ -1213,7 +1211,9 @@ def stats():
 
 @app.route('/stats/errors', methods=['GET'])
 def stats_errors():
-    filtered_engines = dict(filter(lambda kv: request.preferences.validate_token(kv[1]), engines.items()))
+    filtered_engines = dict(
+        filter(lambda kv: request.preferences.validate_token(kv[1]), searx.engines.ENGINE_MAP.items())
+    )
     result = get_engine_errors(filtered_engines)
     return jsonify(result)
 
@@ -1234,7 +1234,9 @@ def stats_open_metrics():
     if not request.authorization or request.authorization.password != password:
         return Response('access forbidden', status=401, mimetype='text/plain')
 
-    filtered_engines = dict(filter(lambda kv: request.preferences.validate_token(kv[1]), engines.items()))
+    filtered_engines = dict(
+        filter(lambda kv: request.preferences.validate_token(kv[1]), searx.engines.ENGINE_MAP.items())
+    )
 
     checker_results = checker_get_result()
     checker_results = (
@@ -1301,7 +1303,7 @@ def clear_cookies():
 def config():
     """Return configuration in JSON format."""
     _engines = []
-    for name, engine in engines.items():
+    for name, engine in searx.engines.ENGINE_MAP.items():
         if not request.preferences.validate_token(engine):
             continue
 
@@ -1330,7 +1332,7 @@ def config():
 
     return jsonify(
         {
-            'categories': list(categories.keys()),
+            'categories': list(searx.engines.ENGINE_MAP.categories.keys()),
             'engines': _engines,
             'plugins': _plugins,
             'instance_name': settings['general']['instance_name'],

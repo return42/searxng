@@ -12,10 +12,8 @@ import lxml
 from httpx import HTTPError
 
 from searx import settings
-from searx.engines import (
-    engines,
-    google,
-)
+import searx.engines
+from searx.engines import google
 from searx.network import get as http_get, post as http_post
 from searx.exceptions import SearxEngineResponseException
 
@@ -73,7 +71,7 @@ def dbpedia(query, _lang):
 def duckduckgo(query, sxng_locale):
     """Autocomplete from DuckDuckGo. Supports DuckDuckGo's languages"""
 
-    traits = engines['duckduckgo'].traits
+    traits = searx.engines.ENGINE_MAP['duckduckgo'].traits
     args = {
         'q': query,
         'kl': traits.get_region(sxng_locale, traits.all_locale),
@@ -99,7 +97,7 @@ def google_complete(query, sxng_locale):
 
     """
 
-    google_info = google.get_google_info({'searxng_locale': sxng_locale}, engines['google'].traits)
+    google_info = google.get_google_info({'searxng_locale': sxng_locale}, searx.engines.ENGINE_MAP['google'].traits)
 
     url = 'https://{subdomain}/complete/search?{args}'
     args = urlencode(
@@ -168,7 +166,7 @@ def stract(query, _lang):
 
 def startpage(query, sxng_locale):
     """Autocomplete from Startpage. Supports Startpage's languages"""
-    lui = engines['startpage'].traits.get_language(sxng_locale, 'english')
+    lui = searx.engines.ENGINE_MAP['startpage'].traits.get_language(sxng_locale, 'english')
     url = 'https://startpage.com/suggestions?{query}'
     resp = get(url.format(query=urlencode({'q': query, 'segment': 'startpage.udog', 'lui': lui})))
     data = resp.json()
@@ -187,7 +185,7 @@ def qwant(query, sxng_locale):
     """Autocomplete from Qwant. Supports Qwant's regions."""
     results = []
 
-    locale = engines['qwant'].traits.get_region(sxng_locale, 'en_US')
+    locale = searx.engines.ENGINE_MAP['qwant'].traits.get_region(sxng_locale, 'en_US')
     url = 'https://api.qwant.com/v3/suggest?{query}'
     resp = get(url.format(query=urlencode({'q': query, 'locale': locale, 'version': '2'})))
 
@@ -203,7 +201,7 @@ def qwant(query, sxng_locale):
 def wikipedia(query, sxng_locale):
     """Autocomplete from Wikipedia. Supports Wikipedia's languages (aka netloc)."""
     results = []
-    eng_traits = engines['wikipedia'].traits
+    eng_traits = searx.engines.ENGINE_MAP['wikipedia'].traits
     wiki_lang = eng_traits.get_language(sxng_locale, 'en')
     wiki_netloc = eng_traits.custom['wiki_netloc'].get(wiki_lang, 'en.wikipedia.org')
 

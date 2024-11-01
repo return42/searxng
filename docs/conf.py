@@ -53,14 +53,14 @@ searx.engines.load_engines(searx.settings['engines'])
 
 jinja_contexts = {
     'searx': {
-        'engines': searx.engines.engines,
+        'engines': searx.engines.ENGINE_MAP,
         'plugins': searx.plugins.plugins,
         'version': {
             'node': os.getenv('NODE_MINIMUM_VERSION')
         },
-        'enabled_engine_count': sum(not x.disabled for x in searx.engines.engines.values()),
-        'categories': searx.engines.categories,
-        'categories_as_tabs': {c: searx.engines.categories[c] for c in searx.settings['categories_as_tabs']},
+        'enabled_engine_count': sum(not x.disabled for x in searx.engines.ENGINE_MAP.values()),
+        'categories': searx.engines.ENGINE_MAP.categories,
+        'categories_as_tabs': {c: searx.engines.ENGINE_MAP.categories[c] for c in searx.settings['categories_as_tabs']},
     },
 }
 jinja_filters = {

@@ -13,13 +13,15 @@ import re
 import unicodedata
 import json
 
+from searx import logger
 from searx.locales import LOCALE_NAMES, locales_initialize
-from searx.engines import wikidata, set_loggers
+from searx.engines import wikidata
 from searx.data import data_dir
 
 DATA_FILE = data_dir / 'currencies.json'
 
-set_loggers(wikidata, 'wikidata')
+wikidata.logger = logger.getChild("engines.wikidata")
+
 locales_initialize()
 
 # ORDER BY (with all the query fields) is important to keep a deterministic result order

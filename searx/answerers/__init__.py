@@ -1,51 +1,45 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # pylint: disable=missing-module-docstring
 
-import sys
-from os import listdir
-from os.path import realpath, dirname, join, isdir
-from collections import defaultdict
+import types
+import pathlib
 
-from searx.utils import load_module
+from searx.answerers.random import answerer
+import searx.utils
 
-answerers_dir = dirname(realpath(__file__))
+ANSWERERS_FOLDER = pathlib.Path(__file__).parent.absolute()
+ANSWERERS_MAP: dict[str, tuple[types.ModuleType]] = {}
 
 
-def load_answerers():
-    answerers = []  # pylint: disable=redefined-outer-name
+def load_answerers() -> dict[str, tuple[types.ModuleType]]:
+    ret_val = {}
 
-    for filename in listdir(answerers_dir):
-        if not isdir(join(answerers_dir, filename)) or filename.startswith('_'):
+    for f_name in ANSWERERS_FOLDER.glob("*/answerer.py"):
+        if not f_name.is_file or str(f_name.parent.name).startswith("_"):
             continue
-        module = load_module('answerer.py', join(answerers_dir, filename))
-        if not hasattr(module, 'keywords') or not isinstance(module.keywords, tuple) or not module.keywords:
-            sys.exit(2)
-        answerers.append(module)
-    return answerers
+        answ_name = f_name.parent.name
+        module = searx.utils.load_module(answ_name, f_name)
+        keywords = getattr(module, "keywords", ())
+        if not keywords or not isinstance(keywords, tuple):
+            raise ValueError(f"missing or invalid 'keyword' attribute in: {f_name}")
+        ret_val[answ_name] = module
 
-
-def get_answerers_by_keywords(answerers):  # pylint:disable=redefined-outer-name
-    by_keyword = defaultdict(list)
-    for answerer in answerers:
-        for keyword in answerer.keywords:
-            for keyword in answerer.keywords:
-                by_keyword[keyword].append(answerer.answer)
-    return by_keyword
+    return ret_val
 
 
 def ask(query):
     results = []
     query_parts = list(filter(None, query.query.split()))
 
-    if not query_parts or query_parts[0] not in answerers_by_keywords:
+    if not query_parts or query_parts[0] not in ANSWERERS_MAP:
         return results
 
-    for answerer in answerers_by_keywords[query_parts[0]]:
-        result = answerer(query)
-        if result:
-            results.append(result)
+    for module in ANSWERERS_MAP.get(query_parts[0], ()):
+        answer = module.answerer(query)
+        if answer:
+            results.append(answer)
+
     return results
 
 
-answerers = load_answerers()
-answerers_by_keywords = get_answerers_by_keywords(answerers)
+ANSWERERS_MAP = load_answerers()

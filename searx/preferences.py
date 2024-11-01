@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Searx preferences implementation.
 """
-
 # pylint: disable=useless-object-inheritance
+from __future__ import annotations
 
 from base64 import urlsafe_b64encode, urlsafe_b64decode
 from zlib import compress, decompress
@@ -13,12 +13,12 @@ from collections import OrderedDict
 import flask
 import babel
 
+import searx.engines
 from searx import settings, autocomplete, favicons
-from searx.enginelib import Engine
+from searx.enginelib import Engine, EngineMap
 from searx.plugins import Plugin
 from searx.locales import LOCALE_NAMES
 from searx.webutils import VALID_LANGUAGE_CODE
-from searx.engines import DEFAULT_CATEGORY
 
 
 COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 5  # 5 years
@@ -291,7 +291,9 @@ class EnginesSetting(BooleanChoices):
         choices = {}
         for engine in engines:
             for category in engine.categories:
-                if not category in list(settings['categories_as_tabs'].keys()) + [DEFAULT_CATEGORY]:
+                if not category in list(settings['categories_as_tabs'].keys()) + [
+                    searx.engines.ENGINE_MAP.DEFAULT_CATEGORY
+                ]:
                     continue
                 choices['{}__{}'.format(engine.name, category)] = not engine.disabled
         super().__init__(default_value, choices)
@@ -377,7 +379,7 @@ class Preferences:
         self,
         themes: List[str],
         categories: List[str],
-        engines: Dict[str, Engine],
+        engines: EngineMap,
         plugins: Iterable[Plugin],
         client: Optional[ClientPref] = None,
     ):

@@ -13,7 +13,7 @@ from searx.exceptions import (
     SearxEngineAccessDeniedException,
 )
 from searx import searx_parent_dir, settings
-from searx.engines import engines
+import searx.engines
 
 
 errors_per_engines = {}
@@ -87,7 +87,7 @@ class ErrorContext:  # pylint: disable=missing-class-docstring
 def add_error_context(engine_name: str, error_context: ErrorContext) -> None:
     errors_for_engine = errors_per_engines.setdefault(engine_name, {})
     errors_for_engine[error_context] = errors_for_engine.get(error_context, 0) + 1
-    engines[engine_name].logger.warning('%s', str(error_context))
+    searx.engines.ENGINE_MAP[engine_name].logger.warning('%s', str(error_context))
 
 
 def get_trace(traces):

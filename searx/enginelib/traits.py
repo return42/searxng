@@ -10,16 +10,19 @@ used.
 """
 
 from __future__ import annotations
+
+__all__ = ["EngineTraits", "EngineTraitsMap"]
+
 import json
 import dataclasses
-import types
 from typing import Dict, Literal, Iterable, Union, Callable, Optional, TYPE_CHECKING
 
+import searx.engines
 from searx import locales
 from searx.data import data_dir, ENGINE_TRAITS
 
 if TYPE_CHECKING:
-    from . import Engine
+    from .engine import Engine
 
 
 class EngineTraitsEncoder(json.JSONEncoder):
@@ -148,47 +151,6 @@ class EngineTraits:
             fetch_traits(engine_traits)
         return engine_traits
 
-    def set_traits(self, engine: Engine):
-        """Set traits from self object in a :py:obj:`.Engine` namespace.
-
-        :param engine: engine instance build by :py:func:`searx.engines.load_engine`
-        """
-
-        if self.data_type == 'traits_v1':
-            self._set_traits_v1(engine)
-        else:
-            raise TypeError('engine traits of type %s is unknown' % self.data_type)
-
-    def _set_traits_v1(self, engine: Engine):
-        # For an engine, when there is `language: ...` in the YAML settings the engine
-        # does support only this one language (region)::
-        #
-        #   - name: google italian
-        #     engine: google
-        #     language: it
-        #     region: it-IT                                      # type: ignore
-
-        traits = self.copy()
-
-        _msg = "settings.yml - engine: '%s' / %s: '%s' not supported"
-
-        languages = traits.languages
-        if hasattr(engine, 'language'):
-            if engine.language not in languages:
-                raise ValueError(_msg % (engine.name, 'language', engine.language))
-            traits.languages = {engine.language: languages[engine.language]}
-
-        regions = traits.regions
-        if hasattr(engine, 'region'):
-            if engine.region not in regions:
-                raise ValueError(_msg % (engine.name, 'region', engine.region))
-            traits.regions = {engine.region: regions[engine.region]}
-
-        engine.language_support = bool(traits.languages or traits.regions)
-
-        # set the copied & modified traits in engine's namespace
-        engine.traits = traits
-
 
 class EngineTraitsMap(Dict[str, EngineTraits]):
     """A python dictionary to map :class:`EngineTraits` by engine name."""
@@ -211,14 +173,13 @@ class EngineTraitsMap(Dict[str, EngineTraits]):
 
     @classmethod
     def fetch_traits(cls, log: Callable) -> 'EngineTraitsMap':
-        from searx import engines  # pylint: disable=cyclic-import, import-outside-toplevel
 
-        names = list(engines.engines)
+        names = list(searx.engines.ENGINE_MAP)
         names.sort()
         obj = cls()
 
         for engine_name in names:
-            engine = engines.engines[engine_name]
+            engine = searx.engines.ENGINE_MAP[engine_name]
 
             traits = EngineTraits.fetch_traits(engine)
             if traits is not None:
@@ -227,24 +188,3 @@ class EngineTraitsMap(Dict[str, EngineTraits]):
                 obj[engine_name] = traits
 
         return obj
-
-    def set_traits(self, engine: Engine | types.ModuleType):
-        """Set traits in a :py:obj:`Engine` namespace.
-
-        :param engine: engine instance build by :py:func:`searx.engines.load_engine`
-        """
-
-        engine_traits = EngineTraits(data_type='traits_v1')
-        if engine.name in self.keys():
-            engine_traits = self[engine.name]
-
-        elif engine.engine in self.keys():
-            # The key of the dictionary traits_map is the *engine name*
-            # configured in settings.xml.  When multiple engines are configured
-            # in settings.yml to use the same origin engine (python module)
-            # these additional engines can use the languages from the origin
-            # engine.  For this use the configured ``engine: ...`` from
-            # settings.yml
-            engine_traits = self[engine.engine]
-
-        engine_traits.set_traits(engine)

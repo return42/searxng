@@ -18,7 +18,7 @@ class TinEyeTests(SearxTestCase):  # pylint: disable=missing-class-docstring
             [{'name': 'tineye', 'engine': 'tineye', 'shortcut': 'tin', 'timeout': 9.0, 'disabled': True}]
         )
 
-        self.tineye = searx.engines.engines['tineye']
+        self.tineye = searx.engines.ENGINE_MAP['tineye']
         self.tineye.logger.setLevel(logging.CRITICAL)
 
     def tearDown(self):

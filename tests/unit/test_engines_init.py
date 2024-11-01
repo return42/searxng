@@ -19,9 +19,9 @@ class TestEnginesInit(SearxTestCase):  # pylint: disable=missing-class-docstring
         ]
 
         engines.load_engines(engine_list)
-        self.assertEqual(len(engines.engines), 2)
-        self.assertIn('engine1', engines.engines)
-        self.assertIn('engine2', engines.engines)
+        self.assertEqual(len(engines.ENGINE_MAP), 2)
+        self.assertIn('engine1', engines.ENGINE_MAP)
+        self.assertIn('engine2', engines.ENGINE_MAP)
 
     def test_initialize_engines_exclude_onions(self):  # pylint: disable=invalid-name
         settings['outgoing']['using_tor_proxy'] = False
@@ -31,9 +31,9 @@ class TestEnginesInit(SearxTestCase):  # pylint: disable=missing-class-docstring
         ]
 
         engines.load_engines(engine_list)
-        self.assertEqual(len(engines.engines), 1)
-        self.assertIn('engine1', engines.engines)
-        self.assertNotIn('onions', engines.categories)
+        self.assertEqual(len(engines.ENGINE_MAP), 1)
+        self.assertIn('engine1', engines.ENGINE_MAP)
+        self.assertNotIn('onions', engines.ENGINE_MAP.categories)
 
     def test_initialize_engines_include_onions(self):  # pylint: disable=invalid-name
         settings['outgoing']['using_tor_proxy'] = True
@@ -51,12 +51,12 @@ class TestEnginesInit(SearxTestCase):  # pylint: disable=missing-class-docstring
         ]
 
         engines.load_engines(engine_list)
-        self.assertEqual(len(engines.engines), 2)
-        self.assertIn('engine1', engines.engines)
-        self.assertIn('engine2', engines.engines)
-        self.assertIn('onions', engines.categories)
-        self.assertIn('http://engine1.onion', engines.engines['engine1'].search_url)
-        self.assertEqual(engines.engines['engine1'].timeout, 120.0)
+        self.assertEqual(len(engines.ENGINE_MAP), 2)
+        self.assertIn('engine1', engines.ENGINE_MAP)
+        self.assertIn('engine2', engines.ENGINE_MAP)
+        self.assertIn('onions', engines.ENGINE_MAP.categories)
+        self.assertIn('http://engine1.onion', engines.ENGINE_MAP['engine1'].search_url)
+        self.assertEqual(engines.ENGINE_MAP['engine1'].timeout, 120.0)
 
     def test_missing_name_field(self):
         settings['outgoing']['using_tor_proxy'] = False
@@ -65,7 +65,7 @@ class TestEnginesInit(SearxTestCase):  # pylint: disable=missing-class-docstring
         ]
         with self.assertLogs('searx.engines', level='ERROR') as cm:  # pylint: disable=invalid-name
             engines.load_engines(engine_list)
-            self.assertEqual(len(engines.engines), 0)
+            self.assertEqual(len(engines.ENGINE_MAP), 0)
             self.assertEqual(cm.output, ['ERROR:searx.engines:An engine does not have a "name" field'])
 
     def test_missing_engine_field(self):
@@ -75,7 +75,7 @@ class TestEnginesInit(SearxTestCase):  # pylint: disable=missing-class-docstring
         ]
         with self.assertLogs('searx.engines', level='ERROR') as cm:  # pylint: disable=invalid-name
             engines.load_engines(engine_list)
-            self.assertEqual(len(engines.engines), 0)
+            self.assertEqual(len(engines.ENGINE_MAP), 0)
             self.assertEqual(
                 cm.output, ['ERROR:searx.engines:The "engine" field is missing for the engine named "engine2"']
             )

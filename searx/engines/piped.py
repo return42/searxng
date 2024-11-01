@@ -54,6 +54,8 @@ import datetime
 from dateutil import parser
 
 from searx.utils import humanize_number
+import searx.engines
+
 
 # about
 about = {
@@ -92,18 +94,14 @@ piped_filter = 'all'
 
 
 def _backend_url() -> str:
-    from searx.engines import engines  # pylint: disable=import-outside-toplevel
-
-    url = engines['piped'].backend_url  # type: ignore
+    url = searx.engines.ENGINE_MAP['piped'].backend_url  # type: ignore
     if isinstance(url, list):
         url = random.choice(url)
     return url
 
 
 def _frontend_url() -> str:
-    from searx.engines import engines  # pylint: disable=import-outside-toplevel
-
-    return engines['piped'].frontend_url  # type: ignore
+    return searx.engines.ENGINE_MAP['piped'].frontend_url  # type: ignore
 
 
 def request(query, params):
