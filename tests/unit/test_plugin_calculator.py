@@ -22,7 +22,7 @@ class PluginCalculator(SearxTestCase):
         super().setUp()
 
         f = _default / "calculator.py"
-        mod = load_module(f.name, str(f.parent))
+        mod = load_module(f.name, f)
         engines = {}
 
         self.storage = searx.plugins.PluginStorage()

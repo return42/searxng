@@ -14,6 +14,7 @@ from tests import SearxTestCase
 PRIVATE_ENGINE_NAME = "dummy private engine"  # from the ./settings/test_settings.yml
 SEARCHQUERY = [EngineRef(PRIVATE_ENGINE_NAME, 'general')]
 
+
 class ValidateQueryCase(SearxTestCase):
 
     def test_without_token(self):

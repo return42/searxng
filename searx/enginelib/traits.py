@@ -17,7 +17,6 @@ import json
 import dataclasses
 from typing import Dict, Literal, Iterable, Union, Callable, Optional, TYPE_CHECKING
 
-import searx.engines
 from searx import locales
 from searx.data import data_dir, ENGINE_TRAITS
 
@@ -173,6 +172,8 @@ class EngineTraitsMap(Dict[str, EngineTraits]):
 
     @classmethod
     def fetch_traits(cls, log: Callable) -> 'EngineTraitsMap':
+
+        import searx.engines  # pylint: disable=import-outside-toplevel
 
         names = list(searx.engines.ENGINE_MAP)
         names.sort()

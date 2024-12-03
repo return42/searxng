@@ -448,7 +448,11 @@ def pre_request():
     client_pref = ClientPref.from_http_request(sxng_request)
     # pylint: disable=redefined-outer-name
     preferences = Preferences(
-        themes, list(searx.engines.ENGINE_MAP.categories.keys()), searx.engines.ENGINE_MAP, searx.plugins.STORAGE, client_pref
+        themes,
+        list(searx.engines.ENGINE_MAP.categories.keys()),
+        searx.engines.ENGINE_MAP,
+        searx.plugins.STORAGE,
+        client_pref,
     )
 
     user_agent = sxng_request.headers.get('User-Agent', '').lower()
@@ -879,7 +883,9 @@ def preferences():
     allowed_plugins = sxng_request.preferences.plugins.get_enabled()
 
     # stats for preferences page
-    filtered_engines = dict(filter(lambda kv: sxng_request.preferences.validate_token(kv[1]), searx.engines.ENGINE_MAP.items()))
+    filtered_engines = dict(
+        filter(lambda kv: sxng_request.preferences.validate_token(kv[1]), searx.engines.ENGINE_MAP.items())
+    )
 
     engines_by_category = {}
 

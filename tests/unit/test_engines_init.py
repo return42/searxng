@@ -33,6 +33,7 @@ class TestEnginesInit(SearxTestCase):
     def test_initialize_engines_include_onions(self):
         settings['outgoing']['using_tor_proxy'] = True
         settings['outgoing']['extra_proxy_timeout'] = 100.0
+
         engine_list = [
             {
                 'engine': 'dummy',
@@ -42,10 +43,22 @@ class TestEnginesInit(SearxTestCase):
                 'timeout': 20.0,
                 'onion_url': 'http://engine1.onion',
             },
-            {'engine': 'dummy', 'name': 'engine2', 'shortcut': 'e2', 'categories': 'onions'},
+            {
+                'engine': 'dummy',
+                'name': 'engine2',
+                'shortcut': 'e2',
+                'categories': 'onions',
+            },
         ]
 
-        engines.load_engines(engine_list)
+        try:
+            settings['outgoing']['using_tor_proxy'] = True
+            settings['outgoing']['extra_proxy_timeout'] = 100.0
+            engines.load_engines(engine_list)
+        finally:
+            settings['outgoing']['using_tor_proxy'] = False
+            settings['outgoing']['extra_proxy_timeout'] = 0
+
         self.assertEqual(len(engines.ENGINE_MAP), 2)
         self.assertIn('engine1', engines.ENGINE_MAP)
         self.assertIn('engine2', engines.ENGINE_MAP)
@@ -54,23 +67,22 @@ class TestEnginesInit(SearxTestCase):
         self.assertEqual(engines.ENGINE_MAP['engine1'].timeout, 120.0)
 
     def test_missing_name_field(self):
-        settings['outgoing']['using_tor_proxy'] = False
         engine_list = [
             {'engine': 'dummy', 'shortcut': 'e1', 'categories': 'general'},
         ]
-        with self.assertLogs('searx.engines', level='ERROR') as cm:  # pylint: disable=invalid-name
+        with self.assertRaises(ValueError) as ctx:
             engines.load_engines(engine_list)
             self.assertEqual(len(engines.ENGINE_MAP), 0)
-            self.assertEqual(cm.output, ['ERROR:searx.engines:An engine does not have a "name" field'])
+            self.assertTrue("enigne_settings: the mandatory field 'name' is missing!" in str(ctx.exception))
 
     def test_missing_engine_field(self):
         settings['outgoing']['using_tor_proxy'] = False
         engine_list = [
             {'name': 'engine2', 'shortcut': 'e2', 'categories': 'onions'},
         ]
-        with self.assertLogs('searx.engines', level='ERROR') as cm:  # pylint: disable=invalid-name
+
+        with self.assertRaises(ValueError) as ctx:
             engines.load_engines(engine_list)
-            self.assertEqual(len(engines.ENGINE_MAP), 0)
-            self.assertEqual(
-                cm.output, ['ERROR:searx.engines:The "engine" field is missing for the engine named "engine2"']
-            )
+
+        self.assertEqual(len(engines.ENGINE_MAP), 0)
+        self.assertTrue("enigne_settings: the mandatory field 'engine' is missing!" in str(ctx.exception))

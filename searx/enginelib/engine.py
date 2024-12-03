@@ -7,6 +7,7 @@ __all__ = ["Engine", "EngineModule"]
 
 from typing import Any
 
+import copy
 import importlib
 import inspect
 import logging
@@ -279,6 +280,10 @@ class Engine(msgspec.Struct, kw_only=True):
           initialized by ``None`` in engine's python module).
         """
 
+        # The engine settings will be modified in place, create a (deep) copy of
+        # the settings first!
+        engine_settings = copy.deepcopy(engine_settings)
+
         fqn = engine_settings.get("engine")
         if fqn is None:
             raise ValueError(f"enigne_settings: the mandatory field 'engine' is missing! {engine_settings}")
@@ -470,6 +475,8 @@ class EngineModule(Engine):  # pylint: disable=too-few-public-methods
     module: types.ModuleType
     """A copy of the python module with the engine implementation, see
     :py:obj:`searx.utils.load_module`."""
+
+    search_url: str | None = None
 
     def __post_init__(self):
 

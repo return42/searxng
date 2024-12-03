@@ -116,7 +116,7 @@ class AnswerStorage(dict):
                 warnings.warn(
                     f"answerer module {f} is deprecated / migrate to searx.answerers.Answerer", DeprecationWarning
                 )
-                mod = load_module("answerer.py", str(f))
+                mod = load_module("answerer.py", f)
                 self.register(ModuleAnswerer(mod))
 
     def register_by_fqn(self, fqn: str):

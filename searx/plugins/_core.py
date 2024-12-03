@@ -281,7 +281,7 @@ class PluginStorage:
                 continue
 
             # for backward compatibility
-            mod = load_module(f.name, str(f.parent))
+            mod = load_module(f.name, f)
             self.register(ModulePlugin(mod))
 
         for fqn in searx.get_setting("plugins"):  # type: ignore
