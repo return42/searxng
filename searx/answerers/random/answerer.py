@@ -1,11 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # pylint: disable=missing-module-docstring
 
+from __future__ import annotations
+
 import hashlib
 import random
 import string
 import uuid
 from flask_babel import gettext
+
+from searx.result_types import Answer
+from searx.result_types.answer import BaseAnswer
 
 # required answerer attribute
 # specifies which search query keywords triggers this answerer
@@ -56,21 +61,17 @@ random_types = {
 }
 
 
-# required answerer function
-# can return a list of results (any result type) for a given query
-def answer(query):
-    parts = query.query.split()
-    if len(parts) != 2:
-        return []
+def answer(query: str) -> list[BaseAnswer]:
+    results = []
+    parts = query.split()
 
-    if parts[1] not in random_types:
-        return []
+    if len(parts) != 2 or parts[1] not in random_types:
+        return results
 
-    return [{'answer': random_types[parts[1]]()}]
+    Answer(results=results, answer=random_types[parts[1]]())
+    return results
 
 
-# required answerer function
-# returns information about the answerer
 def self_info():
     return {
         'name': gettext('Random value generator'),

@@ -22,6 +22,7 @@ import urllib
 import urllib.parse
 from urllib.parse import urlencode, urlparse, unquote
 
+import warnings
 import httpx
 
 from pygments import highlight
@@ -59,6 +60,7 @@ from searx import limiter
 from searx.botdetection import link_token
 
 from searx.data import ENGINE_DESCRIPTIONS
+from searx.result_types import Answer
 from searx.results import Timing
 from searx.settings_defaults import OUTPUT_FORMATS
 from searx.settings_loader import DEFAULT_SETTINGS_FILE
@@ -97,10 +99,7 @@ from searx.preferences import (
     ClientPref,
     ValidationException,
 )
-from searx.answerers import (
-    answerers,
-    ask,
-)
+import searx.answerers
 from searx.metrics import get_engines_stats, get_engine_errors, get_reliabilities, histogram, counter, openmetrics
 from searx.flaskfix import patch_application
 
@@ -123,6 +122,8 @@ from searx.network import stream as http_stream, set_context_network_name
 from searx.search.checker import get_result as checker_get_result
 
 logger = logger.getChild('webapp')
+
+warnings.simplefilter("always")
 
 # check secret_key
 if not searx_debug and settings['server']['secret_key'] == 'ultrasecretkey':
@@ -848,6 +849,10 @@ def autocompleter():
     raw_text_query = RawTextQuery(request.form.get('q', ''), disabled_engines)
     sug_prefix = raw_text_query.getQuery()
 
+    for obj in searx.answerers.STORAGE.ask(sug_prefix):
+        if isinstance(obj, Answer):
+            results.append(obj.answer)
+
     # normal autocompletion results only appear if no inner results returned
     # and there is a query part
     if len(raw_text_query.autocomplete_list) == 0 and len(sug_prefix) > 0:
@@ -865,10 +870,6 @@ def autocompleter():
     if len(raw_text_query.autocomplete_list) > 0:
         for autocomplete_text in raw_text_query.autocomplete_list:
             results.append(raw_text_query.get_autocomplete_full_query(autocomplete_text))
-
-    for answers in ask(raw_text_query):
-        for answer in answers:
-            results.append(str(answer['answer']))
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         # the suggestion request comes from the searx search form
@@ -1024,10 +1025,7 @@ def preferences():
         max_rate95 = max_rate95,
         reliabilities = reliabilities,
         supports = supports,
-        answerers = [
-            {'info': a.self_info(), 'keywords': a.keywords}
-            for a in answerers
-        ],
+        answer_storage = searx.answerers.STORAGE.info,
         disabled_engines = disabled_engines,
         autocomplete_backends = autocomplete_backends,
         favicon_resolver_names = favicons.proxy.CFG.resolver_map.keys(),

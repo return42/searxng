@@ -13,6 +13,8 @@ import babel
 from flask_babel import gettext
 
 from searx.plugins import logger
+from searx.result_types import Answer
+
 
 name = "Basic Calculator"
 description = gettext("Calculate mathematical expressions via the search bar")
@@ -89,6 +91,8 @@ def timeout_func(timeout, func, *args, **kwargs):
 
 def post_search(_request, search):
 
+    results = []
+
     # only show the result of the expression on the first page
     if search.search_query.pageno > 1:
         return True
@@ -126,5 +130,7 @@ def post_search(_request, search):
     if result is None or result == "":
         return True
     result = babel.numbers.format_decimal(result, locale=ui_locale)
-    search.result_container.answers['calculate'] = {'answer': f"{search.search_query.query} = {result}"}
-    return True
+
+    Answer(results=results, answer=f"{search.search_query.query} = {result}")
+
+    return results
