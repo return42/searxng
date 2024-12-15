@@ -11,6 +11,7 @@ Developer documentation
    engines/index
    search_api
    plugins
+   answerers
    translation
    lxcdev
    makefile

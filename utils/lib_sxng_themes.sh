@@ -19,7 +19,7 @@ themes.all() {
     (   set -e
         pygments.less
         node.env
-        themes.simple
+        themes.simple.build
     )
     dump_return $?
 }
@@ -48,7 +48,7 @@ themes.live() {
         | grep -E --ignore-case --color 'error[s]?[:]? |warning[s]?[:]? |'
 }
 
-themes.simple() {
+themes.simple.build() {
     (   set -e
         build_msg GRUNT "theme: simple"
         npm --prefix searx/static/themes/simple run build

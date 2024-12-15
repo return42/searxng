@@ -11,11 +11,11 @@ from flask import copy_current_request_context
 import babel
 
 from searx import settings
-from searx.answerers import ask
+import searx.answerers
 from searx.external_bang import get_bang_url
 from searx.results import ResultContainer
 from searx import logger
-from searx.plugins import plugins
+import searx.plugins
 from searx.search.models import EngineRef, SearchQuery
 from searx.engines import load_engines
 from searx.network import initialize as initialize_network, check_network_configuration
@@ -72,13 +72,12 @@ class Search:
         Check if an answer return a result.
         If yes, update self.result_container and return True
         """
-        answerers_results = ask(self.search_query)
-
-        if answerers_results:
-            for results in answerers_results:
-                self.result_container.extend('answer', results)
-            return True
-        return False
+        results = searx.answerers.STORAGE.ask(self.search_query.query)
+        for item in results:
+            # The "engine_name" is already set by the STORAGE.ask method before
+            # returning the result list -> we can use None for engine_name here:
+            self.result_container.extend(None, item)
+        return bool(results)
 
     # do search-request
     def _get_requests(self):
@@ -184,11 +183,11 @@ class Search:
 class SearchWithPlugins(Search):
     """Inherit from the Search class, add calls to the plugins."""
 
-    __slots__ = 'ordered_plugin_list', 'request'
+    __slots__ = 'user_plugins', 'request'
 
-    def __init__(self, search_query: SearchQuery, ordered_plugin_list, request: flask.Request):
+    def __init__(self, search_query: SearchQuery, request: flask.Request, user_plugins: list[str]):
         super().__init__(search_query)
-        self.ordered_plugin_list = ordered_plugin_list
+        self.user_plugins = user_plugins
         self.result_container.on_result = self._on_result
         # pylint: disable=line-too-long
         # get the "real" request to use it outside the Flask context.
@@ -200,14 +199,14 @@ class SearchWithPlugins(Search):
         self.request = request._get_current_object()
 
     def _on_result(self, result):
-        return plugins.call(self.ordered_plugin_list, 'on_result', self.request, self, result)
+        return searx.plugins.STORAGE.on_result(self.request, self, result)
 
     def search(self) -> ResultContainer:
-        if plugins.call(self.ordered_plugin_list, 'pre_search', self.request, self):
+
+        if searx.plugins.STORAGE.pre_search(self.request, self):
             super().search()
 
-        plugins.call(self.ordered_plugin_list, 'post_search', self.request, self)
-
+        searx.plugins.STORAGE.post_search(self.request, self)
         self.result_container.close()
 
         return self.result_container

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Searx preferences implementation.
 """
+from __future__ import annotations
 
 # pylint: disable=useless-object-inheritance
 
@@ -15,7 +16,7 @@ import babel
 
 from searx import settings, autocomplete, favicons
 from searx.enginelib import Engine
-from searx.plugins import Plugin
+import searx.plugins
 from searx.locales import LOCALE_NAMES
 from searx.webutils import VALID_LANGUAGE_CODE
 from searx.engines import DEFAULT_CATEGORY
@@ -312,7 +313,7 @@ class EnginesSetting(BooleanChoices):
 class PluginsSetting(BooleanChoices):
     """Plugin settings"""
 
-    def __init__(self, default_value, plugins: Iterable[Plugin]):
+    def __init__(self, default_value, plugins: Iterable[searx.plugins.Plugin]):
         super().__init__(default_value, {plugin.id: plugin.default_on for plugin in plugins})
 
     def transform_form_items(self, items):
@@ -375,11 +376,11 @@ class Preferences:
 
     def __init__(
         self,
-        themes: List[str],
-        categories: List[str],
-        engines: Dict[str, Engine],
-        plugins: Iterable[Plugin],
-        client: Optional[ClientPref] = None,
+        themes: list[str],
+        categories: list[str],
+        engines: dict[str, Engine],
+        plugins: searx.plugins.PluginStorage,
+        client: ClientPref | None = None,
     ):
 
         super().__init__()

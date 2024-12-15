@@ -25,15 +25,10 @@ Configuration defaults (at built time):
         - DO
         - Description
 
-          JS & CSS dependencies
-
       {% for plgin in plugins %}
 
       * - {{plgin.name}}
         - {{(plgin.default_on and "y") or ""}}
         - {{plgin.description}}
-
-          {% for dep in (plgin.js_dependencies + plgin.css_dependencies) %}
-          | ``{{dep}}`` {% endfor %}
 
       {% endfor %}

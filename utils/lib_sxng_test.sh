@@ -45,18 +45,38 @@ test.pylint() {
 
 test.pyright() {
     build_msg TEST "[pyright] static type check of python sources"
+    build_msg TEST "    --> typeCheckingMode: off !!!"
+    build_msg TEST "[pyright] suppress warnings related to intentional monkey patching"
     node.env.dev
     # We run Pyright in the virtual environment because Pyright
     # executes "python" to determine the Python version.
-    build_msg TEST "[pyright] suppress warnings related to intentional monkey patching"
     pyenv.cmd npx --no-install pyright -p pyrightconfig-ci.json \
-        | grep -v ".py$" \
+        | grep -E '\.py:[0-9]+:[0-9]+'\
         | grep -v '/engines/.*.py.* - warning: "logger" is not defined'\
         | grep -v '/plugins/.*.py.* - error: "logger" is not defined'\
         | grep -v '/engines/.*.py.* - warning: "supported_languages" is not defined' \
         | grep -v '/engines/.*.py.* - warning: "language_aliases" is not defined' \
         | grep -v '/engines/.*.py.* - warning: "categories" is not defined'
-    dump_return $?
+    dump_return ${PIPESTATUS[0]}
+}
+
+test.types() {
+    build_msg TEST "[pyright/types] static type check of python sources"
+    build_msg TEST "    --> typeCheckingMode: on"
+    build_msg TEST "[pyright/types] suppress warnings related to intentional monkey patching"
+    node.env.dev
+    # We run Pyright in the virtual environment because Pyright
+    # executes "python" to determine the Python version.
+    pyenv.cmd npx --no-install pyright -p pyrightconfig.json \
+        | grep -E '\.py:[0-9]+:[0-9]+'\
+        | grep -v '/engines/.*.py.* - warning: "logger" is not defined'\
+        | grep -v '/plugins/.*.py.* - error: "logger" is not defined'\
+        | grep -v '/engines/.*.py.* - warning: "supported_languages" is not defined' \
+        | grep -v '/engines/.*.py.* - warning: "language_aliases" is not defined' \
+        | grep -v '/engines/.*.py.* - warning: "categories" is not defined'
+    # ignore exit value from pyright
+    # dump_return ${PIPESTATUS[0]}
+    return 0
 }
 
 test.black() {

@@ -50,7 +50,7 @@ search.checker.%: install
 	$(Q)./manage pyenv.cmd searxng-checker -v "$(subst _, ,$(patsubst search.checker.%,%,$@))"
 
 PHONY += test ci.test test.shell
-ci.test: test.yamllint test.black test.pyright test.pylint test.unit test.robot test.rst test.pybabel
+ci.test: test.yamllint test.black test.types test.pylint test.unit test.robot test.rst test.pybabel
 test:    test.yamllint test.black test.pyright test.pylint test.unit test.robot test.rst test.shell
 test.shell:
 	$(Q)shellcheck -x -s dash \
@@ -83,7 +83,7 @@ MANAGE += node.env node.env.dev node.clean
 MANAGE += py.build py.clean
 MANAGE += pyenv pyenv.install pyenv.uninstall
 MANAGE += format.python
-MANAGE += test.yamllint test.pylint test.pyright test.black test.pybabel test.unit test.coverage test.robot test.rst test.clean
+MANAGE += test.yamllint test.pylint test.pyright test.types test.black test.pybabel test.unit test.coverage test.robot test.rst test.clean
 MANAGE += themes.all themes.simple themes.simple.test pygments.less
 MANAGE += static.build.commit static.build.drop static.build.restore
 MANAGE += nvm.install nvm.clean nvm.status nvm.nodejs

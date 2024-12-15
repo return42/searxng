@@ -1,44 +1,57 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # pylint: disable=missing-module-docstring, invalid-name
-
-from mock import Mock
 from parameterized.parameterized import parameterized
 
-from searx import (
-    plugins,
-    limiter,
-    botdetection,
-)
+import flask
+from flask_babel import gettext
+
+import searx.plugins
+import searx.preferences
+import searx.limiter
+import searx.botdetection
+
+from searx.result_types import Answer
+from searx.utils import load_module
+
 from tests import SearxTestCase
-from .test_plugins import get_search_mock
+from .test_plugins import do_post_search
 
 
 class PluginIPSelfInfo(SearxTestCase):  # pylint: disable=missing-class-docstring
+
     def setUp(self):
-        plugin = plugins.load_and_initialize_plugin('searx.plugins.self_info', False, (None, {}))
-        self.store = plugins.PluginStore()
-        self.store.register(plugin)
-        cfg = limiter.get_cfg()
-        botdetection.init(cfg, None)
+        # pylint: disable=import-outside-toplevel
+        from searx.webapp import app
+        from searx.plugins._core import _default, ModulePlugin
+
+        f = _default / "self_info.py"
+        mod = load_module(f.name, str(f.parent))
+        engines = {}
+
+        self.app = app
+        self.storage = searx.plugins.PluginStorage()
+        self.storage.register(ModulePlugin(mod))
+        self.storage.init(self.app)
+        self.pref = searx.preferences.Preferences(["simple"], ["general"], engines, self.storage)
+        self.pref.parse_dict({"locale": "en"})
+        cfg = searx.limiter.get_cfg()
+        searx.botdetection.init(cfg, None)
 
     def test_plugin_store_init(self):
-        self.assertEqual(1, len(self.store.plugins))
+        self.assertEqual(1, len(self.storage))
 
-    def test_ip_in_answer(self):
-        request = Mock()
-        request.remote_addr = '127.0.0.1'
-        request.headers = {'X-Forwarded-For': '1.2.3.4, 127.0.0.1', 'X-Real-IP': '127.0.0.1'}
-        search = get_search_mock(query='ip', pageno=1)
-        self.store.call(self.store.plugins, 'post_search', request, search)
-        self.assertIn('127.0.0.1', search.result_container.answers["ip"]["answer"])
+    def test_pageno_1_2(self):
+        with self.webapp.app.test_request_context():
+            flask.request.preferences = self.pref
+            flask.request.remote_addr = "127.0.0.1"
+            flask.request.headers = {"X-Forwarded-For": "1.2.3.4, 127.0.0.1", "X-Real-IP": "127.0.0.1"}
+            answer = Answer(results=[], answer=gettext("Your IP is: ") + "127.0.0.1")
 
-    def test_ip_not_in_answer(self):
-        request = Mock()
-        request.remote_addr = '127.0.0.1'
-        request.headers = {'X-Forwarded-For': '1.2.3.4, 127.0.0.1', 'X-Real-IP': '127.0.0.1'}
-        search = get_search_mock(query='ip', pageno=2)
-        self.store.call(self.store.plugins, 'post_search', request, search)
-        self.assertNotIn('ip', search.result_container.answers)
+            search = do_post_search("ip", self.storage, pageno=1)
+            self.assertIn(answer, search.result_container.answers)
+
+            search = do_post_search("ip", self.storage, pageno=2)
+            self.assertEqual(search.result_container.answers, [])
 
     @parameterized.expand(
         [
@@ -47,19 +60,13 @@ class PluginIPSelfInfo(SearxTestCase):  # pylint: disable=missing-class-docstrin
         ]
     )
     def test_user_agent_in_answer(self, query: str):
-        request = Mock(user_agent=Mock(string='Mock'))
-        search = get_search_mock(query=query, pageno=1)
-        self.store.call(self.store.plugins, 'post_search', request, search)
-        self.assertIn('Mock', search.result_container.answers["user-agent"]["answer"])
+        with self.webapp.app.test_request_context():
+            flask.request.preferences = self.pref
+            flask.request.user_agent = "Dummy agent"
+            answer = Answer(results=[], answer=gettext("Your user-agent is: ") + "Dummy agent")
 
-    @parameterized.expand(
-        [
-            'user-agent',
-            'What is my User-Agent?',
-        ]
-    )
-    def test_user_agent_not_in_answer(self, query: str):
-        request = Mock(user_agent=Mock(string='Mock'))
-        search = get_search_mock(query=query, pageno=2)
-        self.store.call(self.store.plugins, 'post_search', request, search)
-        self.assertNotIn('user-agent', search.result_container.answers)
+            search = do_post_search(query, self.storage, pageno=1)
+            self.assertIn(answer, search.result_container.answers)
+
+            search = do_post_search("ip", self.storage, pageno=2)
+            self.assertEqual(search.result_container.answers, [])

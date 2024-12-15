@@ -4,6 +4,7 @@
 
 """
 # pylint: disable=use-dict-literal
+from __future__ import annotations
 
 import hashlib
 import hmac
@@ -16,12 +17,12 @@ from timeit import default_timer
 from html import escape
 from io import StringIO
 import typing
-from typing import List, Dict, Iterable
 
 import urllib
 import urllib.parse
 from urllib.parse import urlencode, urlparse, unquote
 
+import warnings
 import httpx
 
 from pygments import highlight
@@ -47,6 +48,7 @@ from flask_babel import (
     format_decimal,
 )
 
+from searx.extended_types import sxng_request as request
 from searx import (
     logger,
     get_setting,
@@ -59,7 +61,7 @@ from searx import limiter
 from searx.botdetection import link_token
 
 from searx.data import ENGINE_DESCRIPTIONS
-from searx.results import Timing
+from searx.result_types import Answer
 from searx.settings_defaults import OUTPUT_FORMATS
 from searx.settings_loader import DEFAULT_SETTINGS_FILE
 from searx.exceptions import SearxParameterException
@@ -90,17 +92,16 @@ from searx.webadapter import (
 from searx.utils import gen_useragent, dict_subset
 from searx.version import VERSION_STRING, GIT_URL, GIT_BRANCH
 from searx.query import RawTextQuery
-from searx.plugins import Plugin, plugins, initialize as plugin_initialize
 from searx.plugins.oa_doi_rewrite import get_doi_resolver
 from searx.preferences import (
     Preferences,
     ClientPref,
     ValidationException,
 )
-from searx.answerers import (
-    answerers,
-    ask,
-)
+import searx.answerers
+import searx.plugins
+
+
 from searx.metrics import get_engines_stats, get_engine_errors, get_reliabilities, histogram, counter, openmetrics
 from searx.flaskfix import patch_application
 
@@ -118,11 +119,14 @@ from searx import favicons
 
 from searx.redisdb import initialize as redis_initialize
 from searx.sxng_locales import sxng_locales
-from searx.search import SearchWithPlugins, initialize as search_initialize
+import searx.search
 from searx.network import stream as http_stream, set_context_network_name
 from searx.search.checker import get_result as checker_get_result
 
+
 logger = logger.getChild('webapp')
+
+warnings.simplefilter("always")
 
 # check secret_key
 if not searx_debug and settings['server']['secret_key'] == 'ultrasecretkey':
@@ -156,21 +160,6 @@ app.jinja_env.lstrip_blocks = True
 app.jinja_env.add_extension('jinja2.ext.loopcontrols')  # pylint: disable=no-member
 app.jinja_env.filters['group_engines_in_tab'] = group_engines_in_tab  # pylint: disable=no-member
 app.secret_key = settings['server']['secret_key']
-
-
-class ExtendedRequest(flask.Request):
-    """This class is never initialized and only used for type checking."""
-
-    preferences: Preferences
-    errors: List[str]
-    user_plugins: List[Plugin]
-    form: Dict[str, str]
-    start_time: float
-    render_time: float
-    timings: List[Timing]
-
-
-request = typing.cast(ExtendedRequest, flask.request)
 
 
 def get_locale():
@@ -328,7 +317,7 @@ def get_translations():
     }
 
 
-def get_enabled_categories(category_names: Iterable[str]):
+def get_enabled_categories(category_names: typing.Iterable[str]):
     """The categories in ``category_names```for which there is no active engine
     are filtered out and a reduced list is returned."""
 
@@ -449,18 +438,6 @@ def render(template_name: str, **kwargs):
     )
     kwargs['urlparse'] = urlparse
 
-    # scripts from plugins
-    kwargs['scripts'] = set()
-    for plugin in request.user_plugins:
-        for script in plugin.js_dependencies:
-            kwargs['scripts'].add(script)
-
-    # styles from plugins
-    kwargs['styles'] = set()
-    for plugin in request.user_plugins:
-        for css in plugin.css_dependencies:
-            kwargs['styles'].add(css)
-
     start_time = default_timer()
     result = render_template('{}/{}'.format(kwargs['theme'], template_name), **kwargs)
     request.render_time += default_timer() - start_time  # pylint: disable=assigning-non-slot
@@ -477,7 +454,7 @@ def pre_request():
 
     client_pref = ClientPref.from_http_request(request)
     # pylint: disable=redefined-outer-name
-    preferences = Preferences(themes, list(categories.keys()), engines, plugins, client_pref)
+    preferences = Preferences(themes, list(categories.keys()), engines, searx.plugins.STORAGE, client_pref)
 
     user_agent = request.headers.get('User-Agent', '').lower()
     if 'webkit' in user_agent and 'android' in user_agent:
@@ -525,9 +502,9 @@ def pre_request():
     request.user_plugins = []  # pylint: disable=assigning-non-slot
     allowed_plugins = preferences.plugins.get_enabled()
     disabled_plugins = preferences.plugins.get_disabled()
-    for plugin in plugins:
-        if (plugin.default_on and plugin.id not in disabled_plugins) or plugin.id in allowed_plugins:
-            request.user_plugins.append(plugin)
+    for plugin in searx.plugins.STORAGE:
+        if (plugin.id not in disabled_plugins) or plugin.id in allowed_plugins:
+            request.user_plugins.append(plugin.id)
 
 
 @app.after_request
@@ -664,8 +641,8 @@ def search():
         search_query, raw_text_query, _, _, selected_locale = get_search_query_from_webapp(
             request.preferences, request.form
         )
-        search = SearchWithPlugins(search_query, request.user_plugins, request)  # pylint: disable=redefined-outer-name
-        result_container = search.search()
+        search_obj = searx.search.SearchWithPlugins(search_query, request, request.user_plugins)
+        result_container = search_obj.search()
 
     except SearxParameterException as e:
         logger.exception('search error: SearxParameterException')
@@ -796,7 +773,7 @@ def search():
         current_locale = request.preferences.get_value("locale"),
         current_language = selected_locale,
         search_language = match_locale(
-            search.search_query.lang,
+            search_obj.search_query.lang,
             settings['search']['languages'],
             fallback=request.preferences.get_value("language")
         ),
@@ -844,6 +821,10 @@ def autocompleter():
     raw_text_query = RawTextQuery(request.form.get('q', ''), disabled_engines)
     sug_prefix = raw_text_query.getQuery()
 
+    for obj in searx.answerers.STORAGE.ask(sug_prefix):
+        if isinstance(obj, Answer):
+            results.append(obj.answer)
+
     # normal autocompletion results only appear if no inner results returned
     # and there is a query part
     if len(raw_text_query.autocomplete_list) == 0 and len(sug_prefix) > 0:
@@ -861,10 +842,6 @@ def autocompleter():
     if len(raw_text_query.autocomplete_list) > 0:
         for autocomplete_text in raw_text_query.autocomplete_list:
             results.append(raw_text_query.get_autocomplete_full_query(autocomplete_text))
-
-    for answers in ask(raw_text_query):
-        for answer in answers:
-            results.append(str(answer['answer']))
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         # the suggestion request comes from the searx search form
@@ -1011,6 +988,7 @@ def preferences():
     return render(
         # fmt: off
         'preferences.html',
+        preferences = True,
         selected_categories = get_selected_categories(request.preferences, request.form),
         locales = LOCALE_NAMES,
         current_locale = request.preferences.get_value("locale"),
@@ -1020,22 +998,18 @@ def preferences():
         max_rate95 = max_rate95,
         reliabilities = reliabilities,
         supports = supports,
-        answerers = [
-            {'info': a.self_info(), 'keywords': a.keywords}
-            for a in answerers
-        ],
+        answer_storage = searx.answerers.STORAGE.info,
         disabled_engines = disabled_engines,
         autocomplete_backends = autocomplete_backends,
         favicon_resolver_names = favicons.proxy.CFG.resolver_map.keys(),
         shortcuts = {y: x for x, y in engine_shortcuts.items()},
         themes = themes,
-        plugins = plugins,
-        doi_resolvers = settings['doi_resolvers'],
+        plugins_storage = searx.plugins.STORAGE.info,
         current_doi_resolver = get_doi_resolver(request.preferences),
         allowed_plugins = allowed_plugins,
         preferences_url_params = request.preferences.get_as_url_params(),
-        locked_preferences = settings['preferences']['lock'],
-        preferences = True
+        locked_preferences = get_setting("preferences.lock", []),
+        doi_resolvers = get_setting("doi_resolvers", {}),
         # fmt: on
     )
 
@@ -1319,7 +1293,7 @@ def config():
         )
 
     _plugins = []
-    for _ in plugins:
+    for _ in searx.plugins.STORAGE:
         _plugins.append({'name': _.name, 'enabled': _.default_on})
 
     _limiter_cfg = limiter.get_cfg()
@@ -1375,8 +1349,12 @@ werkzeug_reloader = flask_run_development or (searx_debug and __name__ == "__mai
 if not werkzeug_reloader or (werkzeug_reloader and os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
     locales_initialize()
     redis_initialize()
-    plugin_initialize(app)
-    search_initialize(enable_checker=True, check_network=True, enable_metrics=settings['general']['enable_metrics'])
+    searx.plugins.initialize(app)
+    searx.search.initialize(
+        enable_checker=True,
+        check_network=True,
+        enable_metrics=get_setting("general.enable_metrics"),
+    )
     limiter.initialize(app, settings)
     favicons.init()
 
