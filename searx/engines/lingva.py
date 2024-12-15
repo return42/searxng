@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Lingva (alternative Google Translate frontend)"""
 
+from searx.result_types import Translations
+
 about = {
     "website": 'https://lingva.ml',
     "wikidata_id": None,
@@ -45,32 +47,25 @@ def response(resp):
     for definition in info['definitions']:
         for translation in definition['list']:
             data.append(
-                {
-                    'text': result['translation'],
-                    'definitions': [translation['definition']] if translation['definition'] else [],
-                    'examples': [translation['example']] if translation['example'] else [],
-                    'synonyms': translation['synonyms'],
-                }
+                Translations.Item(
+                    text=result['translation'],
+                    definitions=[translation['definition']] if translation['definition'] else [],
+                    examples=[translation['example']] if translation['example'] else [],
+                    synonyms=translation['synonyms'],
+                )
             )
 
     for translation in info["extraTranslations"]:
         for word in translation["list"]:
             data.append(
-                {
-                    'text': word['word'],
-                    'definitions': word['meanings'],
-                }
+                Translations.Item(
+                    text=word['word'],
+                    definitions=word['meanings'],
+                )
             )
 
     if not data and result['translation']:
-        data.append({'text': result['translation']})
+        data.append(Translations.Item(text=result['translation']))
 
-    results.append(
-        {
-            'answer': data[0]['text'],
-            'answer_type': 'translations',
-            'translations': data,
-        }
-    )
-
+    Translations(results=results, translations=data)
     return results

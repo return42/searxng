@@ -3,6 +3,7 @@
 
 import random
 from json import dumps
+from searx.result_types import Translations
 
 about = {
     "website": 'https://libretranslate.com',
@@ -45,8 +46,7 @@ def response(resp):
     if not text:
         return results
 
-    translations = [{'text': text}] + [{'text': alternative} for alternative in json_resp.get('alternatives', [])]
-
-    results.append({'answer': text, 'answer_type': 'translations', 'translations': translations})
+    translations = [Translations.Item(text=a) for a in json_resp.get('alternatives', [])]
+    Translations(results=results, translations=translations)
 
     return results

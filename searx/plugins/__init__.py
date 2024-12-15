@@ -195,17 +195,54 @@ class PluginStore:
     def register(self, plugin):
         self.plugins.append(plugin)
 
-    def call(self, ordered_plugin_list, plugin_type, *args, **kwargs):
+    def pre_search(self, request, search) -> bool:
+
         ret = True
-        for plugin in ordered_plugin_list:
-            if hasattr(plugin, plugin_type):
-                try:
-                    ret = getattr(plugin, plugin_type)(*args, **kwargs)
-                    if not ret:
-                        break
-                except Exception:  # pylint: disable=broad-except
-                    plugin.logger.exception("Exception while calling %s", plugin_type)
+        for plugin in search.ordered_plugin_list:
+            func = getattr(plugin, "pre_search", None)
+            if not func:
+                continue
+            try:
+                ret = bool(func(request, search))
+            except Exception:  # pylint: disable=broad-except
+                plugin.logger.exception("Exception while calling pre_search")
+                continue
+            if not ret:
+                # stop the search
+                break
         return ret
+
+    def on_result(self, request, search, result) -> bool:
+
+        ret = True
+        for plugin in search.ordered_plugin_list:
+            func = getattr(plugin, "on_result", None)
+            if not func:
+                continue
+            try:
+                ret = bool(func(request, search, result))
+            except Exception:  # pylint: disable=broad-except
+                plugin.logger.exception("Exception while calling on_result")
+                continue
+            if not ret:
+                # ignore this result item
+                break
+        return ret
+
+    def post_search(self, request, search) -> None:
+        results = []
+        for plugin in search.ordered_plugin_list:
+            func = getattr(plugin, "post_search", None)
+            if not func:
+                continue
+            try:
+                results = func(request, search)
+            except Exception:  # pylint: disable=broad-except
+                plugin.logger.exception("Exception while calling on_result")
+                continue
+            if isinstance(results, list):
+                # In case of *plugins* prefix ``plugin:`` is set, see searx.result_types.Result
+                search.result_container.extend(f"plugin: {plugin.name}", results)
 
 
 plugins = PluginStore()

@@ -23,6 +23,7 @@ import babel.numbers
 from flask_babel import gettext, get_locale
 
 from searx import data
+from searx.result_types import Answer
 
 
 name = "Unit converter plugin"
@@ -239,25 +240,29 @@ def _parse_text_and_convert(search, from_query, to_query):
     else:
         result = babel.numbers.format_decimal(value, locale=_locale, format='#,##0.##########;-#')
 
-    search.result_container.answers['conversion'] = {'answer': f'{result} {target_symbol}'}
+    return f'{result} {target_symbol}'
 
 
 def post_search(_request, search):
+
+    results = []
+
     # only convert between units on the first page
     if search.search_query.pageno > 1:
-        return True
+        return results
 
     query = search.search_query.query
     query_parts = query.split(" ")
 
     if len(query_parts) < 3:
-        return True
+        return results
 
     for query_part in query_parts:
         for keyword in CONVERT_KEYWORDS:
             if query_part == keyword:
                 from_query, to_query = query.split(keyword, 1)
-                _parse_text_and_convert(search, from_query.strip(), to_query.strip())
-                return True
+                target_val = _parse_text_and_convert(search, from_query.strip(), to_query.strip())
+                if target_val:
+                    Answer(results=results, answer=target_val)
 
-    return True
+    return results

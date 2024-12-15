@@ -105,3 +105,25 @@ Online Dictionary
    - :py:obj:`processors.online_dictionary <searx.search.processors.online_dictionary>`
 
 *no engine of this type is documented yet / coming soon*
+
+
+Result types
+============
+
+.. automodule:: searx.result_types
+
+.. autoclass:: searx.result_types.Result
+   :members:
+
+
+Answer types
+------------
+
+.. autoclass:: searx.result_types.answer.BaseAnswer
+   :members:
+
+.. autoclass:: searx.result_types.Answer
+   :members:
+
+.. autoclass:: searx.result_types.Translations
+   :members:

@@ -14,6 +14,7 @@ from searx.data import OSM_KEYS_TAGS, CURRENCIES
 from searx.utils import searx_useragent
 from searx.external_urls import get_external_url
 from searx.engines.wikidata import send_wikidata_query, sparql_string_escape, get_thumbnail
+from searx.result_types import Answer
 
 # about
 about = {
@@ -37,7 +38,7 @@ search_string = 'search?{query}&polygon_geojson=1&format=jsonv2&addressdetails=1
 result_id_url = 'https://openstreetmap.org/{osm_type}/{osm_id}'
 result_lat_lon_url = 'https://www.openstreetmap.org/?mlat={lat}&mlon={lon}&zoom={zoom}&layers=M'
 
-route_url = 'https://graphhopper.com/maps/?point={}&point={}&locale=en-US&vehicle=car&weighting=fastest&turn_costs=true&use_miles=false&layer=Omniscale'  # pylint: disable=line-too-long
+route_url = 'https://graphhopper.com/maps/?point={}&point={}'
 route_re = re.compile('(?:from )?(.+) to (.+)')
 
 wikidata_image_sparql = """
@@ -154,11 +155,10 @@ def response(resp):
     user_language = resp.search_params['language']
 
     if resp.search_params['route']:
-        results.append(
-            {
-                'answer': gettext('Get directions'),
-                'url': route_url.format(*resp.search_params['route'].groups()),
-            }
+        Answer(
+            results=results,
+            answer=gettext('Show route in map ..'),
+            url=route_url.format(*resp.search_params['route'].groups()),
         )
 
     # simplify the code below: make sure extratags is a dictionary

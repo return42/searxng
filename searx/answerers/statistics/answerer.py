@@ -1,50 +1,47 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # pylint: disable=missing-module-docstring
+from __future__ import annotations
 
 from functools import reduce
 from operator import mul
 
 from flask_babel import gettext
 
+from searx.result_types import Answer
+from searx.result_types.answer import BaseAnswer
 
 keywords = ('min', 'max', 'avg', 'sum', 'prod')
 
 
-# required answerer function
-# can return a list of results (any result type) for a given query
-def answer(query):
-    parts = query.query.split()
+def answer(query: str) -> list[BaseAnswer]:
+    results = []
+    parts = query.split()
 
     if len(parts) < 2:
-        return []
+        return results
 
     try:
         args = list(map(float, parts[1:]))
     except:  # pylint: disable=bare-except
-        return []
+        # seems one of the args is not a float type, can't be converted to float
+        return results
 
     func = parts[0]
-    _answer = None
 
     if func == 'min':
-        _answer = min(args)
+        Answer(results=results, answer=str(min(args)))
     elif func == 'max':
-        _answer = max(args)
+        Answer(results=results, answer=str(max(args)))
     elif func == 'avg':
-        _answer = sum(args) / len(args)
+        Answer(results=results, answer=str(sum(args) / len(args)))
     elif func == 'sum':
-        _answer = sum(args)
+        Answer(results=results, answer=str(sum(args)))
     elif func == 'prod':
-        _answer = reduce(mul, args, 1)
+        Answer(results=results, answer=str(reduce(mul, args, 1)))
 
-    if _answer is None:
-        return []
-
-    return [{'answer': str(_answer)}]
+    return results
 
 
-# required answerer function
-# returns information about the answerer
 def self_info():
     return {
         'name': gettext('Statistics functions'),

@@ -35,7 +35,7 @@ def get_doi_resolver(preferences):
 
 
 def on_result(request, _search, result):
-    if 'parsed_url' not in result:
+    if not result.parsed_url:
         return True
 
     doi = extract_doi(result['parsed_url'])
