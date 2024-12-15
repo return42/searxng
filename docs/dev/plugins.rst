@@ -62,8 +62,6 @@ plugin. A plugin doesn't need to implement all the hooks.
 
    Runs BEFORE the search request.
 
-   `search.result_container` can be changed.
-
    Return a boolean:
 
    * True to continue the search
@@ -72,15 +70,16 @@ plugin. A plugin doesn't need to implement all the hooks.
    :param flask.request request:
    :param searx.search.SearchWithPlugins search:
    :return: False to stop the search
-   :rtype: bool
 
 
-.. py:function:: post_search(request, search) -> None
+.. py:function:: post_search(request, search) -> None | list[searx.result_types.Result]
 
-   Runs AFTER the search request.
+   Runs AFTER the search request.  Can return a list of :py:obj:`Result
+   <searx.result_types.Result>` objects to be added to the final result list.
 
    :param flask.request request: Flask request.
    :param searx.search.SearchWithPlugins search: Context.
+   :return: None or a list of results to add
 
 
 .. py:function:: on_result(request, search, result) -> bool

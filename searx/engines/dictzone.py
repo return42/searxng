@@ -5,6 +5,7 @@
 
 from lxml import html
 from searx.utils import eval_xpath
+from searx.result_types import Translations
 
 # about
 about = {
@@ -53,11 +54,7 @@ def response(resp):
             }
         )
 
-    if translations:
-        result = {
-            'answer': translations[0]['text'],
-            'translations': translations,
-            'answer_type': 'translations',
-        }
+    results = []
+    Translations(results=results, translations=translations)
 
-    return [result]
+    return results

@@ -6,6 +6,8 @@ import re
 
 from flask_babel import gettext
 
+from searx.result_types import Answer
+
 name = "Hash plugin"
 description = gettext("Converts strings to different hash digests.")
 default_on = True
@@ -17,6 +19,9 @@ parser_re = re.compile('(md5|sha1|sha224|sha256|sha384|sha512) (.*)', re.I)
 
 
 def post_search(_request, search):
+
+    results = []
+
     # process only on first page
     if search.search_query.pageno > 1:
         return True
@@ -37,7 +42,6 @@ def post_search(_request, search):
     f.update(string.encode('utf-8').strip())
     answer = function + " " + gettext('hash digest') + ": " + f.hexdigest()
 
-    # print result
-    search.result_container.answers.clear()
-    search.result_container.answers['hash'] = {'answer': answer}
-    return True
+    Answer(results=results, answer=answer)
+
+    return results

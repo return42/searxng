@@ -3,6 +3,8 @@
 
 """
 
+from searx.result_types import Translations
+
 # about
 about = {
     "website": 'https://mymemory.translated.net/',
@@ -35,16 +37,17 @@ def request(query, params):  # pylint: disable=unused-argument
 
 
 def response(resp):
+    results = []
     json_resp = resp.json()
+
+    answer = Translations(results=results, translations=[])
+
     text = json_resp['responseData']['translatedText']
+    answer.translations.append(Translations.Item(text=text))
 
-    alternatives = [match['translation'] for match in json_resp['matches'] if match['translation'] != text]
-    translations = [{'text': translation} for translation in [text] + alternatives]
+    for alternative in json_resp['matches']:
+        if alternative['translation'] == text:
+            continue
+        answer.translations.append(Translations.Item(text=alternative['translation']))
 
-    result = {
-        'answer': translations[0]['text'],
-        'answer_type': 'translations',
-        'translations': translations,
-    }
-
-    return [result]
+    return results

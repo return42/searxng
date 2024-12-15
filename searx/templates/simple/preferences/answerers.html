@@ -14,13 +14,13 @@
       </th>{{- '' -}}
     </tr>
 
-    {%- for answerer in answerers -%}
+    {%- for info in answer_storage -%}
       <tr>{{- '' -}}
         <td class="checkbox-col"></td>{{- '' -}}
-        <td>{{ answerer.keywords|join(', ') }}</td>{{- '' -}}
-        <td>{{ answerer.info.name }}</td>{{- '' -}}
-        <td>{{ answerer.info.description }}</td>{{- '' -}}
-        <td>{{ answerer.info.examples|join(', ') }}</td>{{- '' -}}
+        <td>{{ info.keywords|join(', ') }}</td>{{- '' -}}
+        <td>{{ info.name }}</td>{{- '' -}}
+        <td>{{ info.description }}</td>{{- '' -}}
+        <td>{{ info.examples|join(', ') }}</td>{{- '' -}}
       </tr>
     {%- endfor -%}
 
