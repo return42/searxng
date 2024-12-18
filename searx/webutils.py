@@ -133,6 +133,7 @@ def write_csv_response(csv: CSVWriter, rc: ResultContainer) -> None:  # pylint: 
         csv.writerow([row.get(key, '') for key in keys])
 
     for a in rc.answers:
+        # FIXME .. untested
         row = {'title': a, 'type': 'answer'}
         csv.writerow([row.get(key, '') for key in keys])
 

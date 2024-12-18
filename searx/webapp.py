@@ -872,6 +872,7 @@ def autocompleter():
     # new one ..
     # raw_text_query = RawTextQuery(request.form.get('q', ''), disabled_engines)
 
+    # FIXME: untested ...
     for answer_list in searx.answerers.STORAGE.ask(sug_prefix):
         for obj in answer_list:
             if isinstance(obj, Answer):
