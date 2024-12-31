@@ -33,6 +33,12 @@ class AnswerSet:
         self._answerlist.sort(key=lambda answer: answer.template)
         yield from self._answerlist
 
+    def __contains__(self, answer: BaseAnswer) -> bool:
+        a_hash = hash(answer)
+        for i in self._answerlist:
+            if hash(i) == a_hash:
+                return True
+        return False
 
 class Answer(BaseAnswer, kw_only=True):
     """Simple answer type where the *answer* is a simple string with an optional

@@ -6,6 +6,10 @@ from tests import SearxTestCase
 
 
 class TestEnginesInit(SearxTestCase):  # pylint: disable=missing-class-docstring
+
+    def setUp(self):
+        self.init_test_settings()
+
     @classmethod
     def tearDownClass(cls):
         settings['outgoing']['using_tor_proxy'] = False

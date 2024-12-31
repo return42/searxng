@@ -20,6 +20,10 @@ TEST_ENGINES = [
 
 
 class TestQuery(SearxTestCase):  # pylint:disable=missing-class-docstring
+
+    def setUp(self):
+        self.init_test_settings()
+
     def test_simple_query(self):
         query_text = 'the query'
         query = RawTextQuery(query_text, [])
@@ -60,6 +64,10 @@ class TestQuery(SearxTestCase):  # pylint:disable=missing-class-docstring
 
 
 class TestLanguageParser(SearxTestCase):  # pylint:disable=missing-class-docstring
+
+    def setUp(self):
+        self.init_test_settings()
+
     def test_language_code(self):
         language = 'es-ES'
         query_text = 'the query'
@@ -144,6 +152,10 @@ class TestLanguageParser(SearxTestCase):  # pylint:disable=missing-class-docstri
 
 
 class TestTimeoutParser(SearxTestCase):  # pylint:disable=missing-class-docstring
+
+    def setUp(self):
+        self.init_test_settings()
+
     @parameterized.expand(
         [
             ('<3 the query', 3),
@@ -183,6 +195,10 @@ class TestTimeoutParser(SearxTestCase):  # pylint:disable=missing-class-docstrin
 
 
 class TestExternalBangParser(SearxTestCase):  # pylint:disable=missing-class-docstring
+
+    def setUp(self):
+        self.init_test_settings()
+
     def test_external_bang(self):
         query_text = '!!ddg the query'
         query = RawTextQuery(query_text, [])
@@ -218,6 +234,7 @@ class TestBang(SearxTestCase):  # pylint:disable=missing-class-docstring
     THE_QUERY = 'the query'
 
     def setUp(self):
+        self.init_test_settings()
         searx.search.initialize(TEST_ENGINES)
 
     def tearDown(self):

@@ -185,7 +185,7 @@ def response(resp):
         # see https://github.com/searxng/searxng/pull/1456#issuecomment-1193105023
         # from searx.result_types import Answer
         # Answer(results=results, answer=message)
-        logger.debug(message)
+        logger.info(message)
         return results
 
     # Raise for all other responses

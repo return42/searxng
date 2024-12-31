@@ -35,6 +35,7 @@ query_res = [
 class PluginHashTest(SearxTestCase):  # pylint: disable=missing-class-docstring
 
     def setUp(self):
+        self.init_test_settings()
 
         # pylint: disable=import-outside-toplevel
         from searx.webapp import app
@@ -56,7 +57,7 @@ class PluginHashTest(SearxTestCase):  # pylint: disable=missing-class-docstring
 
     @parameterized.expand(query_res)
     def test_hash_digest_new(self, query: str, res: str):
-        with self.webapp.app.test_request_context():
+        with self.app.test_request_context():
             flask.request.preferences = self.pref
             answer = Answer(results=[], answer=res)
 
@@ -64,7 +65,7 @@ class PluginHashTest(SearxTestCase):  # pylint: disable=missing-class-docstring
             self.assertIn(answer, search.result_container.answers)
 
     def test_pageno_1_2(self):
-        with self.webapp.app.test_request_context():
+        with self.app.test_request_context():
             flask.request.preferences = self.pref
             query, res = query_res[0]
             answer = Answer(results=[], answer=res)
@@ -73,4 +74,4 @@ class PluginHashTest(SearxTestCase):  # pylint: disable=missing-class-docstring
             self.assertIn(answer, search.result_container.answers)
 
             search = do_post_search(query, self.storage, pageno=2)
-            self.assertEqual(search.result_container.answers, [])
+            self.assertEqual([ x for x in search.result_container.answers], [])

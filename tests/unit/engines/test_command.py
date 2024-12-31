@@ -22,6 +22,10 @@ from tests import SearxTestCase
 
 
 class TestCommandEngine(SearxTestCase):  # pylint: disable=missing-class-docstring
+
+    def setUp(self):
+        self.init_test_settings()
+
     def test_basic_seq_command_engine(self):
         ls_engine = command_engine
         ls_engine.command = ['seq', '{{QUERY}}']

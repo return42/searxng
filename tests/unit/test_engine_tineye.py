@@ -14,12 +14,13 @@ from tests import SearxTestCase
 class TinEyeTests(SearxTestCase):  # pylint: disable=missing-class-docstring
 
     def setUp(self):
+        self.init_test_settings()
         searx.search.initialize(
             [{'name': 'tineye', 'engine': 'tineye', 'shortcut': 'tin', 'timeout': 9.0, 'disabled': True}]
         )
 
         self.tineye = searx.engines.engines['tineye']
-        self.tineye.logger.setLevel(logging.CRITICAL)
+        self.tineye.logger.setLevel(logging.INFO)
 
     def tearDown(self):
         searx.search.load_engines([])
@@ -33,11 +34,12 @@ class TinEyeTests(SearxTestCase):  # pylint: disable=missing-class-docstring
     @parameterized.expand([(400), (422)])
     def test_returns_empty_list(self, status_code):
         response = Mock()
-        response.json.return_value = {}
+        response.json.return_value = {"suggestions": {"key": "Download Error"}}
         response.status_code = status_code
         response.raise_for_status.side_effect = HTTPError()
-        results = self.tineye.response(response)
-        self.assertEqual(0, len(results))
+        with self.assertLogs(self.tineye.logger) as assert_logs_context:
+            results = self.tineye.response(response)
+            self.assertEqual(0, len(results))
 
     def test_logs_format_for_422(self):
         response = Mock()
@@ -45,7 +47,7 @@ class TinEyeTests(SearxTestCase):  # pylint: disable=missing-class-docstring
         response.status_code = 422
         response.raise_for_status.side_effect = HTTPError()
 
-        with self.assertLogs(self.tineye.logger) as assert_logs_context:
+        with self.assertLogs(self.tineye.logger):
             self.tineye.response(response)
             self.assertIn(self.tineye.FORMAT_NOT_SUPPORTED, ','.join(assert_logs_context.output))
 

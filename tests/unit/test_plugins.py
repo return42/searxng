@@ -5,16 +5,34 @@ import babel
 import flask
 from mock import Mock
 
+
+import searx.results
 import searx.plugins
 import searx.preferences
 from tests import SearxTestCase
 
+plg_store = searx.plugins.PluginStorage()
+plg_store.load_builtins()
 
 def get_search_mock(query, **kwargs):
     lang = kwargs.get("lang", "en-US")
+
+
     kwargs["pageno"] = kwargs.get("pageno", 1)
     kwargs["locale"] = babel.Locale.parse(lang, sep="-")
-    return Mock(search_query=Mock(query=query, **kwargs), result_container=Mock(answers={}))
+    user_plugins = kwargs.pop("user_plugins", [x.id for x in plg_store])
+
+    return Mock(
+        search_query=Mock(query=query, **kwargs),
+        user_plugins = user_plugins,
+        result_container=searx.results.ResultContainer()
+    )
+
+
+def do_pre_search(query, storage, **kwargs):
+    search = get_search_mock(query, **kwargs)
+    storage.pre_search(flask.request, search)
+    return search
 
 
 def do_post_search(query, storage, **kwargs):
@@ -53,8 +71,10 @@ class PluginMock(searx.plugins.Plugin):
 class PluginStoreTest(SearxTestCase):  # pylint: disable=missing-class-docstring
 
     def setUp(self):
+        self.init_test_settings()
         # pylint: disable=import-outside-toplevel
         from searx.webapp import app
+
         engines = {}
 
         self.app = app
@@ -71,8 +91,17 @@ class PluginStoreTest(SearxTestCase):  # pylint: disable=missing-class-docstring
 
     def test_hooks(self):
 
-        ret = self.storage.pre_search(None, None)  # type: ignore
-        self.assertTrue(ret)
+        with self.app.test_request_context():
+            flask.request.preferences = self.pref
+            query = ""
+
+            ret = do_pre_search(query, self.storage, pageno=1)
+            self.assertTrue(ret)
+
+            ret = do_post_search(query, self.storage, pageno=1)
+            self.assertTrue(ret is None)
+
+            ret = self
 
         self.storage.post_search(None, None)  # type: ignore
 

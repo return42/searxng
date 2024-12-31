@@ -29,6 +29,9 @@ favicons.init()
 class TestSettings(SearxTestCase):  # pylint: disable=missing-class-docstring
     # map settings
 
+    def setUp(self):
+        self.init_test_settings()
+
     def test_map_setting_invalid_default_value(self):
         with self.assertRaises(ValidationException):
             MapSetting(3, map={'dog': 1, 'bat': 2})
@@ -117,7 +120,7 @@ class TestSettings(SearxTestCase):  # pylint: disable=missing-class-docstring
         storage.register(PluginMock("plg001", "first plugin", True))
         storage.register(PluginMock("plg002", "second plugin", True))
         plgs_settings = PluginsSetting(False, storage)
-        self.assertEqual(set(plgs_settings.get_enabled()), {"plg01", "plg002"})
+        self.assertEqual(set(plgs_settings.get_enabled()), {"plg001", "plg002"})
 
     def test_plugins_setting_few_default_enabled(self):
         storage = searx.plugins.PluginStorage()
@@ -125,7 +128,7 @@ class TestSettings(SearxTestCase):  # pylint: disable=missing-class-docstring
         storage.register(PluginMock("plg002", "second plugin", False))
         storage.register(PluginMock("plg003", "third plugin", True))
         plgs_settings = PluginsSetting(False, storage)
-        self.assertEqual(set(plgs_settings.get_enabled()), set(['plg002', 'plg003']))
+        self.assertEqual(set(plgs_settings.get_enabled()), set(['plg001', 'plg003']))
 
 
 class TestPreferences(SearxTestCase):  # pylint: disable=missing-class-docstring
@@ -193,7 +196,7 @@ class TestPreferences(SearxTestCase):  # pylint: disable=missing-class-docstring
 
         cookie_callback = {}
 
-        def set_cookie_callback(name, value, _max_age):
+        def set_cookie_callback(name, value, max_age):
             cookie_callback[name] = value
 
         response_mock = Mock(flask.Response)

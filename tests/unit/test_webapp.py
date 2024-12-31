@@ -9,13 +9,17 @@ from mock import Mock
 from searx.results import Timing
 
 import searx.search.processors
-from searx.search import Search
+import searx.search
 from searx.preferences import Preferences
 from tests import SearxTestCase
 
 
 class ViewsTestCase(SearxTestCase):  # pylint: disable=missing-class-docstring, too-many-public-methods
+
     def setUp(self):
+        self.init_test_settings()
+        searx.search.initialize([])
+
         # skip init function (no external HTTP request)
         def dummy(*args, **kwargs):  # pylint: disable=unused-argument
             pass
@@ -23,13 +27,13 @@ class ViewsTestCase(SearxTestCase):  # pylint: disable=missing-class-docstring, 
         self.setattr4test(searx.search.processors, 'initialize_processor', dummy)
 
         log = logging.getLogger("searx")
-        log_lev = log.level
-        log.setLevel(logging.ERROR)
+        #log_lev = log.level
+        #log.setLevel(logging.ERROR)
         from searx import webapp  # pylint: disable=import-outside-toplevel
 
-        log.setLevel(log_lev)
+        #log.setLevel(log_lev)
 
-        webapp.app.config['TESTING'] = True  # to get better error messages
+        #webapp.app.config['TESTING'] = True  # to get better error messages
         self.app = webapp.app.test_client()
 
         # remove sha for the static file
@@ -85,7 +89,7 @@ class ViewsTestCase(SearxTestCase):  # pylint: disable=missing-class-docstring, 
             )
             search_self.search_query.locale = babel.Locale.parse("en-US", sep='-')
 
-        self.setattr4test(Search, 'search', search_mock)
+        self.setattr4test(searx.search.Search, 'search', search_mock)
 
         original_preferences_get_value = Preferences.get_value
 
@@ -122,7 +126,7 @@ class ViewsTestCase(SearxTestCase):  # pylint: disable=missing-class-docstring, 
         self.assertEqual(result.status_code, 200)
         self.assertIn(b'<div class="title"><h1>SearXNG</h1></div>', result.data)
 
-    def test_search_empty_json(self):
+    def test_search_empty_json(self):    #
         result = self.app.post('/search', data={'q': '', 'format': 'json'})
         self.assertEqual(result.status_code, 400)
 

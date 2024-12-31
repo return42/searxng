@@ -10,7 +10,9 @@ from tests import SearxTestCase
 
 
 class TestNetwork(SearxTestCase):  # pylint: disable=missing-class-docstring
+
     def setUp(self):
+        self.init_test_settings()
         initialize()
 
     def test_simple(self):
@@ -126,6 +128,9 @@ class TestNetworkRequestRetries(SearxTestCase):  # pylint: disable=missing-class
 
     TEXT = 'Lorem Ipsum'
 
+    def setUp(self):
+        self.init_test_settings()
+
     @classmethod
     def get_response_404_then_200(cls):
         first = True
@@ -198,6 +203,9 @@ class TestNetworkRequestRetries(SearxTestCase):  # pylint: disable=missing-class
 class TestNetworkStreamRetries(SearxTestCase):  # pylint: disable=missing-class-docstring
 
     TEXT = 'Lorem Ipsum'
+
+    def setUp(self):
+        self.init_test_settings()
 
     @classmethod
     def get_response_exception_then_200(cls):

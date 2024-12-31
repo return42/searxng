@@ -43,6 +43,10 @@ class TestDefaultSettings(SearxTestCase):  # pylint: disable=missing-class-docst
 
 
 class TestUserSettings(SearxTestCase):  # pylint: disable=missing-class-docstring
+
+    def setUp(self):
+        self.init_test_settings()
+
     def test_is_use_default_settings(self):
         self.assertFalse(settings_loader.is_use_default_settings({}))
         self.assertTrue(settings_loader.is_use_default_settings({'use_default_settings': True}))

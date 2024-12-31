@@ -38,6 +38,8 @@ def fake_result(url='https://aa.bb/cc?dd=ee#ff', title='aaa', content='bbb', eng
 class ResultContainerTestCase(SearxTestCase):  # pylint: disable=missing-class-docstring
 
     def setUp(self) -> None:
+        self.init_test_settings()
+
         stract_engine = make_test_engine_dict(name="stract", engine="stract", shortcut="stra")
         duckduckgo_engine = make_test_engine_dict(name="duckduckgo", engine="duckduckgo", shortcut="ddg")
         mojeek_engine = make_test_engine_dict(name="mojeek", engine="mojeek", shortcut="mjk")

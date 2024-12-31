@@ -2,7 +2,9 @@
 # pylint: disable=missing-module-docstring
 
 import os
-from os.path import dirname, sep, abspath
+from pathlib import Path
 
-# In unit tests the user settings from unit/settings/test_settings.yml are used.
-os.environ['SEARXNG_SETTINGS_PATH'] = abspath(dirname(__file__) + sep + 'settings' + sep + 'test_settings.yml')
+# By default, in unit tests the user settings from
+# unit/settings/test_settings.yml are used.
+
+os.environ['SEARXNG_SETTINGS_PATH'] = str(Path(__file__).parent / "settings" / "test_settings.yml")

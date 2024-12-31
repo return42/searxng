@@ -20,6 +20,7 @@ from .test_plugins import do_post_search
 class PluginIPSelfInfo(SearxTestCase):  # pylint: disable=missing-class-docstring
 
     def setUp(self):
+        self.init_test_settings()
         # pylint: disable=import-outside-toplevel
         from searx.webapp import app
         from searx.plugins._core import _default, ModulePlugin
@@ -41,7 +42,7 @@ class PluginIPSelfInfo(SearxTestCase):  # pylint: disable=missing-class-docstrin
         self.assertEqual(1, len(self.storage))
 
     def test_pageno_1_2(self):
-        with self.webapp.app.test_request_context():
+        with self.app.test_request_context():
             flask.request.preferences = self.pref
             flask.request.remote_addr = "127.0.0.1"
             flask.request.headers = {"X-Forwarded-For": "1.2.3.4, 127.0.0.1", "X-Real-IP": "127.0.0.1"}
@@ -60,7 +61,7 @@ class PluginIPSelfInfo(SearxTestCase):  # pylint: disable=missing-class-docstrin
         ]
     )
     def test_user_agent_in_answer(self, query: str):
-        with self.webapp.app.test_request_context():
+        with self.app.test_request_context():
             flask.request.preferences = self.pref
             flask.request.user_agent = "Dummy agent"
             answer = Answer(results=[], answer=gettext("Your user-agent is: ") + "Dummy agent")

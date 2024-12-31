@@ -17,6 +17,7 @@ from .test_plugins import do_post_search
 class PluginCalculator(SearxTestCase):  # pylint: disable=missing-class-docstring
 
     def setUp(self):
+        self.init_test_settings()
         # pylint: disable=import-outside-toplevel
         from searx.webapp import app
         from searx.plugins._core import _default, ModulePlugin
@@ -36,7 +37,7 @@ class PluginCalculator(SearxTestCase):  # pylint: disable=missing-class-docstrin
         self.assertEqual(1, len(self.storage))
 
     def test_pageno_1_2(self):
-        with self.webapp.app.test_request_context():
+        with self.app.test_request_context():
             flask.request.preferences = self.pref
             query = "1+1"
             answer = Answer(results=[], answer=f"{query} = {eval(query)}")  # pylint: disable=eval-used
@@ -48,7 +49,7 @@ class PluginCalculator(SearxTestCase):  # pylint: disable=missing-class-docstrin
             self.assertEqual(search.result_container.answers, [])
 
     def test_long_query_true(self):
-        with self.webapp.app.test_request_context():
+        with self.app.test_request_context():
             flask.request.preferences = self.pref
             query = f"1+1 {random_string(101)}"
             search = do_post_search(query, self.storage)
@@ -79,7 +80,7 @@ class PluginCalculator(SearxTestCase):  # pylint: disable=missing-class-docstrin
         ]
     )
     def test_localized_query(self, query: str, res: str, lang: str):
-        with self.webapp.app.test_request_context():
+        with self.app.test_request_context():
             self.pref.parse_dict({"locale": lang})
             flask.request.preferences = self.pref
             answer = Answer(results=[], answer=f"{query} = {res}")
@@ -93,7 +94,7 @@ class PluginCalculator(SearxTestCase):  # pylint: disable=missing-class-docstrin
         ]
     )
     def test_invalid_operations(self, query):
-        with self.webapp.app.test_request_context():
+        with self.app.test_request_context():
             flask.request.pref = self.pref
             search = do_post_search(query, self.storage)
-            self.assertEqual(search.result_container.answers, [])
+            self.assertEqual([x for x in search.result_container.answers], [])

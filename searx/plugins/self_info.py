@@ -33,6 +33,6 @@ def post_search(request, search) -> list[Answer]:
         Answer(results=results, answer=gettext('Your IP is: ') + get_real_ip(request))
 
     if ua_regex.match(search.search_query.query):
-        Answer(results=results, answer=gettext('Your user-agent is: ') + request.user_agent.string)
+        Answer(results=results, answer=gettext('Your user-agent is: ') + str(request.user_agent))
 
     return results

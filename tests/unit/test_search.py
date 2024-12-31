@@ -45,7 +45,9 @@ class SearchQueryTestCase(SearxTestCase):  # pylint: disable=missing-class-docst
 
 
 class SearchTestCase(SearxTestCase):  # pylint: disable=missing-class-docstring
+
     def setUp(self):
+        self.init_test_settings()
 
         log = logging.getLogger("searx")
         log_lev = log.level

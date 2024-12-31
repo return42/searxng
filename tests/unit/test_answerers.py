@@ -8,6 +8,9 @@ from tests import SearxTestCase
 
 class AnswererTest(SearxTestCase):
 
+    def setUp(self):
+        self.init_test_settings()
+
     @parameterized.expand(searx.answerers.STORAGE.answerer_list)
     def test_unicode_input(self, answerer_obj: searx.answerers.Answerer):
         unicode_payload = "árvíztűrő tükörfúrógép"

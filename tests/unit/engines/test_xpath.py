@@ -29,6 +29,7 @@ class TestXpathEngine(SearxTestCase):  # pylint: disable=missing-class-docstring
     """
 
     def setUp(self):
+        self.init_test_settings()
         xpath.logger = logger.getChild('test_xpath')
 
     def test_request(self):

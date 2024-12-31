@@ -26,8 +26,9 @@ SEARCHQUERY = [EngineRef(PRIVATE_ENGINE_NAME, 'general')]
 
 
 class ValidateQueryCase(SearxTestCase):  # pylint: disable=missing-class-docstring
-    @classmethod
-    def setUpClass(cls):
+
+    def setUp(self):
+        self.init_test_settings()
         searx.search.initialize(TEST_ENGINES)
 
     def test_query_private_engine_without_token(self):  # pylint:disable=invalid-name

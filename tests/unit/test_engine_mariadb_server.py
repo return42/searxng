@@ -8,6 +8,9 @@ from tests import SearxTestCase
 
 class MariadbServerTests(SearxTestCase):  # pylint: disable=missing-class-docstring
 
+    def setUp(self):
+        self.init_test_settings()
+
     def test_init_no_query_str_raises(self):
         self.assertRaises(ValueError, lambda: mariadb_server.init({}))
 

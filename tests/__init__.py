@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # pylint: disable=missing-module-docstring
 
+import pathlib
 import os
 
 # Before import from the searx package, we need to set up the (debug)
@@ -16,6 +17,8 @@ os.environ['SEARXNG_DISABLE_ETC_SETTINGS'] = '1'
 
 import aiounittest
 import searx
+
+test_settings_folder = pathlib.Path(__file__).parent / "unit" / "settings"
 
 
 class SearxTestLayer:
@@ -46,10 +49,8 @@ class SearxTestCase(aiounittest.AsyncTestCase):
     layer = SearxTestLayer
 
     def setattr4test(self, obj, attr, value):
-        """
-        setattr(obj, attr, value)
-        but reset to the previous value in the cleanup.
-        """
+        """setattr(obj, attr, value) but reset to the previous value in the
+        cleanup."""
         previous_value = getattr(obj, attr)
 
         def cleanup_patch():
@@ -57,3 +58,12 @@ class SearxTestCase(aiounittest.AsyncTestCase):
 
         self.addCleanup(cleanup_patch)
         setattr(obj, attr, value)
+
+    def init_test_settings(self, cfg_fname: str = "test_settings.yml"):
+        """Sets ``SEARXNG_SETTINGS_PATH`` environment variable an initialize
+        global ``settings`` variable and ``logger`` from a test config in
+        :origin:`tests/unit/settings/`.
+        """
+
+        os.environ['SEARXNG_SETTINGS_PATH'] = str(test_settings_folder/cfg_fname)
+        searx.init_settings()

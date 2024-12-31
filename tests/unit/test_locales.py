@@ -15,6 +15,9 @@ class TestLocales(SearxTestCase):
     - :py:obj:`searx.locales.match_locale`
     """
 
+    def setUp(self):
+        self.init_test_settings()
+
     @classmethod
     def setUpClass(cls):
         cls.locale_tag_list = [x[0] for x in sxng_locales]

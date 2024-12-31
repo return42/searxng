@@ -137,7 +137,7 @@ class TestHTMLTextExtractor(SearxTestCase):  # pylint: disable=missing-class-doc
             self.html_text_extractor.feed(text)
 
 
-class TestXPathUtils(SearxTestCase):  # pylint: disable=missing-class-docstring
+class TestXPathUtils( SearxTestCase):  # pylint: disable=missing-class-docstring
 
     TEST_DOC = """<ul>
         <li>Text in <b>bold</b> and <i>italic</i> </li>

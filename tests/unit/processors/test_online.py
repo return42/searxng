@@ -22,6 +22,7 @@ TEST_ENGINE = {
 class TestOnlineProcessor(SearxTestCase):  # pylint: disable=missing-class-docstring
 
     def setUp(self):
+        self.init_test_settings()
         searx.search.initialize([TEST_ENGINE])
 
     def tearDown(self):
