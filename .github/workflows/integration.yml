@@ -68,8 +68,6 @@ jobs:
             ./.nvm
             ./node_modules
           key: python-ubuntu-20.04-3.12-${{ hashFiles('requirements*.txt', 'setup.py','.nvmrc', 'package.json') }}
-      - name: Install node dependencies
-        run: make V=1 node.env
       - name: Build themes
         run: make V=1 themes.all
 
