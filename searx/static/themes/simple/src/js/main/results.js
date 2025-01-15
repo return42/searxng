@@ -85,6 +85,16 @@
       searxng.scrollPageToSelected();
     }
 
+    d.getElementById('gallery').addEventListener('swiped-left', function (e) {
+      console.log(e.target); // element that was swiped
+      console.log(e.detail); // see event data below
+    });
+
+    d.getElementById('gallery').addEventListener('swiped-right', function (e) {
+      console.log(e.target); // element that was swiped
+      console.log(e.detail); // see event data below
+    });
+
     searxng.closeDetail = function (e) {
       d.getElementById('results').classList.remove('image-detail-open');
       searxng.scrollPageToSelected();
