@@ -553,6 +553,8 @@ class EngineModule(Engine):  # pylint: disable=too-few-public-methods
         engine_settings["module"] = module
         engine_settings["fetch_traits"] = getattr(module, "fetch_traits", None)
 
+        # setattr(module, "logger", engine_settings["logger"])
+
         # probe unintentional name collisions / for example name collisions caused
         # by import statements in the engine module ..
 
