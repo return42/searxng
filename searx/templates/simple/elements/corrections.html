@@ -7,7 +7,7 @@
           <input type="hidden" name="category_{{ category }}" value="1">
           {% endfor %}
           <input type="hidden" name="q" value="{{ correction.url }}">
-          <input type="hidden" name="language" value="{{ current_language }}">
+          <input type="hidden" name="language" value="{{ active_search_locale }}">
           <input type="hidden" name="time_range" value="{{ time_range }}">
           <input type="hidden" name="safesearch" value="{{ safesearch }}">
           <input type="hidden" name="theme" value="{{ theme }}">

@@ -3,15 +3,6 @@
 user searches for ``tor-check``.  It fetches the tor exit node list from
 :py:obj:`url_exit_list` and parses all the IPs into a list, then checks if the
 user's IP address is in it.
-
-Enable in ``settings.yml``:
-
-.. code:: yaml
-
-  enabled_plugins:
-    ..
-    - 'Tor check plugin'
-
 """
 
 from __future__ import annotations
@@ -23,8 +14,6 @@ from httpx import HTTPError
 from searx.network import get
 from searx.result_types import Answer
 
-
-default_on = False
 
 name = gettext("Tor check plugin")
 '''Translated name of the plugin'''

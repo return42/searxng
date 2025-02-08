@@ -87,38 +87,3 @@ Parameters
   Please note, available themes depend on an instance.  It is possible that an
   instance administrator deleted, created or renamed themes on their instance.
   See the available options in the preferences page of the instance.
-
-``enabled_plugins`` : optional
-  List of enabled plugins.
-
-  :default:
-     ``Hash_plugin``, ``Self_Information``,
-     ``Tracker_URL_remover``, ``Ahmia_blacklist``
-
-  :values:
-     .. enabled by default
-
-     ``Hash_plugin``, ``Self_Information``,
-     ``Tracker_URL_remover``, ``Ahmia_blacklist``,
-
-     .. disabled by default
-
-     ``Hostnames_plugin``, ``Open_Access_DOI_rewrite``,
-     ``Vim-like_hotkeys``, ``Tor_check_plugin``
-
-``disabled_plugins``: optional
-  List of disabled plugins.
-
-  :default:
-     ``Hostnames_plugin``, ``Open_Access_DOI_rewrite``,
-     ``Vim-like_hotkeys``, ``Tor_check_plugin``
-
-  :values:
-     see values from ``enabled_plugins``
-
-``enabled_engines`` : optional : *all* :origin:`engines <searx/engines>`
-  List of enabled engines.
-
-``disabled_engines`` : optional : *all* :origin:`engines <searx/engines>`
-  List of disabled engines.
-

@@ -3,7 +3,6 @@
 
 from parameterized import parameterized
 
-import searx.plugins
 import searx.answerers
 import searx.preferences
 
@@ -17,10 +16,8 @@ class AnswererTest(SearxTestCase):
     def setUp(self):
         super().setUp()
 
-        self.storage = searx.plugins.PluginStorage()
-        engines = {}
-        self.pref = searx.preferences.Preferences(["simple"], ["general"], engines, self.storage)
-        self.pref.parse_dict({"locale": "en"})
+        self.pref = searx.preferences.Preferences()
+        self.pref.components["loaclae"].parse_form({"locale": "en"})
 
     @parameterized.expand(searx.answerers.STORAGE.answerer_list)
     def test_unicode_input(self, answerer_obj: searx.answerers.Answerer):

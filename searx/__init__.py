@@ -6,6 +6,7 @@ import os
 from os.path import dirname, abspath
 
 import logging
+import typing
 
 import searx.unixthreadname
 import searx.settings_loader
@@ -66,7 +67,7 @@ def init_settings():
         )
 
 
-def get_setting(name, default=_unset):
+def get_setting(name, default=_unset) -> typing.Any:
     """Returns the value to which ``name`` point.  If there is no such name in the
     settings and the ``default`` is unset, a :py:obj:`KeyError` is raised.
 

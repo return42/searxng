@@ -28,7 +28,7 @@ class PluginCalculator(SearxTestCase):
         self.storage = searx.plugins.PluginStorage()
         self.storage.register(ModulePlugin(mod, "searx.plugins.calculator"))
         self.storage.init(self.app)
-        self.pref = searx.preferences.Preferences(["simple"], ["general"], engines, self.storage)
+        self.pref = searx.preferences.Preferences()
         self.pref.parse_dict({"locale": "en"})
 
     def test_plugin_store_init(self):

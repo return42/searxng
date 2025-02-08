@@ -34,7 +34,7 @@
             <form method="{{ method or 'POST' }}" action="{{ url_for('search') }}">
               <input type="hidden" name="q" value="{{ suggestion }}">
               <input type="hidden" name="time_range" value="{{ time_range }}">
-              <input type="hidden" name="language" value="{{ current_language }}">
+              <input type="hidden" name="language" value="{{ active_search_locale }}">
               <input type="hidden" name="safesearch" value="{{ safesearch }}">
               <input type="hidden" name="theme" value="{{ theme }}">
               {%- if timeout_limit -%}<input type="hidden" name="timeout_limit" value="{{ timeout_limit|e }}" >{%- endif -%}

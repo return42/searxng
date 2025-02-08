@@ -48,11 +48,11 @@ class OnlineProcessor(EngineProcessor):
         searx.network.set_context_network_name(self.engine_name)
         super().initialize()
 
-    def get_params(self, search_query, engine_category):
+    def get_params(self, search_query):
         """Returns a set of :ref:`request params <engine request online>` or ``None``
         if request is not supported.
         """
-        params = super().get_params(search_query, engine_category)
+        params = super().get_params(search_query)
         if params is None:
             return None
 
