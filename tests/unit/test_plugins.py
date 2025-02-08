@@ -4,6 +4,7 @@
 import babel
 from mock import Mock
 
+import searx
 import searx.plugins
 import searx.preferences
 import searx.results
@@ -14,7 +15,7 @@ from searx.extended_types import sxng_request
 from tests import SearxTestCase
 
 plg_store = searx.plugins.PluginStorage()
-plg_store.load_builtins()
+plg_store.load_settings(searx.get_setting("plugins"))
 
 
 def get_search_mock(query, **kwargs):
@@ -22,11 +23,11 @@ def get_search_mock(query, **kwargs):
     lang = kwargs.get("lang", "en-US")
     kwargs["pageno"] = kwargs.get("pageno", 1)
     kwargs["locale"] = babel.Locale.parse(lang, sep="-")
-    user_plugins = kwargs.pop("user_plugins", [x.id for x in plg_store])
+    req_plugins = kwargs.pop("req_plugins", [x.id for x in plg_store])
 
     return Mock(
         search_query=Mock(query=query, **kwargs),
-        user_plugins=user_plugins,
+        request=Mock(req_plugins=req_plugins),
         result_container=searx.results.ResultContainer(),
     )
 
@@ -51,7 +52,7 @@ class PluginMock(searx.plugins.Plugin):
         self.id = _id
         self.default_on = default_on
         self._name = name
-        super().__init__()
+        super().__init__(searx.plugins.PluginCfg(active=True))
 
     # pylint: disable= unused-argument
     def pre_search(self, request, search) -> bool:
@@ -76,14 +77,15 @@ class PluginStorage(SearxTestCase):
 
     def setUp(self):
         super().setUp()
-        engines = {}
 
         self.storage = searx.plugins.PluginStorage()
         self.storage.register(PluginMock("plg001", "first plugin", True))
         self.storage.register(PluginMock("plg002", "second plugin", True))
         self.storage.init(self.app)
-        self.pref = searx.preferences.Preferences(["simple"], ["general"], engines, self.storage)
-        self.pref.parse_dict({"locale": "en"})
+        searx.plugins.STORAGE = self.storage
+
+        self.pref = searx.preferences.Preferences()
+        self.pref.members["locale"].parse_form({"locale": "en"})
 
     def test_init(self):
 
@@ -100,7 +102,7 @@ class PluginStorage(SearxTestCase):
 
             ret = self.storage.on_result(
                 sxng_request,
-                get_search_mock("lorem ipsum", user_plugins=["plg001", "plg002"]),
+                get_search_mock("lorem ipsum", req_plugins=["plg001", "plg002"]),
                 Result(),
             )
             self.assertFalse(ret)

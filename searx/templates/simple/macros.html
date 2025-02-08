@@ -58,11 +58,10 @@
 {%- endmacro -%}
 
 <!-- input checkbox, on/off slider user can tap-->
-{%- macro checkbox_onoff(name, checked) -%}
-  <input type="checkbox" {{- ' ' -}}
-         name="{{ name }}" {{- ' ' -}}
-         id="{{ name }}" {{- ' ' -}}
-         aria-labelledby="pref_{{ name }}"{{- ' ' -}}
-         class="checkbox-onoff"{{- ' ' -}}
-         {%- if checked -%} checked{%- endif -%}/>
+{%- macro checkbox_onoff(name, checked, labelledby) -%}
+  <input type="checkbox" name="{{ name }}" id="{{ name }}" class="checkbox-onoff" {{- ' ' -}}
+	 {%- if labelledby -%}aria-labelledby="{{ labelledby }}"
+	 {%- else -%}aria-labelledby="pref_{{ name }}"
+	 {%- endif %}{{- ' ' -}}
+         {%- if checked -%}checked{%- endif -%}/>
 {%- endmacro -%}

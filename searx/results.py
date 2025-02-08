@@ -2,6 +2,7 @@
 # pylint: disable=missing-module-docstring
 from __future__ import annotations
 
+import typing
 import warnings
 import re
 from collections import defaultdict
@@ -193,13 +194,13 @@ class ResultContainer:
         self.answers = AnswerSet()
         self.corrections = set()
         self._number_of_results: list[int] = []
-        self.engine_data: dict[str, str | dict] = defaultdict(dict)
+        self.engine_data: dict[str, dict[str,str]] = defaultdict(dict)
         self._closed: bool = False
         self.paging: bool = False
         self.unresponsive_engines: Set[UnresponsiveEngine] = set()
         self.timings: List[Timing] = []
-        self.redirect_url = None
-        self.on_result = lambda _: True
+        self.redirect_url: str|None = None
+        self.on_result: typing.Callable = lambda _: True
         self._lock = RLock()
 
     def extend(self, engine_name: str | None, results):  # pylint: disable=too-many-branches

@@ -7,15 +7,6 @@ converters, each converter is one item in the list (compare
 :py:obj:`ADDITIONAL_UNITS`).  If the symbols are ambiguous, the matching units
 of measurement are evaluated.  The weighting in the evaluation results from the
 sorting of the :py:obj:`list of unit converters<symbol_to_si>`.
-
-Enable in ``settings.yml``:
-
-.. code:: yaml
-
-  enabled_plugins:
-    ..
-    - 'Unit converter plugin'
-
 """
 
 from __future__ import annotations
@@ -30,7 +21,6 @@ from searx.result_types import Answer
 
 name = "Unit converter plugin"
 description = gettext("Convert between units")
-default_on = True
 
 plugin_id = "unit_converter"
 preference_section = "general"

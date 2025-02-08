@@ -16,7 +16,6 @@ import httpx
 from searx import network, logger
 from searx.utils import gen_useragent, detect_language
 from searx.results import ResultContainer
-from searx.search.models import SearchQuery, EngineRef
 from searx.search.processors import EngineProcessor
 from searx.metrics import counter_inc
 
@@ -360,14 +359,8 @@ class Checker:  # pylint: disable=missing-class-docstring
         self.tests = self.processor.get_tests()
         self.test_results = TestResults()
 
-    @property
-    def engineref_list(self):
-        engine_name = self.processor.engine_name
-        engine_category = self.processor.engine.categories[0]
-        return [EngineRef(engine_name, engine_category)]
-
     @staticmethod
-    def search_query_matrix_iterator(engineref_list, matrix):
+    def search_query_matrix_iterator(matrix):
         p = []
         for name, values in matrix.items():
             if isinstance(values, (tuple, list)):
@@ -381,7 +374,7 @@ class Checker:  # pylint: disable=missing-class-docstring
             query = kwargs['query']
             params = dict(kwargs)
             del params['query']
-            yield SearchQuery(query, engineref_list, **params)
+            yield SearchQuery(query, **params)
 
     def call_test(self, obj, test_description):
         if isinstance(test_description, (tuple, list)):
@@ -405,10 +398,9 @@ class Checker:  # pylint: disable=missing-class-docstring
 
     def search(self, search_query: SearchQuery) -> ResultContainer:
         result_container = ResultContainer()
-        engineref_category = search_query.engineref_list[0].category
-        params = self.processor.get_params(search_query, engineref_category)
+        params = self.processor.get_params(search_query)
         if params is not None:
-            counter_inc('engine', search_query.engineref_list[0].name, 'search', 'count', 'sent')
+            counter_inc('engine', self.processor.engine_name, 'search', 'count', 'sent')  # FIXME
             self.processor.search(search_query.query, params, result_container, default_timer(), 5)
         return result_container
 
@@ -420,7 +412,7 @@ class Checker:  # pylint: disable=missing-class-docstring
 
     def run_test(self, test_name):
         test_parameters = self.tests[test_name]
-        search_query_list = list(Checker.search_query_matrix_iterator(self.engineref_list, test_parameters['matrix']))
+        search_query_list = list(Checker.search_query_matrix_iterator(test_parameters['matrix']))   # FIXME
         rct_list = [self.get_result_container_tests(test_name, search_query) for search_query in search_query_list]
         stop_test = False
         if 'result_container' in test_parameters:

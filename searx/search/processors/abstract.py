@@ -135,7 +135,7 @@ class EngineProcessor(ABC):
             return True
         return False
 
-    def get_params(self, search_query, engine_category):
+    def get_params(self, search_query):
         """Returns a set of (see :ref:`request params <engine request arguments>`) or
         ``None`` if request is not supported.
 
@@ -159,7 +159,6 @@ class EngineProcessor(ABC):
 
         params = {}
         params["query"] = search_query.query
-        params['category'] = engine_category
         params['pageno'] = search_query.pageno
         params['safesearch'] = search_query.safesearch
         params['time_range'] = search_query.time_range

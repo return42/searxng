@@ -2,7 +2,7 @@
 # pylint: disable=missing-module-docstring, too-few-public-methods
 
 # the public namespace has not yet been finally defined ..
-# __all__ = ["EngineRef", "SearchQuery"]
+# __all__ = ["SearchQuery"]
 
 import threading
 from timeit import default_timer
@@ -17,14 +17,14 @@ import searx.plugins
 from searx.engines import load_engines
 from searx.extended_types import SXNG_Request
 from searx.external_bang import get_bang_url
-from searx.metrics import initialize as initialize_metrics, counter_inc, histogram_observe_time
+from searx.metrics import initialize as initialize_metrics, counter_inc
 from searx.network import initialize as initialize_network, check_network_configuration
 from searx.results import ResultContainer
 from searx.search.checker import initialize as initialize_checker
 from searx.search.models import SearchQuery
 from searx.search.processors import PROCESSORS, initialize as initialize_processors
 
-from .models import EngineRef, SearchQuery
+from .models import SearchQuery
 
 logger = logger.getChild('search')
 
@@ -52,8 +52,8 @@ class Search:
         super().__init__()
         self.search_query = search_query
         self.result_container = ResultContainer()
-        self.start_time = None
-        self.actual_timeout = None
+        self.start_time: float = None  # type: ignore
+        self.actual_timeout: float = None # type: ignore
 
     def search_external_bang(self):
         """
@@ -84,22 +84,22 @@ class Search:
         default_timeout = 0
 
         # start search-request for all selected engines
-        for engineref in self.search_query.engineref_list:
-            processor = PROCESSORS[engineref.name]
+        for eng_name in self.search_query.engine_names:  # FIXME
+            processor = PROCESSORS[eng_name]
 
             # stop the request now if the engine is suspend
             if processor.extend_container_if_suspended(self.result_container):
                 continue
 
             # set default request parameters
-            request_params = processor.get_params(self.search_query, engineref.category)
+            request_params = processor.get_params(self.search_query)
             if request_params is None:
                 continue
 
-            counter_inc('engine', engineref.name, 'search', 'count', 'sent')
+            counter_inc('engine', eng_name, 'search', 'count', 'sent')
 
             # append request to list
-            requests.append((engineref.name, self.search_query.query, request_params))
+            requests.append((eng_name, self.search_query.query, request_params))
 
             # update default_timeout
             default_timeout = max(default_timeout, processor.engine.timeout)
@@ -141,8 +141,8 @@ class Search:
                 args=(query, request_params, self.result_container, self.start_time, self.actual_timeout),
                 name=search_id,
             )
-            th._timeout = False
-            th._engine_name = engine_name
+            th._timeout = False  # type: ignore
+            th._engine_name = engine_name # type: ignore
             th.start()
 
         for th in threading.enumerate():  # pylint: disable=invalid-name
@@ -150,9 +150,10 @@ class Search:
                 remaining_time = max(0.0, self.actual_timeout - (default_timer() - self.start_time))
                 th.join(remaining_time)
                 if th.is_alive():
-                    th._timeout = True
-                    self.result_container.add_unresponsive_engine(th._engine_name, 'timeout')
-                    PROCESSORS[th._engine_name].logger.error('engine timeout')
+                    th._timeout = True  # type: ignore
+                    _eng_name = th._engine_name  # type: ignore
+                    self.result_container.add_unresponsive_engine(_eng_name, 'timeout')
+                    PROCESSORS[_eng_name].logger.error('engine timeout')
 
     def search_standard(self):
         """
@@ -179,20 +180,10 @@ class Search:
 class SearchWithPlugins(Search):
     """Inherit from the Search class, add calls to the plugins."""
 
-    __slots__ = 'user_plugins', 'request'
-
-    def __init__(self, search_query: SearchQuery, request: SXNG_Request, user_plugins: list[str]):
+    def __init__(self, search_query: SearchQuery, sxng_request: SXNG_Request):
         super().__init__(search_query)
-        self.user_plugins = user_plugins
         self.result_container.on_result = self._on_result
-        # pylint: disable=line-too-long
-        # get the "real" request to use it outside the Flask context.
-        # see
-        # * https://github.com/pallets/flask/blob/d01d26e5210e3ee4cbbdef12f05c886e08e92852/src/flask/globals.py#L55
-        # * https://github.com/pallets/werkzeug/blob/3c5d3c9bd0d9ce64590f0af8997a38f3823b368d/src/werkzeug/local.py#L548-L559
-        # * https://werkzeug.palletsprojects.com/en/2.0.x/local/#werkzeug.local.LocalProxy._get_current_object
-        # pylint: enable=line-too-long
-        self.request = request._get_current_object()
+        self.request = sxng_request
 
     def _on_result(self, result):
         return searx.plugins.STORAGE.on_result(self.request, self, result)

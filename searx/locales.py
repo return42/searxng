@@ -149,6 +149,12 @@ def locales_initialize():
     LOCALE_NAMES.update(data.LOCALES["LOCALE_NAMES"])
     RTL_LOCALES.update(data.LOCALES["RTL_LOCALES"])
 
+def sxng_tag(locale: babel.Locale) -> str:
+    """Returns SearXNG's language/region tag from the locale (e.g. zh-TW, en-US,
+    de, ..)."""
+    if locale.territory:
+        return region_tag(locale)
+    return language_tag(locale)
 
 def region_tag(locale: babel.Locale) -> str:
     """Returns SearXNG's region tag from the locale (e.g. zh-TW , en-US)."""
@@ -366,7 +372,7 @@ def get_engine_locale(searxng_locale, engine_locales, default=None):
     return default
 
 
-def match_locale(searxng_locale: str, locale_tag_list: list[str], fallback: str | None = None) -> str | None:
+def match_locale(searxng_locale: str, locale_tag_list: list[str]|set[str], fallback: str | None = None) -> str | None:
     """Return tag from ``locale_tag_list`` that best fits to ``searxng_locale``.
 
     :param str searxng_locale: SearXNG's internal representation of locale (de,
