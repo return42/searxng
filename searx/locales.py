@@ -9,8 +9,7 @@ The variables :py:obj:`RTL_LOCALES` and :py:obj:`LOCALE_NAMES` are loaded from
 
 .. hint::
 
-   Whenever the value of :py:obj:`ADDITIONAL_TRANSLATIONS` or
-   :py:obj:`LOCALE_BEST_MATCH` is modified, the
+   Whenever the value of :py:obj:`TRANSLATION_BEST_MATCH` is modified, the
    :origin:`searx/data/locales.json` needs to be rebuild::
 
      ./manage data.locales
@@ -27,11 +26,10 @@ SearXNG’s locale implementations
 """
 
 from __future__ import annotations
-
+import typing
 from pathlib import Path
 
 import babel
-from babel.support import Translations
 import babel.languages
 import babel.core
 import flask_babel
@@ -46,10 +44,6 @@ from searx.extended_types import sxng_request
 
 logger = logger.getChild('locales')
 
-
-# safe before monkey patching flask_babel.get_translations
-_flask_babel_get_translations = flask_babel.get_translations
-
 LOCALE_NAMES = {}
 """Mapping of locales and their description.  Locales e.g. 'fr' or 'pt-BR' (see
 :py:obj:`locales_initialize`).
@@ -61,21 +55,12 @@ RTL_LOCALES: set[str] = set()
 """List of *Right-To-Left* locales e.g. 'he' or 'fa-IR' (see
 :py:obj:`locales_initialize`)."""
 
-ADDITIONAL_TRANSLATIONS = {
-    "dv": "ދިވެހި (Dhivehi)",
-    "oc": "Occitan",
-    "szl": "Ślōnski (Silesian)",
-    "pap": "Papiamento",
-}
-"""Additional languages SearXNG has translations for but not supported by
-python-babel (see :py:obj:`locales_initialize`)."""
-
-LOCALE_BEST_MATCH = {
+TRANSLATION_BEST_MATCH = {
     "dv": "si",
     "oc": 'fr-FR',
     "szl": "pl",
     "nl-BE": "nl",
-    "zh-HK": "zh-Hant-TW",
+    "zh-HK": "zh_Hant-TW",
     "pap": "pt-BR",
 }
 """Map a locale we do not have a translations for to a locale we have a
@@ -83,71 +68,47 @@ translation for.  By example: use Taiwan version of the translation for Hong
 Kong."""
 
 
-def localeselector():
-    locale = 'en'
+def babel_locale_selector():
+    sxng_locale_tag: str = "en"
     if has_request_context():
-        value = sxng_request.preferences.get_value('locale')
-        if value:
-            locale = value
-
-    # first, set the language that is not supported by babel
-    if locale in ADDITIONAL_TRANSLATIONS:
-        sxng_request.form['use-translation'] = locale
-
-    # second, map locale to a value python-babel supports
-    locale = LOCALE_BEST_MATCH.get(locale, locale)
-
-    if locale == '':
-        # if there is an error loading the preferences
-        # the locale is going to be ''
-        locale = 'en'
-
-    # babel uses underscore instead of hyphen.
-    locale = locale.replace('-', '_')
-    return locale
+        sxng_locale_tag = sxng_request.client.ui_locale_tag() or "en"
+    babel_locale = TRANSLATION_BEST_MATCH.get(sxng_locale_tag, sxng_locale_tag).replace('-', '_')
+    return babel_locale
 
 
-def get_translations():
-    """Monkey patch of :py:obj:`flask_babel.get_translations`"""
-    if has_request_context():
-        use_translation = sxng_request.form.get('use-translation')
-        if use_translation in ADDITIONAL_TRANSLATIONS:
-            babel_ext = flask_babel.current_app.extensions['babel']
-            return Translations.load(babel_ext.translation_directories[0], use_translation)
-    return _flask_babel_get_translations()
+_TR_LOCALES: list[babel.Locale] = []
 
 
-_TR_LOCALES: list[str] = []
-
-
-def get_translation_locales() -> list[str]:
-    """Returns the list of translation locales (*underscore*).  The list is
-    generated from the translation folders in :origin:`searx/translations`"""
+def get_translation_locales() -> list[babel.Locale]:
+    """Returns the list of translation :py:obj:`babel.Locale` objects.  The list
+    is generated from the translation folders in :origin:`searx/translations`
+    """
 
     global _TR_LOCALES  # pylint:disable=global-statement
     if _TR_LOCALES:
         return _TR_LOCALES
 
-    tr_locales = []
-    for folder in (Path(searx_dir) / 'translations').iterdir():
-        if not folder.is_dir():
-            continue
-        if not (folder / 'LC_MESSAGES').is_dir():
-            continue
-        tr_locales.append(folder.name)
-    _TR_LOCALES = sorted(tr_locales)
+    _TR_LOCALES = [
+        babel.Locale.parse(str(i.parent.name)) for i in (Path(searx_dir) / 'translations').glob("*/LC_MESSAGES")
+    ]
     return _TR_LOCALES
 
 
 def locales_initialize():
     """Initialize locales environment of the SearXNG session.
 
-    - monkey patch :py:obj:`flask_babel.get_translations` by :py:obj:`get_translations`
     - init global names :py:obj:`LOCALE_NAMES`, :py:obj:`RTL_LOCALES`
     """
-    flask_babel.get_translations = get_translations
     LOCALE_NAMES.update(data.LOCALES["LOCALE_NAMES"])
     RTL_LOCALES.update(data.LOCALES["RTL_LOCALES"])
+
+
+def sxng_locale_tag(locale: babel.Locale) -> str:
+    """Returns SearXNG's language/region tag from the locale (e.g. zh-TW, en-US,
+    de, ..)."""
+    if locale.territory:
+        return region_tag(locale)
+    return language_tag(locale)
 
 
 def region_tag(locale: babel.Locale) -> str:
@@ -366,7 +327,9 @@ def get_engine_locale(searxng_locale, engine_locales, default=None):
     return default
 
 
-def match_locale(searxng_locale: str, locale_tag_list: list[str], fallback: str | None = None) -> str | None:
+def match_locale(
+    searxng_locale: str, locale_tag_list: typing.Iterable[str] | set[str], fallback: str | None = None
+) -> str | None:
     """Return tag from ``locale_tag_list`` that best fits to ``searxng_locale``.
 
     :param str searxng_locale: SearXNG's internal representation of locale (de,
@@ -382,8 +345,7 @@ def match_locale(searxng_locale: str, locale_tag_list: list[str], fallback: str 
     .. hint::
 
        The *SearXNG locale* string and the members of ``locale_tag_list`` has to
-       be known by babel!  The :py:obj:`ADDITIONAL_TRANSLATIONS` are used in the
-       UI and are not known by babel --> will be ignored.
+       be known by babel!
     """
 
     # searxng_locale = 'es'
@@ -406,7 +368,7 @@ def match_locale(searxng_locale: str, locale_tag_list: list[str], fallback: str 
 
     tag_list = []
     for tag in locale_tag_list:
-        if tag in ('all', 'auto') or tag in ADDITIONAL_TRANSLATIONS:
+        if tag in ('all', 'auto'):
             continue
         tag_list.append(tag)
 

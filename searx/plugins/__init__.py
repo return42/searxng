@@ -3,7 +3,6 @@
 
    - :ref:`plugins admin`
    - :ref:`SearXNG settings <settings plugins>`
-   - :ref:`builtin plugins`
 
 Plugins can extend or replace functionality of various components of SearXNG.
 Here is an example of a very simple plugin that adds a "Hello" into the answer
@@ -18,7 +17,6 @@ area:
    class MyPlugin(Plugin):
 
        id = "self_info"
-       default_on = True
 
        def __init__(self):
            super().__init__()
@@ -56,13 +54,15 @@ For a coding example have a look at :ref:`self_info plugin`.
 
 from __future__ import annotations
 
-__all__ = ["PluginInfo", "Plugin", "PluginStorage"]
+__all__ = ["PluginInfo", "Plugin", "PluginStorage", "PluginCfg"]
 
-from ._core import PluginInfo, Plugin, PluginStorage
+
+import searx
+from ._core import PluginInfo, Plugin, PluginStorage, PluginCfg
 
 STORAGE: PluginStorage = PluginStorage()
 
 
 def initialize(app):
-    STORAGE.load_builtins()
+    STORAGE.load_settings(searx.get_setting("plugins"))
     STORAGE.init(app)

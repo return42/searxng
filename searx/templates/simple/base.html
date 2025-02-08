@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html class="no-js theme-{{ preferences.get_value('simple_style') or 'auto' }} center-alignment-{{ preferences.get_value('center_alignment') and 'yes' or 'no' }}" lang="{{ locale_rfc5646 }}" {% if rtl %} dir="rtl"{% endif %}>
+<html class="no-js theme-{{ PREF["simple_style"].str or 'auto' }} center-alignment-{{ PREF["center_alignment"].value and 'yes' or 'no' }}" lang="{{ CLIENT.ui_locale_tag() }}" {% if CLIENT.rtl %} dir="rtl"{% endif %}>
 <head>
   <meta charset="UTF-8">
   <meta name="description" content="SearXNG — a privacy-respecting, open metasearch engine">
@@ -12,7 +12,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
   <title>{% block title %}{% endblock %}{{ instance_name }}</title>
   {% block meta %}{% endblock %}
-  {% if rtl %}
+  {% if CLIENT.rtl %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/searxng-rtl.min.css') }}" type="text/css" media="screen">
   {% else %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/searxng.min.css') }}" type="text/css" media="screen">
@@ -20,9 +20,7 @@
   {% if get_setting('server.limiter') or get_setting('server.public_instance') %}
   <link rel="stylesheet" href="{{ url_for('client_token', token=link_token) }}" type="text/css">
   {% endif %}
-  <!--[if gte IE 9]>-->
-  <script src="{{ url_for('static', filename='js/searxng.head.min.js') }}" client_settings="{{ client_settings }}"></script>
-  <!--<![endif]-->
+  <script src="{{ url_for('static', filename='js/searxng.head.min.js') }}" client_settings="{{ CLIENT.as_base64() }}"></script>
   {% block head %}
   <link title="{{ instance_name }}" type="application/opensearchdescription+xml" rel="search" href="{{ opensearch_url }}">
   {% endblock %}

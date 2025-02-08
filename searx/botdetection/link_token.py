@@ -92,7 +92,7 @@ def is_suspicious(network: IPv4Network | IPv6Network, request: SXNG_Request, ren
     return False
 
 
-def ping(request: SXNG_Request, token: str):
+def ping(request: SXNG_Request, token: str | None):
     """This function is called by a request to URL ``/client<token>.css``.  If
     ``token`` is valid a :py:obj:`PING_KEY` for the client is stored in the DB.
     The expire time of this ping-key is :py:obj:`PING_LIVE_TIME`.
@@ -100,7 +100,7 @@ def ping(request: SXNG_Request, token: str):
     """
     from . import redis_client, cfg  # pylint: disable=import-outside-toplevel, cyclic-import
 
-    if not redis_client:
+    if not redis_client or not token:
         return
     if not token_is_valid(token):
         return

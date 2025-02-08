@@ -1,54 +1,79 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # pylint: disable=missing-module-docstring
-
 from __future__ import annotations
+import typing
+
 import re
 from urllib.parse import urlparse, parse_qsl
 
 from flask_babel import gettext
+from searx import get_setting
+from searx.plugins import Plugin, PluginInfo
 
-from searx import settings
+
+if typing.TYPE_CHECKING:
+    import flask
+    from searx.search import SearchWithPlugins
+    from searx.extended_types import SXNG_Request
+    from searx.result_types import Result
+    from searx.plugins import PluginCfg
+    from searx.preferences import Preferences
+
+ahmia_blacklist: list = []
+
+
+class SXNGPlugin(Plugin):
+    """Avoid paywalls by redirecting to open-access."""
+
+    id = "oa_doi_rewrite"
+
+    def __init__(self, plg_cfg: "PluginCfg") -> None:
+        super().__init__(plg_cfg)
+        self.info = PluginInfo(
+            id=self.id,
+            name=gettext("Open Access DOI rewrite"),
+            description=gettext("Avoid paywalls by redirecting to open-access versions of publications when available"),
+            preference_section="general",
+        )
+
+    def on_result(
+        self, request: "SXNG_Request", search: "SearchWithPlugins", result: Result
+    ) -> bool:  # pylint: disable=unused-argument
+        if not result.parsed_url:
+            return True
+
+        doi = extract_doi(result.parsed_url)
+        if doi and len(doi) < 50:
+
+            for suffix in ("/", ".pdf", ".xml", "/full", "/meta", "/abstract"):
+                if doi.endswith(suffix):
+                    doi = doi[: -len(suffix)]
+            result.url = get_doi_resolver(request.preferences) + doi
+            # FIXME: following lines needs to be fixed .. when
+            # https://github.com/searxng/searxng/pull/4424 has been merged
+            result.parsed_url = urlparse(result.url)
+            if "doi" not in result:
+                result['doi'] = doi
+        return True
 
 
 regex = re.compile(r'10\.\d{4,9}/[^\s]+')
 
-name = gettext('Open Access DOI rewrite')
-description = gettext('Avoid paywalls by redirecting to open-access versions of publications when available')
-default_on = False
-preference_section = 'general/doi_resolver'
-
 
 def extract_doi(url):
-    match = regex.search(url.path)
-    if match:
-        return match.group(0)
+    m = regex.search(url.path)
+    if m:
+        return m.group(0)
     for _, v in parse_qsl(url.query):
-        match = regex.search(v)
-        if match:
-            return match.group(0)
+        m = regex.search(v)
+        if m:
+            return m.group(0)
     return None
 
 
-def get_doi_resolver(preferences):
-    doi_resolvers = settings['doi_resolvers']
-    selected_resolver = preferences.get_value('doi_resolver')[0]
+def get_doi_resolver(prefs: Preferences) -> str:
+    doi_resolvers = get_setting("doi_resolvers")
+    selected_resolver = prefs.value("doi_resolver")[0]
     if selected_resolver not in doi_resolvers:
-        selected_resolver = settings['default_doi_resolver']
+        selected_resolver = get_setting("default_doi_resolver")
     return doi_resolvers[selected_resolver]
-
-
-def on_result(request, _search, result) -> bool:
-
-    if not result.parsed_url:
-        return True
-
-    doi = extract_doi(result['parsed_url'])
-    if doi and len(doi) < 50:
-        for suffix in ('/', '.pdf', '.xml', '/full', '/meta', '/abstract'):
-            if doi.endswith(suffix):
-                doi = doi[: -len(suffix)]
-        result['url'] = get_doi_resolver(request.preferences) + doi
-        result['parsed_url'] = urlparse(result['url'])
-        if 'doi' not in result:
-            result['doi'] = doi
-    return True

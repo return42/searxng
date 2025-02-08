@@ -1,11 +1,9 @@
-<fieldset>{{- '' -}}
-  <legend id="pref_tokens">{{- _('Engine tokens') -}}</legend>{{- '' -}}
-  <div class="value">{{- '' -}}
-    <input name="tokens" aria-labelledby="pref_tokens" type="text"
-           autocomplete="off" spellcheck="false" autocorrect="off"
-           value='{{ preferences.tokens.get_value() }}'>{{- '' -}}
-  </div>{{- '' -}}
-  <div class="description">
-    {{- _('Access tokens for private engines') -}}
-  </div>{{- '' -}}
-</fieldset>{{- '' -}}
+<fieldset>{% set comp = PREF["tokens"] %}
+  <legend id="pref_{{comp.field_id}}">{{comp.legend}}</legend>
+  <div class="value">
+    <input name="{{comp.field_id}}" aria-labelledby="pref_{{comp.field_id}}"
+      type="text" autocomplete="off" spellcheck="false" autocorrect="off"
+      value='{{ comp.str }}'>
+  </div>
+  <div class="description">{{comp.description}}</div>
+</fieldset>

@@ -11,10 +11,12 @@ end_of_line = lf
 charset = utf-8
 
 [*.py]
-max_line_length = 119
+max_line_length = 80
 
 [*.html]
-indent_size = 4
+# in the jinja templates we have an indent size of 2 and we do not use tabs
+indent_size = 2
+indent_style = space
 
 [*.css]
 indent_size = 2

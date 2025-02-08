@@ -64,9 +64,9 @@ class Network:
     def __init__(
         # pylint: disable=too-many-arguments
         self,
-        enable_http=True,
-        verify=True,
-        enable_http2=False,
+        enable_http: bool = True,
+        verify: bool = True,
+        enable_http2: bool = False,
         max_connections=None,
         max_keepalive_connections=None,
         keepalive_expiry=None,

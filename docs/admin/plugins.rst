@@ -8,7 +8,6 @@ List of plugins
 
    - :ref:`SearXNG settings <settings plugins>`
    - :ref:`dev plugin`
-   - :ref:`builtin plugins`
 
 Configuration defaults (at built time):
 

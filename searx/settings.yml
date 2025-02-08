@@ -152,21 +152,23 @@ ui:
 #
 # preferences:
 #   lock:
-#     - categories
-#     - language
 #     - autocomplete
-#     - favicon
-#     - safesearch
-#     - method
+#     - categories
+#     - center_alignment
 #     - doi_resolver
-#     - locale
-#     - theme
-#     - results_on_new_tab
-#     - infinite_scroll
-#     - search_on_category_select
-#     - method
+#     - favicon_resolver
+#     - hotkeys
 #     - image_proxy
+#     - infinite_scroll
+#     - language
+#     - locale
+#     - method
 #     - query_in_title
+#     - results_on_new_tab
+#     - safesearch
+#     - search_on_category_select
+#     - theme
+#     - url_formatting
 
 # searx supports result proxification using an external service:
 # https://github.com/asciimoo/morty uncomment below section if you have running
@@ -226,29 +228,40 @@ outgoing:
   #    - 1.1.1.2
   #    - fe80::/126
 
-# External plugin configuration, for more details see
-#   https://docs.searxng.org/admin/settings/settings_plugins.html
+# Plugin configuration, for more details see
+#   XXXX   FIXME https://docs.searxng.org/admin/settings/settings_plugins.html
 #
-# plugins:
-#   - mypackage.mymodule.MyPlugin
-#   - mypackage.mymodule.MyOtherPlugin
-#   - ...
+plugins:
 
-# Comment or un-comment plugin to activate / deactivate by default.
-#   https://docs.searxng.org/admin/settings/settings_plugins.html
-#
-# enabled_plugins:
-#   # these plugins are enabled if nothing is configured ..
-#   - 'Basic Calculator'
-#   - 'Hash plugin'
-#   - 'Self Information'
-#   - 'Tracker URL remover'
-#   - 'Unit converter plugin'
-#   - 'Ahmia blacklist'  # activation depends on outgoing.using_tor_proxy
-#   # these plugins are disabled if nothing is configured ..
-#   - 'Hostnames plugin'  # see 'hostnames' configuration below
-#   - 'Open Access DOI rewrite'
-#   - 'Tor check plugin'
+  # FIXME: enabled in the past
+
+  # searx.plugins.ahmia_filter.SXNGPlugin:
+  #   active: true
+  # searx.plugins.calculator.SXNGPlugin:
+  #   active: true
+  searx.plugins.hash_plugin.SXNGPlugin:
+    active: true
+  # searx.plugins.self_info.SXNGPlugin:
+  #   active: true
+  # searx.plugins.tracker_url_remover.SXNGPlugin:
+  #   active: true
+  # searx.plugins.unit_converter.SXNGPlugin:
+  #   active: true
+
+  # FIXME: not enabled in the past
+
+  # searx.plugins.hostnames.SXNGPlugin:
+  #   active: true
+  # searx.plugins.oa_doi_rewrite.SXNGPlugin:
+  #   active: true
+  # searx.plugins.tor_check.SXNGPlugin:
+  #   active: true
+
+  # custom plugins
+  #
+  # mypackage.mymodule.MyPlugin:
+  #   active: false
+
 
 # Configuration of the "Hostnames plugin":
 #

@@ -40,12 +40,13 @@ trackers = [
 ]
 
 # piratebay specific type-definitions
-search_types = {"files": "0", "music": "100", "videos": "200"}
+piratebay_search_type = "files"
+_search_types = {"files": "0", "music": "100", "videos": "200"}
 
 
 # do search-request
 def request(query, params):
-    search_type = search_types.get(params["category"], "0")
+    search_type = _search_types.get(piratebay_search_type, "0")
 
     params["url"] = search_url.format(search_term=quote(query), search_type=search_type)
 

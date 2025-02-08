@@ -24,7 +24,7 @@
 </h4>{{- '' -}}
 <div class="selectable_url">{{- '' -}}
   <pre>
-    {{- url_for('index', _external=True) -}}?preferences={{- preferences_url_params|e -}}
+    {{- url_for('index', _external=True) -}}?pref_url_params={{- pref_url_params|e -}}
     {%- raw -%}&amp;q=%s{%- endraw -%}
   </pre>{{- '' -}}
 </div>{{- '' -}}
@@ -36,7 +36,7 @@
 </h4>{{- '' -}}
 <div class="selectable_url">{{- '' -}}
   <pre>
-    {{- url_for('preferences', _external=True) -}}?preferences={{- preferences_url_params|e -}}{{- '' -}}
+    {{- url_for('preferences', _external=True) -}}?pref_url_params={{- pref_url_params|e -}}{{- '' -}}
   </pre>{{- '' -}}
 </div>{{- '' -}}
 <p class="small_font">
@@ -48,10 +48,10 @@
 <div id="copy-hash-container">{{- '' -}}
   <div class="selectable_url">{{- '' -}}
     <pre>
-      {{- preferences_url_params|e }}
+      {{- pref_url_params|e }}
     </pre>{{- '' -}}
   </div>
-  <button id="copy-hash" class="button" data-hash="{{- preferences_url_params|e -}}" data-copied-text="{{- _('Copied') -}}">{{- _('Copy') -}}</button>
+  <button id="copy-hash" class="button" data-hash="{{- pref_url_params|e -}}" data-copied-text="{{- _('Copied') -}}">{{- _('Copy') -}}</button>
 </div>
 <h4>
   {{- _('Insert copied preferences hash (without URL) to restore') -}}:{{- '' -}}

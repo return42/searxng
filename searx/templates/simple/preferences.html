@@ -27,26 +27,15 @@
   {%- endif -%}
 {%- endmacro -%}
 
-{%- macro checkbox_onoff_reversed(name, checked, labelledby) -%}
-  <input type="checkbox" {{- ' ' -}}
-         name="{{ name }}" {{- ' ' -}}
-         id="{{ name }}" {{- ' ' -}}
-         {%- if labelledby -%} aria-labelledby="{{ labelledby }}"{{- ' ' -}}{%- endif -%}
-         class="checkbox-onoff reversed-checkbox"{{- ' ' -}}
-         {%- if checked -%} checked{%- endif -%}>
-{%- endmacro -%}
-
 {%- macro plugin_preferences(section) -%}
   {%- for plugin in plugins_storage -%}
     {%- if plugin.preference_section == section -%}
+      {%- set box_name = 'plugin_' + plugin.id  -%}
+      {%- set labelledby = 'plugin_labelledby_' + plugin.id  -%}
       <fieldset>{{- '' -}}
-	<legend>{{ _(plugin.name) }}</legend>{{- '' -}}
-	<div class="value">
-	  {{- checkbox_onoff_reversed('plugin_' + plugin.id, plugin.id not in allowed_plugins, 'plugin_labelledby' + plugin.id) -}}
-	</div>{{- '' -}}
-	<div class="description" id="{{ 'plugin_labelledby' + plugin.id }}">
-	  {{- _(plugin.description) -}}
-	</div>{{- '' -}}
+        <legend>{{ _(plugin.name) }}</legend>{{- '' -}}
+        <div class="value">{{- checkbox_onoff(box_name, plugin.id in PREF.req_plugins, labelledby) -}}</div>{{- '' -}}
+        <div class="description" id="{{ plugin_labelledby }}">{{ _(plugin.description)}}</div>{{- '' -}}
       </fieldset>
     {%- endif -%}
   {%- endfor -%}
@@ -143,7 +132,7 @@
     </td>
   {%- else -%}
     <td class="{{ label }}">{% if r %}<span>{{ r }}</span>
-  {%- endif -%}
+    {%- endif -%}
     </td>
   {%- endif -%}
 {%- endmacro -%}
@@ -161,89 +150,73 @@
     {# tab: general #}
 
     {{- tab_header('maintab', 'general', _('General'), True) -}}
-    {%- if 'categories' not in locked_preferences -%}
+    {%- if not PREF["categories"].locked) -%}
       <fieldset>
         <legend>{{- _('Default categories') -}}</legend>
         {% set display_tooltip = false %}
         {% include 'simple/categories.html' %}
       </fieldset>
     {%- endif -%}
-    {%- if 'language' not in locked_preferences -%}
-      {%- include 'simple/preferences/language.html' -%}
-    {% endif %}
-    {%- if 'autocomplete' not in locked_preferences -%}
-      {%- include 'simple/preferences/autocomplete.html' -%}
-    {%- endif -%}
-    {%- if 'favicon' not in locked_preferences -%}
-      {%- include 'simple/preferences/favicon.html' -%}
-    {%- endif -%}
-    {% if 'safesearch' not in locked_preferences %}
-      {%- include 'simple/preferences/safesearch.html' -%}
-    {%- endif -%}
+
+    {% if not PREF["search_locale_tag"].locked %}{{ choice_drop_down(PREF["search_locale_tag"]) }}{% endif -%}
+    {% if not PREF["autocomplete"].locked %}{{ choice_drop_down(PREF["autocomplete"]) }}{% endif -%}
+    {% if not PREF["favicon"].locked -%}{{ choice_drop_down(PREF["favicon"]) }}{% endif -%}
+    {% if not PREF["safesearch"].locked -%}{{ choice_drop_down(PREF["safesearch"]) }}{% endif -%}
+
     {%- include 'simple/preferences/tokens.html' -%}
-    {{- plugin_preferences('general') -}}
+    {{- pluginpreferenceserences('general') -}}
 
-
-    {%- if 'doi_resolver' not in locked_preferences %}
-      {%- include 'simple/preferences/doi_resolver.html' -%}
+    {%- if not PREF["doi_resolver"].locked -%}
+      <div class="pref-group">{{- _('Digital Object Identifier (DOI)') -}}</div>
+      {{- pluginpreferenceserences('general/doi_resolver') -}}
+      {{ choice_drop_down(PREF["doi_resolver"]) }}
     {%- endif -%}
     {{- tab_footer() -}}
 
     {# tab: ui #}
 
     {{- tab_header('maintab', 'ui', _('User interface')) -}}
-    {%- if 'locale' not in locked_preferences -%}
-      {%- include 'simple/preferences/ui_locale.html' -%}
+    {% if not PREF["ui_locale_tag"].locked -%}{{ choice_drop_down(PREF["ui_locale_tag"]) }}{% endif -%}
+    {% if not PREF["theme"].locked -%}
+      {{ choice_drop_down(PREF["theme"]) }}
+      {{ choice_drop_down(PREF["simple_style"]) }}
     {%- endif -%}
-    {%- if 'theme' not in locked_preferences -%}
-      {%- include 'simple/preferences/theme.html' -%}
-    {%- endif -%}
-    {%- if 'results_on_new_tab' not in locked_preferences -%}
-      {%- include 'simple/preferences/results_on_new_tab.html' -%}
-    {%- endif -%}
-    {%- if 'infinite_scroll' not in locked_preferences -%}
-      {%- include 'simple/preferences/infinite_scroll.html' -%}
-    {%- endif -%}
-    {%- if 'search_on_category_select' not in locked_preferences -%}
-      {%- include 'simple/preferences/search_on_category_select.html' -%}
-    {%- endif -%}
-    {%- include 'simple/preferences/hotkeys.html' -%}
+
+    {{ bool_checkbox(PREF["center_alignment"]) }}
+
+    {% if not PREF["results_on_new_tab"].locked -%}{{ bool_checkbox(PREF["results_on_new_tab"]) }}{% endif -%}
+    {% if not PREF["infinite_scroll"].locked -%}{{ bool_checkbox(PREF["infinite_scroll"]) }}{% endif -%}
+    {% if not PREF["search_on_category_select"].locked -%}{{ bool_checkbox(PREF["search_on_category_select"]) }}{% endif -%}
+
+    {{ choice_drop_down(PREF["hotkeys"]) }}
+    {{ choice_drop_down(PREF["url_formatting"]) }}
+
     {%- include 'simple/preferences/urlformatting.html' -%}
-    {{- plugin_preferences('ui') -}}
+    {{- pluginpreferenceserences('ui') -}}
     {{- tab_footer() -}}
 
     {# tab: privacy #}
 
     {{- tab_header('maintab', 'privacy', _('Privacy')) -}}
-    {%- if 'method' not in locked_preferences -%}
-      {%- include 'simple/preferences/method.html' -%}
-    {%- endif -%}
-    {%- if 'image_proxy' not in locked_preferences -%}
-      {%- include 'simple/preferences/image_proxy.html' -%}
-    {%- endif -%}
-    {%- if 'query_in_title' not in locked_preferences -%}
-      {%- include 'simple/preferences/query_in_title.html' -%}
-    {%- endif -%}
+    {% if not PREF["method"].locked -%}{{ choice_drop_down(PREF["method"]) }}{% endif -%}
+    {% if not PREF["image_proxy"].locked -%}{{ bool_checkbox(PREF["image_proxy"]) }}{% endif -%}
+    {% if not PREF["query_in_title"].locked -%}{{ bool_checkbox(PREF["query_in_title"]) }}{% endif -%}
     {{- plugin_preferences('privacy') -}}
     {{- tab_footer() -}}
 
     {# tab: enignes #}
 
     {{- tab_header('maintab', 'engines', _('Engines')) -}}
-    <p>
-      {{- _('Currently used search engines') -}}
-    </p>
+    <p>{{ _('Currently used search engines') }}</p>
     {{- tabs_open() -}}
     {%- include 'simple/preferences/engines.html' -%}
     {{- tabs_close() -}}
     {{- tab_footer() -}}
 
-    {# tab: query #}
+    {# tab: special queries #}
 
     {{- tab_header('maintab', 'query', _('Special Queries')) -}}
-    {%- if answer_storage -%}
-      {%- include 'simple/preferences/answerers.html' -%}
-    {%- endif -%}
+    {%- include 'simple/preferences/special_queries.html' -%}
     {{- tab_footer() -}}
 
     {# tab: cookies #}
