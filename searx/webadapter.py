@@ -3,13 +3,19 @@
 
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple
+from searx import get_setting
 from searx.exceptions import SearxParameterException
 from searx.webutils import VALID_LANGUAGE_CODE
 from searx.query import RawTextQuery
 from searx.engines import categories, engines
 from searx.search import SearchQuery, EngineRef
-from searx.preferences import Preferences, is_locked
+from searx.preferences import Preferences
 from searx.utils import detect_language
+
+
+def is_locked(pref_name: str):
+    """Checks if a given setting name is locked by settings.yml"""
+    return pref_name in get_setting("preferences.lock", [])
 
 
 # remove duplicate queries.

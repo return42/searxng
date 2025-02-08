@@ -24,7 +24,9 @@ from __future__ import annotations
 
 __all__ = ["SXNG_Request", "sxng_request", "SXNG_Response"]
 
+import timeit
 import typing
+
 import flask
 import httpx
 
@@ -38,8 +40,10 @@ class SXNG_Request(flask.Request):
     *this* class definition, see type cast :py:obj:`sxng_request`.
     """
 
-    user_plugins: list[str]
-    """list of searx.plugins.Plugin.id (the id of the plugins)"""
+    # FIXME .. should no longer be needed ..
+    # req_plugins: list[str]
+    # """List of plugin IDs (:py:obj:`searx.plugins.Plugin.id`) activated in the
+    # request."""
 
     preferences: "searx.preferences.Preferences"
     """The prefernces of the request."""
@@ -61,6 +65,30 @@ class SXNG_Request(flask.Request):
     timings: list["searx.results.Timing"]
     """A list of :py:obj:`searx.results.Timing` of the engines, calculatid in
     and hold by :py:obj:`searx.results.ResultContainer.timings`."""
+
+    form: dict[str, str]
+    """flask.request.form_ is of type ImmutableMultiDict_, to merge GET, POST
+    vars we need a (mutable) python dict.
+
+    _flask.request.form:
+        https://flask.palletsprojects.com/en/stable/api/#flask.Request.form
+    _ImmutableMultiDict:
+        https://werkzeug.palletsprojects.com/en/stable/datastructures/#werkzeug.datastructures.ImmutableMultiDict
+    """
+
+    @staticmethod
+    def init(preferences: "searx.preferences.Preferences"):
+        sxng_request.preferences = preferences
+        sxng_request.start_time = timeit.default_timer()  # pylint: disable=assigning-non-slot
+        sxng_request.render_time = 0  # pylint: disable=assigning-non-slot
+        sxng_request.timings = []  # pylint: disable=assigning-non-slot
+        sxng_request.errors = []  # pylint: disable=assigning-non-slot
+
+        # merge GET, POST vars
+        sxng_request.form = dict(sxng_request.form.items())  # type: ignore
+        for k, v in sxng_request.args.items():
+            if k not in sxng_request.form:
+                sxng_request.form[k] = v
 
 
 #: A replacement for :py:obj:`flask.request` with type cast :py:`SXNG_Request`.

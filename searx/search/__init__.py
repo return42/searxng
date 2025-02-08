@@ -179,20 +179,10 @@ class Search:
 class SearchWithPlugins(Search):
     """Inherit from the Search class, add calls to the plugins."""
 
-    __slots__ = 'user_plugins', 'request'
-
-    def __init__(self, search_query: SearchQuery, request: SXNG_Request, user_plugins: list[str]):
+    def __init__(self, search_query: SearchQuery, sxng_request: SXNG_Request):
         super().__init__(search_query)
-        self.user_plugins = user_plugins
         self.result_container.on_result = self._on_result
-        # pylint: disable=line-too-long
-        # get the "real" request to use it outside the Flask context.
-        # see
-        # * https://github.com/pallets/flask/blob/d01d26e5210e3ee4cbbdef12f05c886e08e92852/src/flask/globals.py#L55
-        # * https://github.com/pallets/werkzeug/blob/3c5d3c9bd0d9ce64590f0af8997a38f3823b368d/src/werkzeug/local.py#L548-L559
-        # * https://werkzeug.palletsprojects.com/en/2.0.x/local/#werkzeug.local.LocalProxy._get_current_object
-        # pylint: enable=line-too-long
-        self.request = request._get_current_object()
+        self.request = sxng_request
 
     def _on_result(self, result):
         return searx.plugins.STORAGE.on_result(self.request, self, result)
