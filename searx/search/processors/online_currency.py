@@ -35,11 +35,11 @@ class OnlineCurrencyProcessor(OnlineProcessor):
 
     engine_type = 'online_currency'
 
-    def get_params(self, search_query, engine_category):
+    def get_params(self, search_query):
         """Returns a set of :ref:`request params <engine request online_currency>`
         or ``None`` if search query does not match to :py:obj:`parser_re`."""
 
-        params = super().get_params(search_query, engine_category)
+        params = super().get_params(search_query)
         if params is None:
             return None
 

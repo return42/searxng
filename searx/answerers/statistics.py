@@ -45,7 +45,7 @@ class SXNGAnswerer(Answerer):
         if len(parts) < 2:
             return results
 
-        ui_locale = babel.Locale.parse(sxng_request.preferences.get_value('locale'), sep='-')
+        ui_locale = babel.Locale.parse(sxng_request.preferences.value('locale'), sep='-')
 
         try:
             args = [babel.numbers.parse_decimal(num, ui_locale, numbering_system="latn") for num in parts[1:]]

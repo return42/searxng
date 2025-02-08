@@ -1,0 +1,46 @@
+{% from 'simple/icons.html' import icon_big %}
+{% set icons = {
+    'apps': 'appstore',
+    'dictionaries': 'book',
+    'files': 'file-tray-full',
+    'general': 'search',
+    'images': 'image',
+    'it': 'layers',
+    'map': 'location',
+    'music': 'musical-notes',
+    'news': 'newspaper',
+    'radio': 'radio',
+    'science': 'school',
+    'social media': 'people',
+    'TV': 'tv',
+    'videos': 'play',
+  }
+  comp = PREF["categories"]
+%}
+<div id="categories" class="search_categories">
+  <div id="categories_container">
+    {% if not PREF["search_on_category_select"].value %}
+
+      {% for name, selected, description  in comp.menu_options() %}
+        <div class="category category_checkbox">
+          <input type="checkbox" id="{{comp.item_id(name) }}" name="{{comp.item_id(name) }}" {% if selected %} checked {% endif %}>
+          <label for="{{comp.item_id(name) }}" class="tooltips">{{ icon_big(icons.get(name,"globe") }}
+            <div class="category_name">{{ _(name) }}</div>
+          </label>
+        </div>
+      {% endfor %}
+      {% if display_tooltip %}<div class="help">{{ _('Click on the magnifier to perform search') }}</div>{% endif %}
+
+    {% else -%}
+
+      {% for name, selected, description  in comp.menu_options() -%}
+        <button type="submit" name="{{ comp.item_id(name) }}" class="category category_button {% if selected %}selected{% endif %}">
+          {{ icon_big(icons.get(name,"globe") }}
+          <div class="category_name">{{ _(name) }}</div>
+        </button>
+      {% endfor %}
+      <input name="categories" id="selected-categories" type="hidden">
+
+    {% endif %}
+  </div>
+</div>

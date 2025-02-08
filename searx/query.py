@@ -1,16 +1,18 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # pylint: disable=invalid-name, missing-module-docstring, missing-class-docstring
-
 from __future__ import annotations
+
+__all__ = ["RawTextQuery"]
+
 from abc import abstractmethod, ABC
 import re
 
-from searx import settings
+import searx.engines
+
+from searx import get_setting
 from searx.sxng_locales import sxng_locales
-from searx.engines import categories, engines, engine_shortcuts
 from searx.external_bang import get_bang_definition_and_autocomplete
-from searx.search import EngineRef
-from searx.webutils import VALID_LANGUAGE_CODE
+from searx.client import VALID_LANGUAGE_CODE
 
 
 class QueryPartParser(ABC):
@@ -19,15 +21,15 @@ class QueryPartParser(ABC):
 
     @staticmethod
     @abstractmethod
-    def check(raw_value):
+    def check(raw_value) -> bool:
         """Check if raw_value can be parsed"""
 
-    def __init__(self, raw_text_query, enable_autocomplete):
+    def __init__(self, raw_text_query: RawTextQuery, enable_autocomplete):
         self.raw_text_query = raw_text_query
         self.enable_autocomplete = enable_autocomplete
 
     @abstractmethod
-    def __call__(self, raw_value):
+    def __call__(self, raw_value) -> bool:
         """Try to parse raw_value: set the self.raw_text_query properties
 
         return True if raw_value has been parsed
@@ -41,7 +43,18 @@ class QueryPartParser(ABC):
             self.raw_text_query.autocomplete_list.append(value)
 
 
-class TimeoutParser(QueryPartParser):
+class Timeout(QueryPartParser):
+    """``<`` set timeout
+
+    For values below 100, the unit is seconds (``<3`` = 3sec timeout)::
+
+      <3 the quick brown fox
+
+    For values from 100, the unit is milliseconds (``<850`` = 850ms timeout )
+
+      <850 the quick brown fox
+    """
+
     @staticmethod
     def check(raw_value):
         return raw_value[0] == '<'
@@ -70,7 +83,16 @@ class TimeoutParser(QueryPartParser):
             self._add_autocomplete(suggestion)
 
 
-class LanguageParser(QueryPartParser):
+class SearchLocale(QueryPartParser):
+    """``:`` select language
+
+    To select language filter use a `:` prefix.  To give an example:
+
+    Search Wikipedia by a custom language::
+
+      !wp Wau Holland :fr
+    """
+
     @staticmethod
     def check(raw_value):
         return raw_value[0] == ':'
@@ -117,10 +139,11 @@ class LanguageParser(QueryPartParser):
         return found
 
     def _autocomplete(self, value):
+        search_languages: list = get_setting("search.languages")
         if not value:
             # show some example queries
-            if len(settings['search']['languages']) < 10:
-                for lang in settings['search']['languages']:
+            if len(search_languages) < 10:
+                for lang in search_languages:
                     self.raw_text_query.autocomplete_list.append(':' + lang)
             else:
                 for lang in [":en", ":en_us", ":english", ":united_kingdom"]:
@@ -128,7 +151,7 @@ class LanguageParser(QueryPartParser):
             return
 
         for lc in sxng_locales:
-            if lc[0] not in settings['search']['languages']:
+            if lc[0] not in search_languages:
                 continue
             lang_id, lang_name, country, english_name, _flag = map(str.lower, lc)
 
@@ -149,7 +172,22 @@ class LanguageParser(QueryPartParser):
                 self._add_autocomplete(':' + country.replace(' ', '_'))
 
 
-class ExternalBangParser(QueryPartParser):
+class ExternalBang(QueryPartParser):
+    """``!!<bang>`` external bangs
+
+    SearXNG supports the external bangs from DuckDuckGo_.  To directly jump to a
+    external search page use the `!!` prefix.  To give an example: search
+    Wikipedia by a custom language (fr, de)::
+
+      !!wfr Wau Holland
+      !!wde Wau Holland
+
+    Please note, your search will be performed directly in the external search
+    engine, SearXNG cannot protect your privacy on this.
+
+    _DuckDuckGo: https://duckduckgo.com/bang
+    """
+
     @staticmethod
     def check(raw_value):
         return raw_value.startswith('!!') and len(raw_value) > 2
@@ -177,6 +215,28 @@ class ExternalBangParser(QueryPartParser):
 
 
 class BangParser(QueryPartParser):
+    """``!`` select engine and category
+
+    To set category and/or engine names use a `!` prefix.  To give a few
+    examples: search in Wikipedia for **paris**::
+
+      !wp paris
+      !wikipedia paris
+
+    Search in category **map** for **paris**::
+
+      !map paris
+
+    Image search::
+
+      !images Wau Holland
+
+    Abbreviations of the engines and languages are also accepted.
+    Engine/category modifiers are chain able and inclusive.  E.g. with ``!map
+    !ddg !wp paris`` search in map category and DuckDuckGo_ and Wikipedia for
+    **paris**.
+    """
+
     @staticmethod
     def check(raw_value):
         # make sure it's not any bang with double '!!'
@@ -185,60 +245,67 @@ class BangParser(QueryPartParser):
     def __call__(self, raw_value):
         value = raw_value[1:].replace('-', ' ').replace('_', ' ')
         found = self._parse(value) if len(value) > 0 else False
-        if found and raw_value[0] == '!':
-            self.raw_text_query.specific = True
         if self.enable_autocomplete:
             self._autocomplete(raw_value[0], value)
         return found
 
-    def _parse(self, value):
+    def _parse(self, bang):
         # check if prefix is equal with engine shortcut
-        if value in engine_shortcuts:  # pylint: disable=consider-using-get
-            value = engine_shortcuts[value]
+        bang = searx.engines.engine_shortcuts.get(bang, bang)
 
         # check if prefix is equal with engine name
-        if value in engines:
-            self.raw_text_query.enginerefs.append(EngineRef(value, 'none'))
+        if bang in searx.engines.engines and bang not in self.raw_text_query.disabled_engines:
+            self.raw_text_query.engine_names.add(bang)
             return True
 
         # check if prefix is equal with category name
-        if value in categories:
-            # using all engines for that search, which
-            # are declared under that category name
-            self.raw_text_query.enginerefs.extend(
-                EngineRef(engine.name, value)
-                for engine in categories[value]
-                if (engine.name, value) not in self.raw_text_query.disabled_engines
-            )
+        from_categ = searx.engines.categories.get(bang, [])
+        for eng in from_categ:
+            if eng.name not in self.raw_text_query.disabled_engines:
+                self.raw_text_query.engine_names.add(eng.name)
+        if from_categ:
             return True
-
         return False
 
     def _autocomplete(self, first_char, value):
         if not value:
             # show some example queries
             for suggestion in ['images', 'wikipedia', 'osm']:
-                if suggestion not in self.raw_text_query.disabled_engines or suggestion in categories:
+                if suggestion not in self.raw_text_query.disabled_engines or suggestion in searx.engines.categories:
                     self._add_autocomplete(first_char + suggestion)
             return
 
         # check if query starts with category name
-        for category in categories:
+        for category in searx.engines.categories:
             if category.startswith(value):
                 self._add_autocomplete(first_char + category.replace(' ', '_'))
 
         # check if query starts with engine name
-        for engine in engines:
+        for engine in searx.engines.engines:
             if engine.startswith(value):
                 self._add_autocomplete(first_char + engine.replace(' ', '_'))
 
         # check if query starts with engine shortcut
-        for engine_shortcut in engine_shortcuts:
+        for engine_shortcut in searx.engines.engine_shortcuts:
             if engine_shortcut.startswith(value):
                 self._add_autocomplete(first_char + engine_shortcut)
 
 
 class FeelingLuckyParser(QueryPartParser):
+    """``!!`` automatic redirect
+
+    When mentioning ``!!`` within the search query (separated by spaces), you
+    will automatically be redirected to the first result.  This behavior is
+    comparable to the "Feeling Lucky" feature from DuckDuckGo.  To give an
+    example: search for a query and get redirected to the first result::
+
+      !! Wau Holland
+
+    Please keep in mind that the result you are being redirected to can't become
+    verified for being trustworthy, SearXNG cannot protect your personal privacy
+    when using this feature.  Use it at your own risk.
+    """
+
     @staticmethod
     def check(raw_value):
         return raw_value == '!!'
@@ -249,12 +316,12 @@ class FeelingLuckyParser(QueryPartParser):
 
 
 class RawTextQuery:
-    """parse raw text query (the value from the html input)"""
+    """Parse raw text query (the value from the html input)"""
 
     PARSER_CLASSES = [
-        TimeoutParser,  # force the timeout
-        LanguageParser,  # force a language
-        ExternalBangParser,  # external bang (must be before BangParser)
+        Timeout,  # force the timeout
+        SearchLocale,  # force a language
+        ExternalBang,  # external bang (must be before BangParser)
         BangParser,  # force an engine or category
         FeelingLuckyParser,  # redirect to the first link in the results list
     ]
@@ -262,26 +329,29 @@ class RawTextQuery:
     def __init__(self, query: str, disabled_engines: list):
         assert isinstance(query, str)
         # input parameters
-        self.query = query
+        self.query: str = query
         self.disabled_engines = disabled_engines if disabled_engines else []
         # parsed values
-        self.enginerefs = []
-        self.languages = []
-        self.timeout_limit = None
-        self.external_bang = None
-        self.specific = False
+        self.languages: list[str] = []
+        self.timeout_limit: float | None = None
+        self.external_bang: str | None = None
         self.autocomplete_list = []
         # internal properties
-        self.query_parts = []  # use self.getFullQuery()
+        self.query_parts: list[str] = []  # use self.getFullQuery()
         self.user_query_parts = []  # use self.getQuery()
-        self.autocomplete_location = None
-        self.redirect_to_first_result = False
+        self.autocomplete_location: tuple[list[str], int] | None = None
+        self.redirect_to_first_result: bool = False
+        self.engine_names: set[str] = set()
         self._parse_query()
 
+    @property
+    def search_locale_tag(self) -> str:
+        """SearXNG locale tag from search term."""
+        return self.languages[-1] if len(self.languages) else ""
+
     def _parse_query(self):
-        """
-        parse self.query, if tags are set, which
-        change the search engine or search-language
+        """parse self.query, if tags are set, which change the search engine or
+        search-language
         """
 
         # split query, including whitespaces
@@ -299,7 +369,8 @@ class RawTextQuery:
             special_part = False
             for parser_class in RawTextQuery.PARSER_CLASSES:
                 if parser_class.check(query_part):
-                    special_part = parser_class(self, i == autocomplete_index)(query_part)
+                    parser = parser_class(self, i == autocomplete_index)
+                    special_part = parser(query_part)
                     break
 
             # append query part to query_part list
@@ -310,8 +381,9 @@ class RawTextQuery:
         self.autocomplete_location = last_index_location
 
     def get_autocomplete_full_query(self, text):
-        qlist, position = self.autocomplete_location
-        qlist[position] = text
+        if self.autocomplete_location is not None:
+            qlist, position = self.autocomplete_location
+            qlist[position] = text
         return self.getFullQuery()
 
     def changeQuery(self, query):
@@ -341,8 +413,6 @@ class RawTextQuery:
             + f"languages={self.languages!r} "
             + f"timeout_limit={self.timeout_limit!r} "
             + f"external_bang={self.external_bang!r} "
-            + f"specific={self.specific!r} "
-            + f"enginerefs={self.enginerefs!r}\n  "
             + f"autocomplete_list={self.autocomplete_list!r}\n  "
             + f"query_parts={self.query_parts!r}\n  "
             + f"user_query_parts={self.user_query_parts!r} >\n"

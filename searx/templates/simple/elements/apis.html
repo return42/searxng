@@ -4,15 +4,15 @@
     <div class="wrapper">
       {%- for output_type in search_formats -%}
         <div class="left">
-          <form method="{{ method or 'POST' }}" action="{{ url_for('search') }}">
+          <form method="{{ PREF["method"].str }}" action="{{ url_for('search') }}">
             <input type="hidden" name="q" value="{{ q|e }}">
-            {%- for category in selected_categories -%}
+            {%- for category in PREF["categories"].value -%}
               <input type="hidden" name="category_{{ category }}" value="1">
             {%- endfor -%}
-            <input type="hidden" name="pageno" value="{{ pageno }}">
-            <input type="hidden" name="language" value="{{ current_language }}">
+            <input type="hidden" name="pageno" value="{{ CLIENT.pageno }}">
+            <input type="hidden" name="language" value="{{ CLIENT.search_locale_tag }}">
             <input type="hidden" name="time_range" value="{{ time_range }}">
-            <input type="hidden" name="safesearch" value="{{ safesearch }}">
+            <input type="hidden" name="safesearch" value="{{ PREF["safesearch"].str }}">
             <input type="hidden" name="format" value="{{ output_type }}">
             {%- if timeout_limit -%}
               <input type="hidden" name="timeout_limit" value="{{ timeout_limit|e }}" >
