@@ -3,14 +3,14 @@
 """
 from __future__ import annotations
 
-import babel
 from flask_babel import gettext
 
+import searx.client
 import searx.engines
 import searx.locales
 import searx.plugins
 
-from searx.extended_types import sxng_request, SXNG_Request
+from searx.extended_types import sxng_request
 from searx import logger, get_setting, autocomplete, favicons
 from searx.enginelib import Engine
 from searx.engines import DEFAULT_CATEGORY
@@ -166,15 +166,14 @@ def sxng_pref_list():
 class Preferences(Form):
     """A collection of prefernces."""
 
-    client: HTTPClient
-
-    def __init__(self):
-        self.client = HTTPClient()
+    def __init__(self, client: searx.client.HTTPClient|None = None):
+        self.client = client
         super().__init__("pref", sxng_pref_list)
         self.lock(get_setting("preferences.lock", []))
 
     def process_request(self):
-        self.client = HTTPClient.from_http_request(sxng_request)
+        if self.client is None:
+            self.client = searx.client.HTTPClient.from_http_request(sxng_request)
 
         try:
             self.parse_cookies(sxng_request.cookies)
@@ -244,60 +243,3 @@ class Preferences(Form):
             if field.value:
                 ret_val.append(plg_id)
         return ret_val
-
-
-#     XXXXXXXXX FIXME .. see searx.webadapter !!!
-
-
-class HTTPClient:
-    """Container to assemble client prefferences and settings."""
-
-    # FIXME !!! searx.webapp.get_client_settings should be moved into this class !!!
-
-    locale: babel.Locale | None
-    """Locale preferred by the client."""
-
-    def __init__(self, locale: babel.Locale | None = None):
-        self.locale = locale
-
-    @property
-    def language_tag(self) -> str:
-        if self.locale:
-            return searx.locales.language_tag(self.locale)
-        return "en"
-
-    @property
-    def region_tag(self) -> str:
-        if self.locale and self.locale.territory:
-            return searx.locales.region_tag(self.locale)
-        return "en-US"
-
-    @classmethod
-    def from_http_request(cls, http_request: SXNG_Request):
-        """Build ClientPref object from HTTP request.
-
-        - `Accept-Language used for locale setting
-          <https://www.w3.org/International/questions/qa-accept-lang-locales.en>`__
-
-        """
-        al_header = http_request.headers.get("Accept-Language")
-        if not al_header:
-            return cls(locale=None)
-
-        pairs = []
-        for l in al_header.split(','):
-            # fmt: off
-            lang, qvalue = [_.strip() for _ in (l.split(';') + ['q=1',])[:2]]
-            # fmt: on
-            try:
-                qvalue = float(qvalue.split('=')[-1])
-                locale = babel.Locale.parse(lang, sep='-')
-            except (ValueError, babel.core.UnknownLocaleError):
-                continue
-            pairs.append((locale, qvalue))
-
-        locale = None
-        if pairs:
-            pairs.sort(reverse=True, key=lambda x: x[1])
-            locale = pairs[0][0]
-        return cls(locale=locale)

@@ -56,6 +56,7 @@ from searx import (
     searx_debug,
 )
 
+import searx.client
 from searx import infopage
 from searx import limiter
 from searx.botdetection import link_token
@@ -437,7 +438,8 @@ def render(template_name: str, **kwargs):
 
 @app.before_request
 def pre_request():
-    prefs = Preferences()
+    client = searx.client.HTTPClient.from_http_request()
+    prefs = Preferences(client)
     prefs.process_request()
     SXNG_Request.init(prefs)
 
