@@ -94,7 +94,6 @@ from searx.utils import gen_useragent, dict_subset
 from searx.version import VERSION_STRING, GIT_URL, GIT_BRANCH
 from searx.query import RawTextQuery
 from searx.plugins.oa_doi_rewrite import get_doi_resolver
-from searx.preferences import Preferences
 
 import searx.answerers
 import searx.plugins

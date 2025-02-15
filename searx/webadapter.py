@@ -53,35 +53,6 @@ def validate_engineref_list(
 
 
 
-def parse_lang(preferences: Preferences, form: Dict[str, str], raw_text_query: RawTextQuery) -> str:
-    if is_locked('language'):
-        return preferences.get_value('language')
-    # get language
-    # set specific language if set on request, query or preferences
-    # search with multiple languages is not supported (by most engines)
-    if len(raw_text_query.languages):
-        query_lang = raw_text_query.languages[-1]
-    elif 'language' in form:
-        query_lang = form.get('language')
-    else:
-        query_lang = preferences.get_value('language')
-
-    # check language
-    if not VALID_LANGUAGE_CODE.match(query_lang) and query_lang != 'auto':
-        raise SearxParameterException('language', query_lang)
-
-    return query_lang
-
-
-
-
-def parse_time_range(form: Dict[str, str]) -> Optional[str]:
-    query_time_range = form.get('time_range')
-    # check time_range
-    query_time_range = None if query_time_range in ('', 'None') else query_time_range
-    if query_time_range not in (None, 'day', 'week', 'month', 'year'):
-        raise SearxParameterException('time_range', query_time_range)
-    return query_time_range
 
 
 def parse_timeout(form: Dict[str, str], raw_text_query: RawTextQuery) -> Optional[float]:

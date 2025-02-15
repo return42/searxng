@@ -169,8 +169,7 @@ def sxng_pref_list():
 class Preferences(Form):
     """A collection of prefernces."""
 
-    def __init__(self, client: searx.client.HTTPClient|None = None):
-        self.client = client
+    def __init__(self):
         super().__init__("pref", sxng_pref_list)
         self.lock(get_setting("preferences.lock", []))
 
@@ -178,9 +177,7 @@ class Preferences(Form):
     def disabled_engines(self):
         return self.components["engines"].disabled_engines
 
-    def process_request(self):
-        if self.client is None:
-            self.client = searx.client.HTTPClient.from_http_request(sxng_request)
+    def process_request(self, client: searx.client.HTTPClient):
 
         try:
             self.parse_cookies(sxng_request.cookies)
@@ -202,7 +199,7 @@ class Preferences(Form):
 
         if not self.components["language"].value:
             tag = searx.locales.match_locale(
-                self.client.language_tag,
+                client.language_tag,
                 self.components["language"].catalog,
                 fallback="en",
             )
@@ -214,7 +211,7 @@ class Preferences(Form):
 
         if not self.components["ui_locale"].value:
             tag = searx.locales.match_locale(
-                self.client.region_tag,
+                client.region_tag,
                 self.components["ui_locale"].catalog,
                 fallback="en",
             )
