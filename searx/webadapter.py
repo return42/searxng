@@ -52,12 +52,6 @@ def validate_engineref_list(
     return valid, unknown, no_token
 
 
-def parse_pageno(form: Dict[str, str]) -> int:
-    pageno_param = form.get('pageno', '1')
-    if not pageno_param.isdigit() or int(pageno_param) < 1:
-        raise SearxParameterException('pageno', pageno_param)
-    return int(pageno_param)
-
 
 def parse_lang(preferences: Preferences, form: Dict[str, str], raw_text_query: RawTextQuery) -> str:
     if is_locked('language'):
@@ -79,24 +73,6 @@ def parse_lang(preferences: Preferences, form: Dict[str, str], raw_text_query: R
     return query_lang
 
 
-def parse_safesearch(preferences: Preferences, form: Dict[str, str]) -> int:
-    if is_locked('safesearch'):
-        return preferences.get_value('safesearch')
-
-    if 'safesearch' in form:
-        query_safesearch = form.get('safesearch')
-        # first check safesearch
-        if not query_safesearch.isdigit():
-            raise SearxParameterException('safesearch', query_safesearch)
-        query_safesearch = int(query_safesearch)
-    else:
-        query_safesearch = preferences.get_value('safesearch')
-
-    # safesearch : second check
-    if query_safesearch < 0 or query_safesearch > 2:
-        raise SearxParameterException('safesearch', query_safesearch)
-
-    return query_safesearch
 
 
 def parse_time_range(form: Dict[str, str]) -> Optional[str]:

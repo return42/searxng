@@ -72,6 +72,9 @@ class EngineMapPrefs(BoolGrp):
                 self.members[eng.name] = field
                 self.categories[eng_categ] = field
 
+    @property
+    def disabled_engines(self):
+        return [ eng_name for eng_name, field in self.members.items() if not field.value ]
 
 def sxng_pref_list():
     return [
@@ -170,6 +173,10 @@ class Preferences(Form):
         self.client = client
         super().__init__("pref", sxng_pref_list)
         self.lock(get_setting("preferences.lock", []))
+
+    @property
+    def disabled_engines(self):
+        return self.components["engines"].disabled_engines
 
     def process_request(self):
         if self.client is None:

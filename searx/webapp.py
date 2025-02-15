@@ -575,7 +575,7 @@ def search():
     raw_text_query = None
     result_container = None
     try:
-        search_query, raw_text_query, _, _, selected_locale = get_search_query_from_webapp(
+        search_query, raw_text_query, _, _, selected_locale = get_search_query_from_webappXXXXXXXXXXX(
             sxng_request.preferences, sxng_request.form
         )
         search_obj = searx.search.SearchWithPlugins(search_query, sxng_request)
