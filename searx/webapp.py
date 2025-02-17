@@ -390,8 +390,9 @@ def render(template_name: str, **kwargs):
     if locale in RTL_LOCALES and 'rtl' not in kwargs:
         kwargs['rtl'] = True
 
-    if 'current_language' not in kwargs:
-        kwargs['current_language'] = parse_lang(sxng_request.preferences, {}, RawTextQuery('', []))
+    if "active_search_locale" not in kwargs:
+        # FIXME ...
+        kwargs["active_search_locale"] = parse_lang(sxng_request.preferences, {}, RawTextQuery('', []))
 
     # values from settings
     kwargs['search_formats'] = [x for x in settings['search']['formats'] if x != 'html']
@@ -705,7 +706,7 @@ def search():
             result_container.unresponsive_engines
         ),
         current_locale = sxng_request.preferences.get_value("locale"),
-        current_language = selected_locale,
+        active_search_locale = selected_locale,
         search_language = match_locale(
             search_obj.search_query.lang,
             settings['search']['languages'],

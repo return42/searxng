@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # pylint: disable=invalid-name, missing-module-docstring, missing-class-docstring
-
 from __future__ import annotations
+
+__all__ = ["RawTextQuery"]
+
 from abc import abstractmethod, ABC
 import re
 
@@ -41,7 +43,18 @@ class QueryPartParser(ABC):
             self.raw_text_query.autocomplete_list.append(value)
 
 
-class TimeoutParser(QueryPartParser):
+class Timeout(QueryPartParser):
+    """``<`` set timeout
+
+    For values below 100, the unit is seconds (``<3`` = 3sec timeout)::
+
+      <3 the quick brown fox
+
+    For values from 100, the unit is milliseconds (``<850`` = 850ms timeout )
+
+      <850 the quick brown fox
+    """
+
     @staticmethod
     def check(raw_value):
         return raw_value[0] == '<'
@@ -70,7 +83,16 @@ class TimeoutParser(QueryPartParser):
             self._add_autocomplete(suggestion)
 
 
-class LanguageParser(QueryPartParser):
+class SearchLocale(QueryPartParser):
+    """``:`` select language
+
+    To select language filter use a `:` prefix.  To give an example:
+
+    Search Wikipedia by a custom language::
+
+      !wp Wau Holland :fr
+    """
+
     @staticmethod
     def check(raw_value):
         return raw_value[0] == ':'
@@ -149,7 +171,22 @@ class LanguageParser(QueryPartParser):
                 self._add_autocomplete(':' + country.replace(' ', '_'))
 
 
-class ExternalBangParser(QueryPartParser):
+class ExternalBang(QueryPartParser):
+    """``!!<bang>`` external bangs
+
+    SearXNG supports the external bangs from DuckDuckGo_.  To directly jump to a
+    external search page use the `!!` prefix.  To give an example: search
+    Wikipedia by a custom language (fr, de)::
+
+      !!wfr Wau Holland
+      !!wde Wau Holland
+
+    Please note, your search will be performed directly in the external search
+    engine, SearXNG cannot protect your privacy on this.
+
+    _DuckDuckGo: https://duckduckgo.com/bang
+    """
+
     @staticmethod
     def check(raw_value):
         return raw_value.startswith('!!') and len(raw_value) > 2
@@ -177,6 +214,28 @@ class ExternalBangParser(QueryPartParser):
 
 
 class BangParser(QueryPartParser):
+    """``!`` select engine and category
+
+    To set category and/or engine names use a `!` prefix.  To give a few
+    examples: search in Wikipedia for **paris**::
+
+      !wp paris
+      !wikipedia paris
+
+    Search in category **map** for **paris**::
+
+      !map paris
+
+    Image search::
+
+      !images Wau Holland
+
+    Abbreviations of the engines and languages are also accepted.
+    Engine/category modifiers are chain able and inclusive.  E.g. with ``!map
+    !ddg !wp paris`` search in map category and DuckDuckGo_ and Wikipedia for
+    **paris**.
+    """
+
     @staticmethod
     def check(raw_value):
         # make sure it's not any bang with double '!!'
@@ -239,6 +298,19 @@ class BangParser(QueryPartParser):
 
 
 class FeelingLuckyParser(QueryPartParser):
+    """``!!`` automatic redirect
+
+    When mentioning ``!!`` within the search query (separated by spaces), you
+    will automatically be redirected to the first result.  This behavior is
+    comparable to the "Feeling Lucky" feature from DuckDuckGo.  To give an
+    example: search for a query and get redirected to the first result::
+
+      !! Wau Holland
+
+    Please keep in mind that the result you are being redirected to can't become
+    verified for being trustworthy, SearXNG cannot protect your personal privacy
+    when using this feature.  Use it at your own risk.
+    """
     @staticmethod
     def check(raw_value):
         return raw_value == '!!'
@@ -249,12 +321,12 @@ class FeelingLuckyParser(QueryPartParser):
 
 
 class RawTextQuery:
-    """parse raw text query (the value from the html input)"""
+    """Parse raw text query (the value from the html input)"""
 
     PARSER_CLASSES = [
-        TimeoutParser,  # force the timeout
-        LanguageParser,  # force a language
-        ExternalBangParser,  # external bang (must be before BangParser)
+        Timeout,  # force the timeout
+        SearchLocale,  # force a language
+        ExternalBang,  # external bang (must be before BangParser)
         BangParser,  # force an engine or category
         FeelingLuckyParser,  # redirect to the first link in the results list
     ]
@@ -262,12 +334,12 @@ class RawTextQuery:
     def __init__(self, query: str, disabled_engines: list):
         assert isinstance(query, str)
         # input parameters
-        self.query = query
+        self.query: str = query
         self.disabled_engines = disabled_engines if disabled_engines else []
         # parsed values
         self.enginerefs = []
-        self.languages = []
-        self.timeout_limit = None
+        self.languages: str[] = []
+        self.timeout_limit: float|None = None
         self.external_bang = None
         self.specific = False
         self.autocomplete_list = []
@@ -277,6 +349,11 @@ class RawTextQuery:
         self.autocomplete_location = None
         self.redirect_to_first_result = False
         self._parse_query()
+
+    @property
+    def search_locale_tag(self) -> str:
+        """SearXNG locale tag from search term."""
+        return self.raw_query.languages[-1] if len(self.raw_query.languages) else ""
 
     def _parse_query(self):
         """

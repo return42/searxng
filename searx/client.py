@@ -5,13 +5,17 @@ import re
 import abc
 import babel
 from typing import Literal
+from collections import defaultdict
 
+import searx
 import searx.locales
-from searx.extended_types import sxng_request
-from searx.search import SearchQuery
-from searx.query import RawTextQuery
+
 from searx.exceptions import SearxParameterException
+from searx.extended_types import sxng_request
 from searx.preferences import Preferences
+from searx.query import RawTextQuery
+from searx.search import SearchQuery
+from searx.utils import detect_language
 
 #     XXXXXXXXX FIXME .. see searx.webadapter !!!
 
@@ -34,16 +38,16 @@ class Client(abc.ABC):
         self.raw_query = RawTextQuery(self.search_term(), self.prefs.disabled_engines)
 
     @property
-    def language_tag(self) -> str:
+    def language_tag(self) -> str|None:
         if self.locale:
             return searx.locales.language_tag(self.locale)
-        return "en"
+        return None
 
     @property
-    def region_tag(self) -> str:
+    def region_tag(self) -> str|None:
         if self.locale and self.locale.territory:
             return searx.locales.region_tag(self.locale)
-        return "en-US"
+        return None
 
     @abc.abstractmethod
     def search_term(self) -> str:
@@ -51,48 +55,35 @@ class Client(abc.ABC):
 
     @abc.abstractmethod
     def pageno(self) -> int:
-        """Page number from user input."""
+        """Page number of the search request."""
 
     @abc.abstractmethod
     def time_range(self) -> Literal["day", "week", "month", "year"]:
-        """Time range selected by the user."""
+        """Time range filter."""
 
-
+    @abc.abstractmethod
     def safesearch(self) -> int:
-        """Safesearch option selected by the user (default is taken from
-        preferences)."""
-        self.prefs.components["safesearch"].value
+        """Safesearch filter."""
 
-    def language(self) -> str:
-        """SearXNG's locale of a query comes from (*highest wins*):
+    @abc.abstractmethod
+    def ui_locale_tag(self) -> str:
+        """Language of the user interface (UI)."""
 
-        1. The user select a locale in the preferences.
-        2. The language is given by the :ref:`search-syntax` (e.g. `:zh-TW`)
-        5. Autodetection plugin is activated in the preferences and the locale
-           (only the language code / none region code) comes from the fastText's
-           language detection.
-        """
-        
-        # FIXME: .. see doc string .. in case of "auto" use detect_language !!
-        
-        
-        pref = self.prefs.components["language"]
-        if pref.locked or not len(self.raw_query.languages):
-            return pref.value
-        lang = self.raw_query.languages[-1]
-        if not VALID_LANGUAGE_CODE.match(lang) and lang != "auto":
-            raise SearxParameterException("language", lang)
-        return lang
+    @abc.abstractmethod
+    def search_locale_tag(self) -> str:
+        """SearXNG's locale tag of a search query."""
 
+    @abc.abstractmethod
+    def timeout_limit(self) -> str:
+        """Maximum timeout for the whole search request."""
 
+    @abc.abstractmethod
+    def engine_data(self):
+        pass
 
-
-
-
-
-
-
-
+    def external_bang(self) -> str:
+        """External bangs (e.g. ``!!wde`` parsed by :py:obj:`searx.query.ExternalBang`)."""
+        return self.raw_query.external_bang
 
         
     def get_search_query(self):
@@ -121,13 +112,13 @@ class Client(abc.ABC):
         return SearchQuery(
             query =  query,
             engineref_list = xxx,
-            lang = xxx,  # FIXME: this is the query language (not the UI language!)
+            lang = self.search_locale_tag(),  # this is the search locale (not UI language!)
             safesearch = self.safesearch(),
             pageno = self.pageno(),
             time_range = self.time_range(),
-            timeout_limit = xxx,
-            external_bang = xxx,
-            engine_data= xxx,
+            timeout_limit = self.timeout_limit(),
+            external_bang = self.external_bang(),
+            engine_data= self.engine_data(),
             redirect_to_first_result= xxx,
         )
 
@@ -187,7 +178,6 @@ class HTTPClient(Client):
             raise SearxParameterException("time_range", val)
         return val
 
-
     def safesearch(self) -> int:
         """Safesearch option from the HTML form (``safesearch``)."""
         pref = self.prefs.components["safesearch"]
@@ -200,29 +190,121 @@ class HTTPClient(Client):
             raise SearxParameterException("safesearch", str_val)
         return pref.str2val(str_val)
 
-    def language(self) -> str:
-        """SearXNG's locale of a query comes from (*highest wins*):
+    def ui_locale_tag(self) -> str:
+        """Language of the user interface (UI).  The preferred translation_ of
+        the user interface is determined as follows:
 
-        1. The `Accept-Language` header from user's HTTP client.
-        2. The user select a locale in the preferences.
-        3. The user select a locale from the menu in the query form (e.g. `zh-TW`)
-        4. The language is given by the :ref:`search-syntax` (e.g. `:zh-TW`)
-        5. Autodetection plugin is activated in the preferences and the locale
-           (only the language code / none region code) comes from the fastText's
-           language detection.
+        1. the user has set a locale in the preferences (``ui_locale_tag``), or
+        2. the :py:obj:`ui:default_locale <settings ui>` is set, or
+        3. the `Accept-Language` header from user's HTTP client, or
+        3. there are no preferences, no settings at all: default ``en``.
+
+        Examples of valid values:
+
+        - ``en``, ``fr``, ``de``, ``fil`` .. ``nb-NO``, ``zh-TW``
+
+        Examples for which there are no translations_:
+
+        - ``en-US``, ``fr-fr``, ``de-de``, .. ``nb``, ``zh``
+
+        _translation: https://translate.codeberg.org/projects/searxng/searxng/
+
         """
 
-        # FIXME: .. see doc string .. in case of "auto" use detect_language !!
+        for tag in [
+                self.prefs.get("ui_locale_tag", ""),
+                searx.get_setting("ui.default_locale", ""),
+                self.language_tag,
+                "en",
+        ]:
+            if tag:
+                break
+        return tag
 
-        pref = self.prefs.components["language"]
-        if pref.locked:
-            return pref.value
-        lang = sxng_request.form.get("language", None)
-        if len(self.raw_query.languages):
-            lang = self.raw_query.languages[-1]
-        if not VALID_LANGUAGE_CODE.match(lang) and lang != "auto":
-            raise SearxParameterException("language", lang)
-        return lang
+    def search_locale_tag(self) -> str:
+        """SearXNG's search language /  locale of a query comes from:
+
+        1. the locale is given by the :ref:`search-syntax`
+           (e.g. `:zh-TW` parsed by :py:obj:`searx.query.SearchLocale`), if not ..
+
+        2. the user selects a locale from the menu of the query form
+           (e.g. ``zh-TW``), if not ..
+
+        3. the user has set a locale in the preferences, if not ..
+
+        4. the :ref:`search:default_lang <settings search>` is used.  If the
+           maintainer of the instance has not made any adjustments here, the
+           value is ``auto``.
+
+        The selection options for 2. can be restricted by the setting
+        :ref:`search:languages <settings search>`.
+
+        If the locale tag from 1. 2. 3. or 4. is:
+
+        ``auto``:
+          The search term is examined to determine the preferred search language
+          (fastText).  If no preferred language can be determined from the
+          search term, the Accept-Language (:py:obj:`Client.language_tag`)
+
+        ``all``:
+          No language or locale is specified, it is up to the engines how they
+          deal with it, most engines fall back to a default and that is usually
+          `en`.
+        """
+        search_locale = ""
+        for tag in [
+                self.raw_query.search_locale_tag,
+                self.sxng_request.form.get("search_locale", ""),
+                self.prefs.get("ui_locale_tag", ""),
+                searx.get_setting("ui.default_locale", ""),
+        ]:
+            if tag:
+                search_locale = tag
+                break
+
+        if not (search_locale in ["", "auto", "all" ] or VALID_LANGUAGE_CODE.match(search_locale)):
+            raise SearxParameterException("search_locale", search_locale)
+
+        if search_locale in ["", "auto"]:
+            lang = detect_language(self.raw_query, threshold=0.8, only_search_languages=True)
+            if lang:
+                search_locale = lang
+
+        return search_locale
 
 
+    def timeout_limit(self) -> float|None:
+        """Maximum timeout for the whole search request. The timeout limit comes
+        from:
 
+        1. the timeout limit is given by the :ref:`search-syntax` (e.g. ``<3``
+           or ``<200`` parsed by :py:obj:`searx.query.Timeout`), if not ..
+
+        2. the ``timeout_limit`` element in the HTML form, a string with a float
+           (e.g. "3" or "0.2" seconds).
+
+        If there is no timeout limit, the return value is ``None`` and the
+        timeout is determined by the maximum timeout of all engines involved in
+        the search.
+        """
+        limit = self.raw_query.timeout_limit
+        if limit is None:
+            limit = self.sxng_request.form.get("timeout_limit")
+            try:
+                limit = float(limit)
+            except ValueError as exc:
+                raise SearxParameterException('timeout_limit', limit) from exc
+        return limit
+
+    def engine_data(self):
+        # hack to pass engine_data from one HTTP request (page) to the next HTTP
+        # request (page), see:
+        # - searx.results.ResultContainer.engine_data
+        # - searx/templates/simple/results.html macro engine_data_form
+
+        data = defaultdict(dict)
+        for key, val in self.sxng_request.form.items():
+            if key.startswith("engine_data"):
+                _, engine, key = key.split('-')
+                data[engine][key] = val
+        return data

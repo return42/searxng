@@ -55,17 +55,6 @@ def validate_engineref_list(
 
 
 
-def parse_timeout(form: Dict[str, str], raw_text_query: RawTextQuery) -> Optional[float]:
-    timeout_limit = raw_text_query.timeout_limit
-    if timeout_limit is None:
-        timeout_limit = form.get('timeout_limit')
-
-    if timeout_limit is None or timeout_limit in ['None', '']:
-        return None
-    try:
-        return float(timeout_limit)
-    except ValueError as e:
-        raise SearxParameterException('timeout_limit', timeout_limit) from e
 
 
 def parse_category_form(query_categories: List[str], name: str, value: str) -> None:

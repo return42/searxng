@@ -113,12 +113,12 @@ def sxng_pref_list():
             default=get_setting("ui.infinite_scroll"),
         ),
         SingleChoice(
-            name="language",
+            name="search_locale_tag",  # FIXME old name was "language"
             default=get_setting("search.default_lang"),
             catalog=[""] + get_setting("search.languages"),
         ),
         SingleChoice(
-            name="ui_locale",  # FIXME old name was "locale"
+            name="ui_locale_tag",  # FIXME old name was "locale"
             default=get_setting("ui.default_locale"),
             catalog=[""] + list(searx.locales.LOCALE_NAMES.keys()),
         ),
