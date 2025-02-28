@@ -72,7 +72,7 @@ class Search:
     def search_answerers(self):
 
         results = searx.answerers.STORAGE.ask(self.search_query.query)
-        self.result_container.extend(None, results)
+        self.result_container.extend_results("answerers", results)
         return bool(results)
 
     # do search-request

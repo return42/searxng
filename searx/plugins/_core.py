@@ -292,4 +292,4 @@ class PluginStorage:
                 continue
 
             # In case of *plugins* prefix ``plugin:`` is set, see searx.result_types.Result
-            search.result_container.extend(f"plugin: {plugin.id}", results)
+            search.result_container.extend_results(f"plugin: {plugin.id}", results)

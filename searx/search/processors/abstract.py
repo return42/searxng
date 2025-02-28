@@ -107,7 +107,7 @@ class EngineProcessor(ABC):
 
     def _extend_container_basic(self, result_container, start_time, search_results):
         # update result_container
-        result_container.extend(self.engine_name, search_results)
+        result_container.extend_results(self.engine_name, search_results)
         engine_time = default_timer() - start_time
         page_load_time = get_time_for_thread()
         result_container.add_timing(self.engine_name, engine_time, page_load_time)

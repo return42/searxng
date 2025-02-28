@@ -64,11 +64,11 @@ def compare_urls(url_a, url_b):
 def merge_two_infoboxes(infobox1, infobox2):  # pylint: disable=too-many-branches, too-many-statements
     # get engines weights
     if hasattr(engines[infobox1['engine']], 'weight'):
-        weight1 = engines[infobox1['engine']].weight
+        weight1 = engines[infobox1['engine']].weight  # type: ignore
     else:
         weight1 = 1
     if hasattr(engines[infobox2['engine']], 'weight'):
-        weight2 = engines[infobox2['engine']].weight
+        weight2 = engines[infobox2['engine']].weight  # type: ignore
     else:
         weight2 = 1
 
@@ -138,7 +138,7 @@ def result_score(result, priority):
 
     for result_engine in result['engines']:
         if hasattr(engines.get(result_engine), 'weight'):
-            weight *= float(engines[result_engine].weight)
+            weight *= float(engines[result_engine].weight)  # type: ignore
 
     weight *= len(result['positions'])
     score = 0
@@ -203,7 +203,7 @@ class ResultContainer:
         self.on_result: typing.Callable = lambda _: True
         self._lock = RLock()
 
-    def extend(self, engine_name: str | None, results):  # pylint: disable=too-many-branches
+    def extend_results(self, engine_name: str, results):  # pylint: disable=too-many-branches
         if self._closed:
             return
 
