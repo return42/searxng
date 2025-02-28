@@ -201,7 +201,7 @@ class Preferences(Form):
 
             # If search language is defined neither in settings nor in
             # preferences use the browser Accept-Language header.
-            tag = searx.locales.sxng_tag(client.locale)
+            tag = searx.locales.sxng_locale_tag(client.locale)
 
             # Find best match in the configured search languages/regions. Best
             # match from the catalog of search languages in the preferences.

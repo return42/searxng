@@ -25,8 +25,8 @@ from searx.utils import detect_language
 TimeRangeType = typing.Literal["day", "week", "month", "year", None]
 TIME_RANGE: tuple[TimeRangeType, ...] = typing.get_args(TimeRangeType)
 
-
 VALID_LANGUAGE_CODE = re.compile(r'^[a-z]{2,3}(-[a-zA-Z]{2})?$')
+
 
 class Client(abc.ABC):
     """Base class to implement server site of a client."""

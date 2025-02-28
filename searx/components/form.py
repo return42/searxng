@@ -263,7 +263,7 @@ class MultipleChoice(FieldABC):
         default: set[typing.Any],
         catalog: dict[str, typing.Any] | Sequence[typing.Any] | set[typing.Any],
     ):
-        if isinstance(catalog, Sequence):
+        if isinstance(catalog, (Sequence, set)):
             self.str2obj = {str(i): i for i in catalog}
         else:
             self.str2obj = catalog

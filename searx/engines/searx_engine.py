@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""
- Searx (all)
-"""
-
-from json import loads
-from searx.engines import categories as searx_categories
+"""SearXNG search API"""
 
 # about
 about = {
@@ -16,14 +11,14 @@ about = {
     "results": 'JSON',
 }
 
-categories = searx_categories.keys()
+sxng_categories = ["global"]
+sxng_engines = []
 
 # search-url
 instance_urls = []
 instance_index = 0
 
 
-# do search-request
 def request(query, params):
     global instance_index  # pylint: disable=global-statement
     params['url'] = instance_urls[instance_index % len(instance_urls)]
@@ -38,21 +33,23 @@ def request(query, params):
         'time_range': params['time_range'],
         'format': 'json',
     }
+    if sxng_categories:
+        params["data"]["categories"] =  ",".join(sxng_categories),
+    if sxng_engines:
+        params["data"]["engines"] =  ",".join(sxng_engines),
 
     return params
 
 
-# get response from search-request
 def response(resp):
 
-    response_json = loads(resp.text)
+    response_json = resp.json()
     results = response_json['results']
 
     for i in ('answers', 'infoboxes'):
         results.extend(response_json[i])
 
     results.extend({'suggestion': s} for s in response_json['suggestions'])
-
     results.append({'number_of_results': response_json['number_of_results']})
 
     return results

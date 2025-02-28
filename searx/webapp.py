@@ -105,7 +105,7 @@ from searx.flaskfix import patch_application
 from searx.locales import (
     LOCALE_NAMES,
     RTL_LOCALES,
-    localeselector,
+    babel_locale_selector,
     locales_initialize,
     match_locale,
 )
@@ -158,14 +158,7 @@ app.jinja_env.add_extension('jinja2.ext.loopcontrols')  # pylint: disable=no-mem
 app.jinja_env.filters['group_engines_in_tab'] = group_engines_in_tab  # pylint: disable=no-member
 app.secret_key = settings['server']['secret_key']
 
-
-def get_locale():
-    locale = localeselector()
-    logger.debug("%s uses locale `%s`", urllib.parse.quote(sxng_request.url), locale)
-    return locale
-
-
-babel = Babel(app, locale_selector=get_locale)
+_ = Babel(app, locale_selector=babel_locale_selector)
 
 
 def _get_locale_rfc5646(locale):

@@ -70,7 +70,7 @@ class SXNG_Request(flask.Request):
     """A list of :py:obj:`searx.results.Timing` of the engines, calculatid in
     and hold by :py:obj:`searx.results.ResultContainer.timings`."""
 
-    form: dict[str, str]
+    form: dict[str, str]  # type: ignore
     """flask.request.form_ is of type ImmutableMultiDict_, to merge GET, POST
     vars we need a (mutable) python dict.
 
