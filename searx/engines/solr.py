@@ -80,7 +80,7 @@ def response(resp):
         r = {key: str(value) for key, value in result.items()}
         if len(r) == 0:
             continue
-        r['template'] = 'key-value.html'
+        r['template'] = 'key-value.html'  FIXME
         results.append(r)
 
     return results

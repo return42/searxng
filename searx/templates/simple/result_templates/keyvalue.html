@@ -1,0 +1,11 @@
+<article class="result keyvalue">
+  <table>
+  {%- for key, value in result.kvmap.items() -%}
+      <tr>{%-  -%}
+          <td><b>{{ key|upper }}</b>:</td>{%-  -%}
+          <td>{{ value }}</td>{%-  -%}
+      </tr>{%-  -%}
+  {%- endfor -%}
+  </table>
+  <div class="engines">{% for engine in result.engines %}<span>{{ engine }}</span>{% endfor %}</div>{{- '' -}}
+</article>

@@ -93,7 +93,7 @@ query_enum = []
 environment_variables = {}
 working_dir = realpath('.')
 result_separator = '\n'
-result_template = 'key-value.html'
+result_template = 'key-value.html'  FIXME
 timeout = 4.0
 
 _command_logger = logger.getChild('command')

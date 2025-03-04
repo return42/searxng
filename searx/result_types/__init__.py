@@ -13,15 +13,15 @@
 
 from __future__ import annotations
 
-__all__ = ["Result", "EngineResults", "AnswerSet", "Answer", "Translations"]
+__all__ = ["Result", "MainResult", "KeyValue", "EngineResults", "AnswerSet", "Answer", "Translations"]
 
 import abc
 
 from searx import enginelib
 
-from ._base import Result, LegacyResult
+from ._base import Result, MainResult, LegacyResult
 from .answer import AnswerSet, Answer, Translations
-
+from .keyvalue import KeyValue
 
 class ResultList(list, abc.ABC):
     """Base class of all result lists (abstract)."""
@@ -30,6 +30,8 @@ class ResultList(list, abc.ABC):
         """The collection of result types (which have already been implemented)."""
 
         Answer = Answer
+        KeyValue = KeyValue
+        Result = Result
         Translations = Translations
 
     def __init__(self):

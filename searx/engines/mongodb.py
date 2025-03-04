@@ -63,7 +63,7 @@ key = None
 paging = True
 results_per_page = 20
 exact_match_only = False
-result_template = 'key-value.html'
+result_template = 'key-value.html'  FIXME
 
 _client = None
 

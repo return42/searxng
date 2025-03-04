@@ -46,7 +46,7 @@ db = 0
 
 # engine specific variables
 paging = False
-result_template = 'key-value.html'
+result_template = 'key-value.html'  FIXME
 exact_match_only = True
 
 _redis_client = None

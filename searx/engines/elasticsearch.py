@@ -154,7 +154,7 @@ def response(resp):
 
     for result in resp_json['hits']['hits']:
         r = {key: str(value) if not key.startswith('_') else value for key, value in result['_source'].items()}
-        r['template'] = 'key-value.html'
+        r['template'] = 'key-value.html'  FIXME
 
         if show_metadata:
             r['metadata'] = {'index': result['_index'], 'id': result['_id'], 'score': result['_score']}

@@ -29,7 +29,7 @@ about = {
 }
 
 # if there is a need for globals, use a leading underline
-_my_offline_engine = None
+_my_offline_engine: str = ""
 
 
 def init(engine_settings=None):
@@ -50,24 +50,18 @@ def init(engine_settings=None):
 
 
 def search(query, request_params) -> EngineResults:
-    """Query (offline) engine and return results.  Assemble the list of results from
-    your local engine.  In this demo engine we ignore the 'query' term, usual
-    you would pass the 'query' term to your local engine to filter out the
+    """Query (offline) engine and return results.  Assemble the list of results
+    from your local engine.  In this demo engine we ignore the 'query' term,
+    usual you would pass the 'query' term to your local engine to filter out the
     results.
-
     """
     res = EngineResults()
 
-    result_list = json.loads(_my_offline_engine)
-
-    for row in result_list:
+    for row in json.loads(_my_offline_engine):
         entry = {
             'query': query,
             'language': request_params['searxng_locale'],
             'value': row.get("value"),
-            # choose a result template or comment out to use the *default*
-            'template': 'key-value.html',
         }
-        res.append(entry)
-
+        res.add(res.types.KeyValue(kvmap=entry))
     return res

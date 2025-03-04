@@ -14,7 +14,7 @@ from searx import logger
 from searx.engines import engines
 from searx.metrics import histogram_observe, counter_add, count_error
 
-from searx.result_types import Result, LegacyResult
+from searx.result_types import Result, LegacyResult, KeyValue, MainResult
 from searx.result_types.answer import AnswerSet, BaseAnswer
 
 CONTENT_LEN_IGNORED_CHARS_REGEX = re.compile(r'[,;:!?\./\\\\ ()-_]', re.M | re.U)
@@ -217,6 +217,10 @@ class ResultContainer:
 
                 if isinstance(result, BaseAnswer) and self.on_result(result):
                     self.answers.add(result)
+
+                if isinstance(result, KeyValue) and self.on_result(result):
+                    standard_result_count += 1
+                    self.__merge_result_no_url(result, standard_result_count)
                 else:
                     # more types need to be implemented in the future ..
                     raise NotImplementedError(f"no handler implemented to process the result of type {result}")

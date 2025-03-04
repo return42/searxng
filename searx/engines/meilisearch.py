@@ -41,7 +41,7 @@ index = ''
 auth_key = ''
 facet_filters = []
 _search_url = ''
-result_template = 'key-value.html'
+result_template = 'key-value.html'  FIXME
 categories = ['general']
 paging = True
 
