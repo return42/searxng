@@ -337,6 +337,12 @@ categories_as_tabs:
   social media:
 
 engines:
+
+  - name: my offline engine
+    engine: demo_offline
+    shortcut: demo
+    disabled: false
+
   - name: 9gag
     engine: 9gag
     shortcut: 9g
