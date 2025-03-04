@@ -337,6 +337,24 @@ categories_as_tabs:
   social media:
 
 engines:
+
+  - name: find
+    engine: command
+    shortcut: demo1
+    categories: [general, demo]
+    command: ['find', '.', '-name', '{{QUERY}}']
+    query_type: path
+    delimiter:
+    chars: ' '
+    keys: ['line']
+    disabled: false
+
+  - name: demo offline
+    engine: demo_offline
+    shortcut: demo2
+    categories: [general, demo]
+    disabled: false
+
   - name: 9gag
     engine: 9gag
     shortcut: 9g
@@ -1827,13 +1845,13 @@ engines:
   # and unpack into searx/data/filmliste-v2.db
   # Query to test: "!demo concert"
   #
-  # - name: demo
+  # - name: mediathekview
   #   engine: sqlite
-  #   shortcut: demo
-  #   categories: general
-  #   result_template: default.html
+  #   shortcut: mediathekview
+  #   categories: [general, videos]
+  #   result_type: MainResult
   #   database: searx/data/filmliste-v2.db
-  #   query_str:  >-
+  #   query_str: >-
   #     SELECT title || ' (' || time(duration, 'unixepoch') || ')' AS title,
   #            COALESCE( NULLIF(url_video_hd,''), NULLIF(url_video_sd,''), url_video) AS url,
   #            description AS content

@@ -23,6 +23,7 @@ from ._base import Result, MainResult, LegacyResult
 from .answer import AnswerSet, Answer, Translations
 from .keyvalue import KeyValue
 
+
 class ResultList(list, abc.ABC):
     """Base class of all result lists (abstract)."""
 
@@ -31,14 +32,18 @@ class ResultList(list, abc.ABC):
 
         Answer = Answer
         KeyValue = KeyValue
+        MainResult = MainResult
         Result = Result
         Translations = Translations
+
+        # for backward compatibility
+        LegacyResult = LegacyResult
 
     def __init__(self):
         # pylint: disable=useless-parent-delegation
         super().__init__()
 
-    def add(self, result: Result):
+    def add(self, result: Result | LegacyResult):
         """Add a :py:`Result` item to the result list."""
         self.append(result)
 

@@ -10,7 +10,7 @@ from typing import List, NamedTuple, Set
 from searx import logger as log
 import searx.engines
 from searx.metrics import histogram_observe, counter_add
-from searx.result_types import Result, LegacyResult, KeyValue, MainResult
+from searx.result_types import Result, LegacyResult, MainResult
 from searx.result_types.answer import AnswerSet, BaseAnswer
 
 
@@ -51,7 +51,9 @@ class ResultContainer:
     """In the result container, the results are collected, sorted and duplicates
     will be merged."""
 
-    main_results_map: dict[int, MainResult|LegacyResult]
+    # pylint: disable=too-many-statements
+
+    main_results_map: dict[int, MainResult | LegacyResult]
     infoboxes: list[LegacyResult]
     suggestions: set[str]
     answers: AnswerSet
@@ -70,10 +72,10 @@ class ResultContainer:
         self.paging: bool = False
         self.unresponsive_engines: Set[UnresponsiveEngine] = set()
         self.timings: List[Timing] = []
-        self.redirect_url:str|None = None
+        self.redirect_url: str | None = None
         self.on_result = lambda _: True
         self._lock = RLock()
-        self._main_results_sorted: list[MainResult|LegacyResult] = None  # type: ignore
+        self._main_results_sorted: list[MainResult | LegacyResult] = None  # type: ignore
 
     def extend(self, engine_name: str | None, results):  # pylint: disable=too-many-branches
         if self._closed:
@@ -89,8 +91,7 @@ class ResultContainer:
 
                 if isinstance(result, BaseAnswer) and self.on_result(result):
                     self.answers.add(result)
-
-                if isinstance(result, KeyValue) and self.on_result(result):
+                elif isinstance(result, MainResult) and self.on_result(result):
                     main_count += 1
                     self._merge_main_result(result, main_count)
                 else:
@@ -162,7 +163,7 @@ class ResultContainer:
         if add_infobox:
             self.infoboxes.append(new_infobox)
 
-    def _merge_main_result(self, result: MainResult|LegacyResult, position):
+    def _merge_main_result(self, result: MainResult | LegacyResult, position):
         result_hash = hash(result)
 
         with self._lock:
@@ -178,7 +179,6 @@ class ResultContainer:
             # add the new position
             merged.positions.append(position)
 
-
     def close(self):
         self._closed = True
 
@@ -187,7 +187,7 @@ class ResultContainer:
             for eng_name in result.engines:
                 counter_add(result.score, 'engine', eng_name, 'score')
 
-    def get_ordered_results(self) -> list[MainResult|LegacyResult]:
+    def get_ordered_results(self) -> list[MainResult | LegacyResult]:
         """Returns a sorted list of results to be displayed in the main result
         area (:ref:`result types`)."""
 
@@ -228,10 +228,10 @@ class ResultContainer:
 
                 # update every index after the current one (including the
                 # current one)
-                for k, item in categoryPositions.items():  # pylint: disable=consider-using-dict-items
+                for item in categoryPositions.values():
                     v = item["index"]
                     if v >= index:
-                        categoryPositions[k]['index'] = v + 1
+                        item["index"] = v + 1
 
                 # update this category
                 grp["count"] -= 1
@@ -244,7 +244,6 @@ class ResultContainer:
 
         self._main_results_sorted = gresults
         return self._main_results_sorted
-
 
     @property
     def number_of_results(self) -> int:
@@ -288,10 +287,9 @@ class ResultContainer:
             return self.timings
 
 
-
 def merge_two_infoboxes(origin: LegacyResult, other: LegacyResult):
     """Merges the values from ``other`` into ``origin``."""
-
+    # pylint: disable=too-many-branches
     weight1 = getattr(searx.engines.engines[origin.engine], "weight", 1)
     weight2 = getattr(searx.engines.engines[other.engine], "weight", 1)
 
@@ -308,7 +306,9 @@ def merge_two_infoboxes(origin: LegacyResult, other: LegacyResult):
             entity_url2 = url2.get("entity")
 
             for url1 in origin.get("urls", []):
-                if (entity_url2 is not None and entity_url2 == url1.get("entity")) or (url1.get("url") == url2.get("url")):
+                if (entity_url2 is not None and entity_url2 == url1.get("entity")) or (
+                    url1.get("url") == url2.get("url")
+                ):
                     unique_url = False
                     break
             if unique_url:
@@ -346,7 +346,8 @@ def merge_two_infoboxes(origin: LegacyResult, other: LegacyResult):
         elif len(other.content) > len(origin.content):
             origin.content = other.content
 
-def merge_two_main_results(origin: MainResult|LegacyResult, other: MainResult|LegacyResult):
+
+def merge_two_main_results(origin: MainResult | LegacyResult, other: MainResult | LegacyResult):
     """Merges the values from ``other`` into ``origin``."""
 
     if len(other.content) > len(origin.content):

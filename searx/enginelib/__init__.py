@@ -144,4 +144,4 @@ class Engine:  # pylint: disable=too-few-public-methods
     :ref:`private engines`."""
 
     weight: int
-    """Weighting of the results of this engine (:ref:`weight <settings engines`>)."""
+    """Weighting of the results of this engine (:ref:`weight <settings engines>`)."""

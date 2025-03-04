@@ -10,6 +10,8 @@
 .. autoclass:: Result
    :members:
 
+.. _LegacyResult:
+
 .. autoclass:: LegacyResult
    :members:
 """
@@ -30,7 +32,8 @@ from searx import logger as log
 
 WHITESPACE_REGEX = re.compile('( |\t|\n)+', re.M | re.U)
 
-def _normalize_url_fields(result: Result|LegacyResult):
+
+def _normalize_url_fields(result: Result | LegacyResult):
 
     # As soon we need LegacyResult not any longer, we can move this function to
     # method Result.normalize_result_fields
@@ -58,7 +61,7 @@ def _normalize_url_fields(result: Result|LegacyResult):
         # As soon we have InfoboxResult, we can move this function to method
         # InfoboxResult.normalize_result_fields
 
-        infobox_urls: list[dict[str,str]] = getattr(result, "urls", [])
+        infobox_urls: list[dict[str, str]] = getattr(result, "urls", [])
         for item in infobox_urls:
             _url = item.get("url")
             if not _url:
@@ -79,7 +82,8 @@ def _normalize_url_fields(result: Result|LegacyResult):
                 path=_url.path.rstrip("/"),
             ).geturl()
 
-def _normalize_text_fields(result: MainResult|LegacyResult):
+
+def _normalize_text_fields(result: MainResult | LegacyResult):
 
     # As soon we need LegacyResult not any longer, we can move this function to
     # method MainResult.normalize_result_fields
@@ -93,7 +97,7 @@ def _normalize_text_fields(result: MainResult|LegacyResult):
         result.title = str(result)
     if result.content and not isinstance(result.content, str):
         log.debug("result: invalid type of field 'content': %s", str(result))
-        result.content =str(result)
+        result.content = str(result)
 
     # normalize title and content
     result.title = WHITESPACE_REGEX.sub(" ", result.title).strip()
@@ -134,8 +138,9 @@ class Result(msgspec.Struct, kw_only=True):
         """Normalize fields ``url`` and ``parse_sql``.
 
         - If field ``url`` is set and field ``parse_url`` is unset, init
-        ``parse_url`` from field ``url``.  The ```url`` field is initialized with
-        the value from ``parse_url``, if ``url`` and ``parse_url`` are not equal.
+          ``parse_url`` from field ``url``.  The ``url`` field is initialized
+          with the resulting value in ``parse_url``, if ``url`` and
+          ``parse_url`` are not equal.
 
         - ``www.example.com`` and ``example.com`` are equivalent and are normalized
           to ``example.com``.
@@ -197,11 +202,9 @@ class Result(msgspec.Struct, kw_only=True):
             if self_val:
                 setattr(self, field_name, other_val)
 
-class MainResult(Result):  # pylint: disable=missing-class-docstring
 
-    # open_group and close_group should not manged in the Result class (we should rop it from here!)
-    open_group: bool = False
-    close_group: bool = False
+class MainResult(Result):  # pylint: disable=missing-class-docstring
+    """Base class of all result types displayed in :ref:`area main results`."""
 
     title: str = ""
     """Link title of the result item."""
@@ -222,6 +225,10 @@ class MainResult(Result):  # pylint: disable=missing-class-docstring
     """In a merged results list, the names of the engines that found this result
     are listed in this field."""
 
+    # open_group and close_group should not manged in the Result
+    # class (we should drop it from here!)
+    open_group: bool = False
+    close_group: bool = False
     positions: list[int] = []
     score: float = 0
     category: str = ""
@@ -267,7 +274,6 @@ class LegacyResult(dict):
 
     UNSET = object()
 
-
     # emulate field types from type class Result
     url: str | None
     template: str
@@ -286,8 +292,8 @@ class LegacyResult(dict):
     category: str
 
     # infobox result
-    urls: list[dict[str,str]]
-    attributes: list[dict[str,str]]
+    urls: list[dict[str, str]]
+    attributes: list[dict[str, str]]
 
     def as_dict(self):
         return self

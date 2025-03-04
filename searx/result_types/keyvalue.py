@@ -14,9 +14,11 @@ template.
 # pylint: disable=too-few-public-methods
 
 from __future__ import annotations
-import typing
 
 __all__ = ["KeyValue"]
+
+import typing
+from collections import OrderedDict
 
 from ._base import MainResult
 
@@ -27,8 +29,17 @@ class KeyValue(MainResult, kw_only=True):
 
     template: str = "keyvalue.html"
 
-    kvmap: dict[str,typing.Any]
-    """Dictionary with keys and values."""
+    kvmap: dict[str, typing.Any] | OrderedDict[str, typing.Any]
+    """Dictionary with keys and values. To sort keys, use :py:obj:`OrderedDict`."""
+
+    caption: str = ""
+    """Optional caption for this result."""
+
+    key_title: str = ""
+    """Optional title for the *key column*."""
+
+    value_title: str = ""
+    """Optional title for the *value column*."""
 
     def __hash__(self) -> int:
         """The KeyValues objects are checked for object identity, even if all

@@ -44,8 +44,8 @@ const svg2svg_favicon_opts = {
 export default defineConfig({
 
   root: PATH.src,
-  mode: "production",
-  // mode: "development",
+  //mode: "production",
+  mode: "development",
 
   // FIXME: missing CCS sourcemaps!!
   // see: https://github.com/vitejs/vite/discussions/13845#discussioncomment-11992084
@@ -74,7 +74,7 @@ export default defineConfig({
 
   esbuild : {
     // FIXME: missing CCS sourcemaps!!
-    sourcemap: true
+    sourcemap: true,
   },
 
   build: {
@@ -87,9 +87,9 @@ export default defineConfig({
     sourcemap: true,
 
     // https://vite.dev/config/build-options.html#build-cssminify
-    cssMinify: true,
+    cssMinify: false,
     // cssMinify: "esbuild",
-    minify: "esbuild",
+    minify: false,
 
     rollupOptions: {
       input: {

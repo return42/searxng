@@ -13,6 +13,7 @@ close to the implementation, its just a simple example.  To get in use of this
 """
 
 import json
+
 from searx.result_types import EngineResults
 
 engine_type = 'offline'
@@ -57,11 +58,21 @@ def search(query, request_params) -> EngineResults:
     """
     res = EngineResults()
 
+    count = 0
     for row in json.loads(_my_offline_engine):
-        entry = {
+        count += 1
+        kvmap = {
             'query': query,
             'language': request_params['searxng_locale'],
             'value': row.get("value"),
         }
-        res.add(res.types.KeyValue(kvmap=entry))
+        res.add(
+            res.types.KeyValue(
+                caption=f"Demo Offline Engine Result #{count}",
+                key_title="Name",
+                value_title="Value",
+                kvmap=kvmap,
+            )
+        )
+    res.add(res.types.LegacyResult(number_of_results=count))
     return res
