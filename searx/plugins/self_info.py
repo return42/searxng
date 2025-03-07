@@ -9,11 +9,12 @@ from flask_babel import gettext
 from searx.botdetection._helpers import get_real_ip
 from searx.result_types import EngineResults
 
-from . import Plugin, PluginInfo, PluginCfg
+from . import Plugin, PluginInfo
 
 if typing.TYPE_CHECKING:
     from searx.search import SearchWithPlugins
     from searx.extended_types import SXNG_Request
+    from . import PluginCfg
 
 
 class SXNGPlugin(Plugin):
@@ -25,7 +26,7 @@ class SXNGPlugin(Plugin):
     id = "self_info"
     keywords = ["ip", "user-agent"]
 
-    def __init__(self, plg_cfg: PluginCfg):
+    def __init__(self, plg_cfg: "PluginCfg"):
         super().__init__(plg_cfg)
 
         self.ip_regex = re.compile(r"^ip", re.IGNORECASE)
