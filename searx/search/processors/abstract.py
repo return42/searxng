@@ -94,10 +94,10 @@ class EngineProcessor(ABC):
         result_container.add_unresponsive_engine(self.engine_name, error_message)
         # metrics
         counter_inc('engine', self.engine_name, 'search', 'count', 'error')
-        if isinstance(exception_or_message, BaseException):
+        if isinstance(exception_or_message, Exception):
             count_exception(self.engine_name, exception_or_message)
         else:
-            count_error(self.engine_name, exception_or_message)
+            count_error(self.engine_name, str(exception_or_message))
         # suspend the engine ?
         if suspend:
             suspended_time = None
@@ -120,7 +120,7 @@ class EngineProcessor(ABC):
     def extend_container(self, result_container, start_time, search_results):
         if getattr(threading.current_thread(), '_timeout', False):
             # the main thread is not waiting anymore
-            self.handle_exception(result_container, 'timeout', None)
+            self.handle_exception(result_container, 'timeout', False)
         else:
             # check if the engine accepted the request
             if search_results is not None:

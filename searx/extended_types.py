@@ -113,3 +113,8 @@ class SXNG_Response(httpx.Response):
     """
 
     ok: bool
+    """Response is OK (``True`` if :py:obj:`httpx.Response.is_error` is
+    ``False``"""
+
+    search_params: dict
+    """Parameters used to send the HTTP request."""

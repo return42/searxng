@@ -11,7 +11,7 @@ from uuid import uuid4
 from flask import copy_current_request_context
 
 from searx import logger
-from searx import settings
+from searx import get_setting
 import searx.answerers
 import searx.plugins
 from searx.engines import load_engines
@@ -30,9 +30,9 @@ logger = logger.getChild('search')
 
 
 def initialize(settings_engines=None, enable_checker=False, check_network=False, enable_metrics=True):
-    settings_engines = settings_engines or settings['engines']
+    settings_engines = settings_engines or get_setting("engines")
     load_engines(settings_engines)
-    initialize_network(settings_engines, settings['outgoing'])
+    initialize_network(settings_engines, get_setting("outgoing"))
     if check_network:
         check_network_configuration()
     initialize_metrics([engine['name'] for engine in settings_engines], enable_metrics)
@@ -105,7 +105,7 @@ class Search:
             default_timeout = max(default_timeout, processor.engine.timeout)
 
         # adjust timeout
-        max_request_timeout = settings['outgoing']['max_request_timeout']
+        max_request_timeout = get_setting("outgoing.max_request_timeout")
         actual_timeout = default_timeout
         query_timeout = self.search_query.timeout_limit
 

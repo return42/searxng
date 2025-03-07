@@ -234,7 +234,7 @@ class ResultContainer:
                         " are without typification / migrate to Answer class.",
                         DeprecationWarning,
                     )
-                    self.answers.add(result)
+                    self.answers.add(result)  # type: ignore
                 elif 'correction' in result and self.on_result(result):
                     self.corrections.add(result['correction'])
                 elif 'infobox' in result and self.on_result(result):

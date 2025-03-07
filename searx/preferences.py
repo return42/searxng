@@ -3,8 +3,6 @@
 """
 from __future__ import annotations
 
-import typing
-
 from flask_babel import gettext
 
 import searx.client
@@ -20,7 +18,7 @@ from searx.engines import DEFAULT_CATEGORY
 from .components import Form, FieldABC, Field, SingleChoice, Bool, MultipleChoice, BoolGrp
 from .settings_defaults import get_typedef
 
-logger = logger.getChild("preferences")
+log = logger.getChild("preferences")
 
 
 class PluginStoragePrefs(BoolGrp):
@@ -185,7 +183,7 @@ class Preferences(Form):
         try:
             self.parse_cookies(sxng_request.cookies)
         except Exception as exc:  # pylint: disable=broad-except
-            logger.exception(exc, exc_info=True)
+            log.exception(exc, exc_info=True)
             sxng_request.errors.append(gettext("Invalid settings, please edit your preferences"))
 
         if sxng_request.form.get("pref_url_params"):
@@ -194,7 +192,7 @@ class Preferences(Form):
             try:
                 self.parse_form(sxng_request.form)
             except Exception as exc:  # pylint: disable=broad-except
-                logger.exception(exc, exc_info=True)
+                log.exception(exc, exc_info=True)
                 sxng_request.errors.append(gettext("Invalid settings"))
 
         if not self.value("search_locale_tag"):
@@ -210,7 +208,7 @@ class Preferences(Form):
 
             if tag:
                 search_locale.set(tag)
-                logger.debug('set search_locale_tag %s (from browser)', tag)
+                log.debug('set search_locale_tag %s (from browser)', tag)
 
         if not self.value("ui_locale_tag"):
 
@@ -225,7 +223,7 @@ class Preferences(Form):
             tag = searx.locales.match_locale(tag, ui_locale.catalog)
             if tag:
                 ui_locale.set(tag)
-                logger.debug('set ui_locale_tag %s (from browser)', tag)
+                log.debug('set ui_locale_tag %s (from browser)', tag)
 
         # Browser quirks ..
         #

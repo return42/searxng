@@ -10,12 +10,14 @@ import ssl
 import httpx
 
 import searx.network
+from searx.network.network import Network
 from searx.utils import gen_useragent
 from searx.exceptions import (
     SearxEngineAccessDeniedException,
     SearxEngineCaptchaException,
     SearxEngineTooManyRequestsException,
 )
+from searx.extended_types import SXNG_Response
 from searx.metrics.error_recorder import count_error
 from .abstract import EngineProcessor
 
@@ -76,7 +78,7 @@ class OnlineProcessor(EngineProcessor):
         self.logger.debug('HTTP Accept-Language: %s', params['headers'].get('Accept-Language', ''))
         return params
 
-    def _send_http_request(self, params):
+    def _send_http_request(self, params) -> SXNG_Response:
         # create dictionary which contain all
         # information about the request
         request_args = dict(headers=params['headers'], cookies=params['cookies'], auth=params['auth'])
@@ -162,7 +164,8 @@ class OnlineProcessor(EngineProcessor):
         except ssl.SSLError as e:
             # requests timeout (connect or read)
             self.handle_exception(result_container, e, suspend=True)
-            self.logger.error("SSLError {}, verify={}".format(e, searx.network.get_network(self.engine_name).verify))
+            nw: Network = searx.network.get_network(self.engine_name)  # type: ignore
+            self.logger.error("SSLError {}, verify={}".format(e, nw.verify))
         except (httpx.TimeoutException, asyncio.TimeoutError) as e:
             # requests timeout (connect or read)
             self.handle_exception(result_container, e, suspend=True)

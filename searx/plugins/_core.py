@@ -8,7 +8,6 @@ __all__ = ["PluginInfo", "Plugin", "PluginCfg", "PluginStorage"]
 import abc
 import importlib
 import logging
-import pathlib
 import re
 import typing
 
@@ -19,9 +18,8 @@ from searx.result_types import Result
 
 if typing.TYPE_CHECKING:
     from searx.search import SearchWithPlugins
-    import flask.Flask
+    import flask
 
-_default = pathlib.Path(__file__).parent
 log: logging.Logger = logging.getLogger("searx.plugins")
 
 

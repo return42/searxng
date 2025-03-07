@@ -9,7 +9,7 @@ import re
 
 import searx.engines
 
-from searx import settings
+from searx import get_setting
 from searx.sxng_locales import sxng_locales
 from searx.external_bang import get_bang_definition_and_autocomplete
 from searx.client import VALID_LANGUAGE_CODE
@@ -139,10 +139,11 @@ class SearchLocale(QueryPartParser):
         return found
 
     def _autocomplete(self, value):
+        search_languages: list = get_setting("search.languages")
         if not value:
             # show some example queries
-            if len(settings['search']['languages']) < 10:
-                for lang in settings['search']['languages']:
+            if len(search_languages) < 10:
+                for lang in search_languages:
                     self.raw_text_query.autocomplete_list.append(':' + lang)
             else:
                 for lang in [":en", ":en_us", ":english", ":united_kingdom"]:
@@ -150,7 +151,7 @@ class SearchLocale(QueryPartParser):
             return
 
         for lc in sxng_locales:
-            if lc[0] not in settings['search']['languages']:
+            if lc[0] not in search_languages:
                 continue
             lang_id, lang_name, country, english_name, _flag = map(str.lower, lc)
 
