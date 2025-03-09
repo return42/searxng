@@ -87,7 +87,6 @@ from searx.webutils import (
     group_engines_in_tab,
 )
 from searx.webadapter import (
-    get_selected_categories,
     parse_lang,
 )
 from searx.utils import gen_useragent, dict_subset
@@ -328,6 +327,7 @@ def get_pretty_url(parsed_url: urllib.parse.ParseResult):
 
 
 def get_client_settings():
+    # This function should be moved to searx.client
     req_pref = sxng_request.preferences
     return {
         'autocomplete': req_pref.get_value('autocomplete'),
@@ -377,15 +377,15 @@ def render(template_name: str, **kwargs):
     # i18n
     kwargs['sxng_locales'] = [l for l in sxng_locales if l[0] in settings['search']['languages']]
 
-    locale = sxng_request.preferences.get_value('locale')
-    kwargs['locale_rfc5646'] = _get_locale_rfc5646(locale)
+    # FIXME: should be replaced by prefs.value("ui_locale_tag")
+    #locale = sxng_request.preferences.get_value('locale')
+    #kwargs['locale_rfc5646'] = _get_locale_rfc5646(locale)
+    #if locale in RTL_LOCALES and 'rtl' not in kwargs:
+    #    kwargs['rtl'] = True
 
-    if locale in RTL_LOCALES and 'rtl' not in kwargs:
-        kwargs['rtl'] = True
-
-    if "active_search_locale" not in kwargs:
-        # FIXME ...
-        kwargs["active_search_locale"] = parse_lang(sxng_request.preferences, {}, RawTextQuery('', []))
+    #if "active_search_locale" not in kwargs:
+    #    # FIXME ... schould be replaced by sxng_request.client.search_locale_tag
+    #    kwargs["active_search_locale"] = parse_lang(sxng_request.preferences, {}, RawTextQuery('', []))
 
     # values from settings
     kwargs['search_formats'] = [x for x in settings['search']['formats'] if x != 'html']
@@ -493,7 +493,10 @@ def index_error(output_format: str, error_message: str):
     return render(
         # fmt: off
         'index.html',
-        selected_categories=get_selected_categories(sxng_request.preferences, sxng_request.form),
+        # FIXME: selected_categories should be replaced by "preferences" in the
+        # HTML templates:
+        # selected_categories=get_selected_categories(sxng_request.preferences, sxng_request.form),
+        prefs = sxng_request.preferences,
         # fmt: on
     )
 
@@ -510,8 +513,12 @@ def index():
     return render(
         # fmt: off
         'index.html',
-        selected_categories=get_selected_categories(sxng_request.preferences, sxng_request.form),
-        current_locale = sxng_request.preferences.get_value("locale"),
+        # FIXME: selected_categories should be replaced by "preferences" in the
+        # HTML templates:
+        # selected_categories=get_selected_categories(sxng_request.preferences, sxng_request.form),
+        prefs = sxng_request.preferences,
+        # FIXME: current_locale should be replaced by prefs.vakleu("ui_locale_tag")
+        # current_locale = sxng_request.preferences.get_value("locale"),
         # fmt: on
     )
 
@@ -556,20 +563,16 @@ def search():
     if not sxng_request.form.get('q'):
         if output_format == 'html':
             return render(
-                # fmt: off
                 'index.html',
-                selected_categories=get_selected_categories(sxng_request.preferences, sxng_request.form),
-                # fmt: on
+                # FIXME: selected_categories should be replaced by "preferences" in the
+                # HTML templates:
+                # selected_categories=get_selected_categories(sxng_request.preferences, sxng_request.form),
+                prefs = sxng_request.preferences,
             )
         return index_error(output_format, 'No query'), 400
 
-    # search
-    search_query = None
-    raw_text_query = None
-    result_container = None
-
     try:
-        search_query, raw_text_query = sxng_request.client.get_search_query()
+        search_query = sxng_request.client.get_search_query()
         search_obj = searx.search.SearchWithPlugins(search_query, sxng_request)
         result_container = search_obj.search()
 
@@ -659,14 +662,14 @@ def search():
     # suggestions: use RawTextQuery to get the suggestion URLs with the same bang
     suggestion_urls = list(
         map(
-            lambda suggestion: {'url': raw_text_query.changeQuery(suggestion).getFullQuery(), 'title': suggestion},
+            lambda suggestion: {'url': sxng_request.client.raw_query.changeQuery(suggestion).getFullQuery(), 'title': suggestion},
             result_container.suggestions,
         )
     )
 
     correction_urls = list(
         map(
-            lambda correction: {'url': raw_text_query.changeQuery(correction).getFullQuery(), 'title': correction},
+            lambda correction: {'url': sxng_request.client.raw_query.changeQuery(correction).getFullQuery(), 'title': correction},
             result_container.corrections,
         )
     )
@@ -684,7 +687,12 @@ def search():
         'results.html',
         results = results,
         q=sxng_request.form['q'],
-        selected_categories = search_query.categories,
+
+        # FIXME: selected_categories should be replaced by "preferences" in the
+        # HTML templates: ?????
+        # selected_categories = search_query.categories,
+        prefs = sxng_request.preferences,
+
         pageno = search_query.pageno,
         time_range = search_query.time_range or '',
         number_of_results = format_decimal(result_container.number_of_results),
@@ -914,9 +922,16 @@ def preferences():
         # fmt: off
         'preferences.html',
         preferences = True,
-        selected_categories = get_selected_categories(sxng_request.preferences, sxng_request.form),
+
+        # FIXME: selected_categories should be replaced by "preferences" in the
+        # HTML templates: ?????
+        # selected_categories = get_selected_categories(sxng_request.preferences, sxng_request.form),
+        prefs = sxng_request.preferences,
         locales = LOCALE_NAMES,
-        current_locale = sxng_request.preferences.get_value("locale"),
+
+        # FIXME should be replaced in HTML template by prefs.value("ui_locale_tag")
+        #current_locale = sxng_request.preferences.get_value("locale"),
+
         image_proxy = image_proxy,
         engines_by_category = engines_by_category,
         stats = stats,
@@ -931,8 +946,13 @@ def preferences():
         themes = themes,
         plugins_storage = searx.plugins.STORAGE.info,
         current_doi_resolver = get_doi_resolver(sxng_request.preferences),
-        enabled_plugins = sxng_request.preferences.plugins.get_enabled(),
-        pref_url_params = sxng_request.preferences.pref_url_params,
+
+        # FIXME: should be replaced by "preferences" (pref, see above)
+        #enabled_plugins = sxng_request.preferences.plugins.get_enabled(),
+
+        # FIXME: should be replaced by "preferences" (pref, see above)
+        #pref_url_params = sxng_request.preferences.pref_url_params,
+
         locked_preferences = get_setting("preferences.lock", []),
         doi_resolvers = get_setting("doi_resolvers", {}),
         # fmt: on
