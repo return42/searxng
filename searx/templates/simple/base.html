@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html class="no-js theme-{{ preferences.get_value('simple_style') or 'auto' }} center-alignment-{{ preferences.get_value('center_alignment') and 'yes' or 'no' }}" lang="{{ locale_rfc5646 }}" {% if rtl %} dir="rtl"{% endif %}>
+<html class="no-js theme-{{ preferences.str("simple_style") or 'auto' }} center-alignment-{{ preferences.value("center_alignment") and 'yes' or 'no' }}" lang="{{ locale_rfc5646 }}" {% if rtl %} dir="rtl"{% endif %}>
 <head>
   <meta charset="UTF-8">
   <meta name="description" content="SearXNG — a privacy-respecting, open metasearch engine">
@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="{{ url_for('client_token', token=link_token) }}" type="text/css">
   {% endif %}
   <!--[if gte IE 9]>-->
-  <script src="{{ url_for('static', filename='js/searxng.head.min.js') }}" client_settings="{{ client_settings }}"></script>
+  <script src="{{ url_for('static', filename='js/searxng.head.min.js') }}" client_settings="{{ client.as_base64() }}"></script>
   <!--<![endif]-->
   {% block head %}
   <link title="{{ instance_name }}" type="application/opensearchdescription+xml" rel="search" href="{{ opensearch_url }}">

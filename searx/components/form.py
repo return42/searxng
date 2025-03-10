@@ -73,6 +73,11 @@ class FieldABC(abc.ABC):
         if getattr(self, "value", None) is None:
             self.value = self.str2val(self.val2str(default))
 
+    @property
+    def str(self):
+        """String value of the *value*"""
+        return self.val2str(self.value)
+
     def lock(self):
         self.locked = True
 
@@ -235,6 +240,11 @@ class SingleChoice(Field):
     def validate(self, string: str):
         self.str2val(string)
 
+    def menu_options(self) -> typing.Generator[tuple[str, bool]]:
+        selected = self.val2str(self.value)
+        for name in self.str2obj:
+            yield (name, name == selected )
+
 
 class Bool(SingleChoice):
     """Class suitable for the implementation on/off switches."""
@@ -273,17 +283,27 @@ class MultipleChoice(FieldABC):
         for val in default:
             self.val2str(val)
 
-    @property
-    def catalog(self) -> list[tuple]:
-        """Returns a list of tuples, the list is suitable to build up a
-        selection list in a form::
+    def menu_entries(self) -> typing.Generator[tuple[str, bool]]:
+        selected = [self.val2str(v) for v in self.value]
+        for name in self.str2obj:
+            yield (name, name in selected )
 
-                item_id, item_name, item_value
-        """
-        if not self._catalog:
-            for item_name, item_value in self.str2obj.items():
-                self._catalog.append((self.item_id(item_name), item_name, item_value))
-        return self._catalog
+    # @property
+    # def catalog(self) -> list[tuple]:
+    #     """Returns a list of tuples, the list is suitable to build up a
+    #     selection list in a form::
+
+    #             item_id, item_name, item_value
+    #     """
+    #     if not self._catalog:
+    #         for item_name, item_value in self.str2obj.items():
+    #             self._catalog.append((self.item_id(item_name), item_name, item_value))
+    #     return self._catalog
+
+    @property
+    def str(self):
+        """String value of the *value*"""
+        return ",".join([self.str2val(v) for v in self.value])
 
     @property
     def catalog_id(self) -> str:
@@ -303,6 +323,7 @@ class MultipleChoice(FieldABC):
         if val == UNKNOWN:
             raise ValueError(f"string value {string} is unknown to the mapping table.")
         return val
+
 
     # ABC methods ..
 
@@ -454,12 +475,29 @@ class Form:
             fields.update(s)
         return fields
 
-    def value(self, comp_name: str) -> typing.Any:
-        """Returns value of the component ``comp_name``"""
+    def is_locked(self, comp_name: str) -> bool:
+        """Returns lock state True/False of the component ``comp_name``."""
         comp = self.components[comp_name]
         if isinstance(comp, BoolGrp):
+            # there is no lock for members of BoolGrp
+            return True
+        return comp.locked
+
+    def value(self, comp_name: str) -> typing.Any:
+        """Returns value of the component ``comp_name``."""
+        comp = self.components[comp_name]
+        if isinstance(comp, BoolGrp):
+            # in case of BoolGrp return field names and their values
             return comp.members
         return comp.value
+
+    def str(self, comp_name: str) -> str|dict[str,str]:
+        """Returns string value of the component ``comp_name``."""
+        comp = self.components[comp_name]
+        if isinstance(comp, BoolGrp):
+            # in case of BoolGrp return field names and their values
+            return { name: field.str for name, field in comp.members.items()}
+        return comp.str
 
     @property
     def pref_url_params(self):  # FIXME rename to url_b64encode

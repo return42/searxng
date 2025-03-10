@@ -66,7 +66,7 @@ def extract_doi(url):
     return None
 
 
-def get_doi_resolver(prefs: Preferences):
+def get_doi_resolver(prefs: Preferences) -> str:
     doi_resolvers = get_setting("doi_resolvers")
     selected_resolver = prefs.value("doi_resolver")[0]
     if selected_resolver not in doi_resolvers:

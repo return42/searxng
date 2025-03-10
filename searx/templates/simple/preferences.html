@@ -150,30 +150,29 @@
     {# tab: general #}
 
     {{- tab_header('maintab', 'general', _('General'), True) -}}
-    {%- if 'categories' not in locked_preferences -%}
+    {%- if not preferences.is_locked("categories") -%}
       <fieldset>
         <legend>{{- _('Default categories') -}}</legend>
         {% set display_tooltip = false %}
         {% include 'simple/categories.html' %}
       </fieldset>
     {%- endif -%}
-    {%- if 'language' not in locked_preferences -%}
+    {%- if not preferences.is_locked("search_locale_tag") -%}
       {%- include 'simple/preferences/language.html' -%}
     {% endif %}
-    {%- if 'autocomplete' not in locked_preferences -%}
+    {%- if not preferences.is_locked("autocomplete") -%}
       {%- include 'simple/preferences/autocomplete.html' -%}
     {%- endif -%}
-    {%- if 'favicon' not in locked_preferences -%}
+    {%- if not preferences.is_locked("favicon") -%}
       {%- include 'simple/preferences/favicon.html' -%}
     {%- endif -%}
-    {% if 'safesearch' not in locked_preferences %}
+    {%- if not preferences.is_locked("safesearch") -%}
       {%- include 'simple/preferences/safesearch.html' -%}
     {%- endif -%}
     {%- include 'simple/preferences/tokens.html' -%}
     {{- plugin_preferences('general') -}}
 
-
-    {%- if 'doi_resolver' not in locked_preferences %}
+    {%- if not preferences.is_locked("doi_resolver") -%}
       {%- include 'simple/preferences/doi_resolver.html' -%}
     {%- endif -%}
     {{- tab_footer() -}}
@@ -181,19 +180,19 @@
     {# tab: ui #}
 
     {{- tab_header('maintab', 'ui', _('User interface')) -}}
-    {%- if 'locale' not in locked_preferences -%}
+    {%- if not preferences.is_locked("ui_locale_tag") -%}
       {%- include 'simple/preferences/ui_locale.html' -%}
     {%- endif -%}
-    {%- if 'theme' not in locked_preferences -%}
+    {%- if not preferences.is_locked("theme") -%}
       {%- include 'simple/preferences/theme.html' -%}
     {%- endif -%}
-    {%- if 'results_on_new_tab' not in locked_preferences -%}
+    {%- if not preferences.is_locked("results_on_new_tab") -%}
       {%- include 'simple/preferences/results_on_new_tab.html' -%}
     {%- endif -%}
-    {%- if 'infinite_scroll' not in locked_preferences -%}
+    {%- if not preferences.is_locked("infinite_scroll") -%}
       {%- include 'simple/preferences/infinite_scroll.html' -%}
     {%- endif -%}
-    {%- if 'search_on_category_select' not in locked_preferences -%}
+    {%- if not preferences.is_locked("search_on_category_select") -%}
       {%- include 'simple/preferences/search_on_category_select.html' -%}
     {%- endif -%}
     {%- include 'simple/preferences/hotkeys.html' -%}
@@ -204,13 +203,13 @@
     {# tab: privacy #}
 
     {{- tab_header('maintab', 'privacy', _('Privacy')) -}}
-    {%- if 'method' not in locked_preferences -%}
+    {%- if not preferences.is_locked("method") -%}
       {%- include 'simple/preferences/method.html' -%}
     {%- endif -%}
-    {%- if 'image_proxy' not in locked_preferences -%}
+    {%- if not preferences.is_locked("image_proxy") -%}
       {%- include 'simple/preferences/image_proxy.html' -%}
     {%- endif -%}
-    {%- if 'query_in_title' not in locked_preferences -%}
+    {%- if not preferences.is_locked("query_in_title") -%}
       {%- include 'simple/preferences/query_in_title.html' -%}
     {%- endif -%}
     {{- plugin_preferences('privacy') -}}

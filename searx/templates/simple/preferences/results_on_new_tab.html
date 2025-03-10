@@ -1,16 +1,10 @@
-<fieldset>{{- '' -}}
-  <legend id="pref_results_on_new_tab">{{ _('Results on new tabs') }}</legend>{{- '' -}}
-  <p class="value">{{- '' -}}
-    <input type="checkbox" {{- ' ' -}}
-           name="results_on_new_tab" {{- ' ' -}}
-           aria-labelledby="pref_results_on_new_tab" {{- ' ' -}}
-           class="checkbox-onoff" {{- ' ' -}}
-           {%- if preferences.get_value('results_on_new_tab') -%}
-             checked
-           {%- endif -%}{{- ' ' -}}
-           >{{- ' ' -}}
-  </p>{{- '' -}}
+<fieldset>
+  {% set comp = preferences.components["results_on_new_tab"] %}
+  <legend id="pref_{{comp.form_id}}">{{ _("Results on new tabs") }}</legend>
+  <p class="value">
+    <input type="checkbox" name="{{comp.form_id}}" aria-labelledby="pref_{{comp.form_id}}" class="checkbox-onoff" {%- if comp.value -%} checked {%- endif -%}>
+  </p>
   <div class="description">
-    {{- _('Open result links on new browser tabs') -}}
-  </div>{{- '' -}}
-</fieldset>{{- '' -}}
+    {{ _("Open result links on new browser tabs") }}
+  </div>
+</fieldset>

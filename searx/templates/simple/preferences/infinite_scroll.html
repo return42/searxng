@@ -1,16 +1,10 @@
-<fieldset>{{- '' -}}
-  <legend>{{ _('Infinite scroll') }}</legend>{{- '' -}}
-  <p class="value">{{- '' -}}
-    <input type="checkbox" {{- ' ' -}}
-           name="infinite_scroll" {{- ' ' -}}
-           aria-labelledby="pref_infinite_scroll" {{- ' ' -}}
-           class="checkbox-onoff" {{- ' ' -}}
-           {%- if preferences.get_value('infinite_scroll') -%}
-             checked
-           {%- endif -%}{{- ' ' -}}
-           >{{- '' -}}
-  </p>{{- '' -}}
-  <div class="description" id="pref_infinite_scroll">
-    {{- _('Automatically load next page when scrolling to bottom of current page') -}}
-  </div>{{- '' -}}
-</fieldset>{{- '' -}}
+<fieldset>
+  {% set comp = preferences.components["infinite_scroll"] %}
+  <legend id="pref_{{comp.form_id}}">{{ _("Infinite scroll") }}</legend>
+  <p class="value">
+    <input type="checkbox" name="{{comp.form_id}}" aria-labelledby="pref_{{comp.form_id}}" class="checkbox-onoff" {%- if comp.value -%} checked {%- endif -%}>
+  </p>
+  <div class="description">
+    {{ _("Automatically load next page when scrolling to bottom of current page") }}
+  </div>
+</fieldset>

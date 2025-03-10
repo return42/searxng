@@ -1,23 +1,16 @@
-<fieldset>{{- '' -}}
-  <legend id="pref_hotkeys">{{- _('Hotkeys') -}}</legend>{{- '' -}}
-  <div class="value">{{- '' -}}
-    <select name="hotkeys" aria-labelledby="pref_hotkeys">{{- '' -}}
-      <option value="default"
-              {%- if hotkeys == 'default' %} selected="selected"
-              {%- endif -%}>
-              SearXNG{{- '' -}}
-      </option>{{- '' -}}
-      <option value="vim"
-              {%- if hotkeys == 'vim' %} selected="selected"
-              {%- endif -%}>
-              {{- _('Vim-like') -}}
-        </option>{{- '' -}}
-    </select>{{- '' -}}
-  </div>{{- '' -}}
+<fieldset>
+  {% set comp = preferences.components["hotkeys""] -%}
+  <legend id="pref_{{comp.form_id}}">{{- _('Hotkeys') -}}</legend>
+  <div class="value">
+    <select name="{{comp.form_id}}" aria-labelledby="pref_{{comp.form_id}}">{{- '' -}}
+      <option value="default" {% if comp.value == "default" %} selected="selected" {% endif %}>SearXNG</option>
+      <option value="vim" {% if comp.value == "vim" %} selected="selected" {% endif %}>{{_('Vim-like')}}</option>
+    </select>
+  </div>
   <div class="description">
     {{- _(
-    'Navigate search results with hotkeys (JavaScript required). '
-    'Press "h" key on main or result page to get help.'
-    ) -}}
-  </div>{{- '' -}}
-</fieldset>{{- '' -}}
+      'Navigate search results with hotkeys (JavaScript required). '
+      'Press "h" key on main or result page to get help.'
+      ) -}}
+  </div>
+</fieldset>

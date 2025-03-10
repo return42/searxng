@@ -1,24 +1,30 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from __future__ import annotations
 
+import base64
 import re
 import abc
 import babel
 import babel.core
+from flask_babel import gettext
 import typing
 from collections import defaultdict
+
+import msgspec
 
 import searx
 import searx.locales
 import searx.engines
+import searx.webutils
 
 from searx.exceptions import SearxParameterException
-from searx.settings_defaults import SafeSearchType
+from searx.settings_defaults import SafeSearchType, URLFormattingType, HTTPMethodeType
 from searx.extended_types import sxng_request
 from searx.preferences import Preferences
 from searx.components.form import SingleChoice, MultipleChoice
 from searx.query import RawTextQuery
 from searx.search import SearchQuery
+from searx.plugins.oa_doi_rewrite import get_doi_resolver
 
 from searx.utils import detect_language
 
@@ -114,17 +120,23 @@ class Client(abc.ABC):
 class HTTPClient(Client):
     """Implements server site of a HTTP client."""
 
+    def __init__(self, locale: babel.Locale, settings: HTTPClientSettings):
+        super().__init__(locale)
+        self.settings = settings
+
     @classmethod
     def from_http_request(cls):
-        """Build ClientPref object from HTTP request.
+        """Build HTTPClient object from HTTP request.
 
         - `Accept-Language used for locale setting
           <https://www.w3.org/International/questions/qa-accept-lang-locales.en>`__
 
         """
+        settings = HTTPClientSettings.get_instance()
+
         al_header = sxng_request.headers.get("Accept-Language")
         if not al_header:
-            return cls(locale=babel.Locale("en"))
+            return cls(locale=babel.Locale("en"), settings=settings)
 
         pairs = []
         for lang_item in al_header.split(","):
@@ -142,7 +154,7 @@ class HTTPClient(Client):
         if pairs:
             pairs.sort(reverse=True, key=lambda x: x[1])
             locale = pairs[0][0]
-        return cls(locale=babel.Locale(locale))
+        return cls(locale=babel.Locale(locale), settings=settings)
 
     def search_term(self) -> str:
         """Search term from user input."""
@@ -334,3 +346,85 @@ class HTTPClient(Client):
                 _, engine, key = key.split('-')
                 data[engine][key] = val
         return data
+
+
+class HTTPClientSettings(msgspec.Struct, kw_only=True):
+    """Container with informations and settings that are transferred to the
+    client.  Those informations are required by the client but also by the
+    template framework.
+
+    Examples of this are settings for auto-completion or whether the search
+    should be executed as soon as a category is clicked on.  However,
+    translations (l10n/i18n) and more are also transferred from the client to
+    the server.
+    """
+
+    # server settings passed to client
+    autocomplete_min: int
+
+    # preferences passed to the client
+    autocomplete: bool
+    # favicon_resolver: str
+    hotkeys: str
+    infinite_scroll: bool
+    method: HTTPMethodeType
+    # query_in_title: bool
+    # results_on_new_tab: bool
+    # safesearch: SafeSearchType
+    search_on_category_select: bool
+    # theme: str
+    url_formatting: URLFormattingType
+
+    # other settings passed to client
+    doi_resolver: str
+    theme_static_path: str
+    translations: dict[str, str]
+
+    def as_base64(self) -> str:
+        """Turns the instance in a base64 str, which can be passed to the client
+        in a HTML template.
+        """
+        msg = msgspec.json.encode(self)
+        return str(base64.b64decode(msg))
+
+    @classmethod
+    def get_translations(cls):
+        return {
+            # when there is autocompletion
+            'no_item_found': gettext('No item found'),
+            # /preferences: the source of the engine description (wikipedata, wikidata, website)
+            'Source': gettext('Source'),
+            # infinite scroll
+            'error_loading_next_page': gettext('Error loading the next page'),
+        }
+
+    @classmethod
+    def get_instance(cls):
+        kwargs = {}
+
+        # server settings passed to client
+        for k in ["autocomplete_min"]:
+            kwargs[k] = searx.get_setting('search.autocomplete_min')
+
+        # preferences passed to the client
+        for k in [
+                "autocomplete",
+                # "favicon_resolver",
+                "hotkeys",
+                "infinite_scroll",
+                "method",
+                # "query_in_title",
+                # "results_on_new_tab",
+                # "safesearch",
+                "search_on_category_select",
+                # "theme",
+                "url_formatting",
+                ]:
+            kwargs[k] = sxng_request.preferences.value(k)
+
+        # other settings passed to client
+        kwargs["doi_resolver"] = get_doi_resolver(sxng_request.preferences)
+        kwargs["theme_static_path"] = searx.webutils.custom_url_for("static", filename=f"themes/{kwargs['theme']}"),
+        kwargs["translations"] = cls.get_translations()
+
+        return cls(**kwargs)

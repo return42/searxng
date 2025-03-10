@@ -1,17 +1,12 @@
-<fieldset>{{- '' -}}
-  <legend id="pref_favicon_resolver">{{- _('Favicon Resolver') -}}</legend>{{- '' -}}
-  <div class="value">{{- '' -}}
-    <select name="favicon_resolver" aria-labelledby="pref_favicon_resolver">{{- '' -}}
-      <option value=""> - </option>
-      {%- for backend in favicon_resolver_names -%}
-        <option value="{{ backend }}"
-          {%- if backend == favicon_resolver %} selected="selected" {%- endif -%}>
-          {{- backend -}}
-        </option>
-      {%- endfor -%}
-    </select>{{- '' -}}
-  </div>{{- '' -}}
-  <div class="description">
-    {{- _('Display favicons near search results') -}}
-  </div>{{- '' -}}
-</fieldset>{{- '' -}}
+<fieldset>
+  {% set comp = preferences.components["favicon_resolver"] %}
+  <legend id="pref_{{comp.form_id}}">{{_('Favicon Resolver')}}</legend>
+  <div class="value">
+    <select name="{{comp.form_id}}" aria-labelledby="pref_{{comp.form_id}}">
+      {% for name, selected in comp.menu_options() %}
+        <option value="{{name}}" {% if selected %} selected="selected" {% endif %}>{{name}}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="description">{{_("Display favicons near search results")}}</div>
+</fieldset>

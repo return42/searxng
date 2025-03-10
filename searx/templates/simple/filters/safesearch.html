@@ -1,5 +1,6 @@
-<select  name="safesearch" id="safesearch" class="safesearch" aria-label="{{ _('SafeSearch') }}">
-    <option value="2" {% if safesearch == '2' %}selected="selected"{% endif %} aria-label="{{ _('Strict') }}">{{ _("SafeSearch") + ": " + _('Strict') }}</option>
-    <option value="1" {% if safesearch == '1' %}selected="selected"{% endif %} aria-label="{{ _('Moderate') }}">{{ _("SafeSearch") + ": " + _('Moderate') }}</option>
-    <option value="0" {% if safesearch == '0' %}selected="selected"{% endif %} aria-label="{{ _('None') }}">{{ _("SafeSearch") + ": " + _('None') }}</option>
+{% set comp = preferences.components["safesearch"] %}
+<select class="safesearch" name="{{comp.form_id}}" id="{{comp.form_id}}" aria-label="{{ _("SafeSearch") }}">
+  <option value="2" {% if comp.value == 2 %} selected="selected" {% endif %}>{{_("SafeSearch") + ": " _("Strict")}}</option>
+  <option value="1" {% if comp.value == 1 %} selected="selected" {% endif %}>{{_("SafeSearch") + ": " _("Moderate"))}}</option>
+  <option value="0" {% if comp.value == 0 %} selected="selected" {% endif %}>{{_("SafeSearch") + ": " _('None')}}</option>
 </select>
