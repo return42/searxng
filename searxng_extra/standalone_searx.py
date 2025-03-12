@@ -43,6 +43,7 @@ from json import dumps
 from typing import Any, Dict, List, Optional
 
 import searx
+import searx.engines
 import searx.preferences
 import searx.query
 import searx.search

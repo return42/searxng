@@ -171,12 +171,12 @@ class SXNGPlugin(Plugin):
         return True
 
     def init(self, app: "flask.Flask") -> bool:  # pylint: disable=unused-argument
-        global REPLACE, REMOVE, HIGH, LOW
+        global REPLACE, REMOVE, HIGH, LOW  # pylint: disable=global-statement
 
-        REPLACE = _load_regular_expressions("replace") or {}  # type: ignore
-        REMOVE = _load_regular_expressions("remove") or set()  # type: ignore
-        HIGH = _load_regular_expressions("high_priority") or set()  # type: ignore
-        LOW = _load_regular_expressions("low_priority") or set()  # type: ignore
+        REPLACE = self._load_regular_expressions("replace") or {}  # type: ignore
+        REMOVE = self._load_regular_expressions("remove") or set()  # type: ignore
+        HIGH = self._load_regular_expressions("high_priority") or set()  # type: ignore
+        LOW = self._load_regular_expressions("low_priority") or set()  # type: ignore
 
         return True
 

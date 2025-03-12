@@ -3,7 +3,6 @@
 """
 from __future__ import annotations
 import types
-from base64 import decode
 
 from flask_babel import gettext
 

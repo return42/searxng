@@ -32,7 +32,6 @@ from pathlib import Path
 import babel
 import babel.languages
 import babel.core
-import flask_babel
 from flask.ctx import has_request_context
 
 from searx import (
@@ -69,10 +68,10 @@ Kong."""
 
 
 def babel_locale_selector():
-    sxng_locale_tag: str = "en"
+    _tag: str = "en"
     if has_request_context():
-        sxng_locale_tag = sxng_request.client.ui_locale_tag() or "en"
-    babel_locale = TRANSLATION_BEST_MATCH.get(sxng_locale_tag, sxng_locale_tag).replace('-', '_')
+        _tag = sxng_request.client.ui_locale_tag or "en"
+    babel_locale = TRANSLATION_BEST_MATCH.get(_tag, _tag).replace('-', '_')
     return babel_locale
 
 

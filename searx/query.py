@@ -347,7 +347,7 @@ class RawTextQuery:
     @property
     def search_locale_tag(self) -> str:
         """SearXNG locale tag from search term."""
-        return self.languages[-1] if len(self.languages) else ""
+        return self.languages[-1] if self.languages else ""
 
     def _parse_query(self):
         """parse self.query, if tags are set, which change the search engine or

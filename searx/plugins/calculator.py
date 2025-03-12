@@ -16,7 +16,6 @@ from flask_babel import gettext
 
 from searx.result_types import EngineResults
 from searx.plugins import Plugin, PluginInfo
-from searx.result_types import EngineResults
 
 if typing.TYPE_CHECKING:
     from searx.search import SearchWithPlugins
