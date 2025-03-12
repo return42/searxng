@@ -86,6 +86,8 @@ class Plugin(abc.ABC):
     info: PluginInfo
     """Informations about the *plugin*, see :py:obj:`PluginInfo`."""
 
+    fqn: str = ""
+
     def __init__(self, plg_cfg: PluginCfg) -> None:
         super().__init__()
         if not self.fqn:

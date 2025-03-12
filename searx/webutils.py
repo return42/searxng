@@ -363,10 +363,10 @@ def group_engines_in_tab(engines: Iterable[Engine]) -> List[Tuple[str, Iterable[
 
 # about static
 logger.debug('static directory is %s', get_setting("ui.static_path"))
-static_files = get_static_files(get_setting("ui.static_path"))
 
 
 def custom_url_for(endpoint: str, **values):
+    static_files = get_static_files(get_setting("ui.static_path"))
     suffix = ""
     if endpoint == 'static' and values.get('filename'):
         file_hash = static_files.get(values['filename'])

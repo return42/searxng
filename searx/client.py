@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from __future__ import annotations
+import typing
 
+import abc
 import base64
 import re
-import abc
+from collections import defaultdict
+
 import babel
 import babel.core
 from flask_babel import gettext
-import typing
-from collections import defaultdict
-
 import msgspec
 
 import searx
@@ -200,8 +200,8 @@ class HTTPClient(Client):
             return safe_search.value
         try:
             safe_search.validate(str_val)
-        except ValueError:
-            raise SearxParameterException("safesearch", str_val)
+        except ValueError as exc:
+            raise SearxParameterException("safesearch", str_val) from exc
         return safe_search.str2val(str_val)
 
     @property
