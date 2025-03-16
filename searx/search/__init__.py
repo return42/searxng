@@ -14,15 +14,15 @@ from searx import logger
 from searx import get_setting
 import searx.answerers
 import searx.plugins
+import searx.metrics
+
 from searx.engines import load_engines
 from searx.extended_types import SXNG_Request
 from searx.external_bang import get_bang_url
-from searx.metrics import initialize as initialize_metrics, counter_inc
-from searx.network import initialize as initialize_network, check_network_configuration
 from searx.results import ResultContainer
-from searx.search.checker import initialize as initialize_checker
 from searx.search.models import SearchQuery
-from searx.search.processors import PROCESSORS, initialize as initialize_processors
+from searx.search.processors import PROCESSORS
+
 
 from .models import SearchQuery
 
@@ -30,16 +30,22 @@ logger = logger.getChild('search')
 
 
 def initialize(settings_engines=None, enable_checker=False, check_network=False, enable_metrics=True):
+
+    import searx.network
+    import searx.search.checker
+    import searx.metrics
+    import searx.search.processors
+
     settings_engines = settings_engines or get_setting("engines")
     load_engines(settings_engines)
-    initialize_network(settings_engines, get_setting("outgoing"))
-    if check_network:
-        check_network_configuration()
-    initialize_metrics([engine['name'] for engine in settings_engines], enable_metrics)
-    initialize_processors(settings_engines)
-    if enable_checker:
-        initialize_checker()
+    searx.network.initialize(settings_engines, get_setting("outgoing"))
+    searx.metrics.initialize([engine['name'] for engine in settings_engines], enable_metrics)
+    searx.search.processors.initialize(settings_engines)
 
+    if check_network:
+        searx.network.check_network_configuration()
+    if enable_checker:
+        searx.search.checker.initialize()
 
 class Search:
     """Search information container"""
@@ -96,7 +102,7 @@ class Search:
             if request_params is None:
                 continue
 
-            counter_inc('engine', eng_name, 'search', 'count', 'sent')
+            searx.metrics.counter_inc('engine', eng_name, 'search', 'count', 'sent')
 
             # append request to list
             requests.append((eng_name, self.search_query.query, request_params))

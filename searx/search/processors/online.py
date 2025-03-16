@@ -164,8 +164,8 @@ class OnlineProcessor(EngineProcessor):
         except ssl.SSLError as e:
             # requests timeout (connect or read)
             self.handle_exception(result_container, e, suspend=True)
-            nw: Network = searx.network.get_network(self.engine_name)  # type: ignore
-            self.logger.error("SSLError {}, verify={}".format(e, nw.verify))
+            _nw: Network = searx.network.get_network(self.engine_name)  # type: ignore
+            self.logger.error("SSLError {}, verify={}".format(e, _nw.verify))
         except (httpx.TimeoutException, asyncio.TimeoutError) as e:
             # requests timeout (connect or read)
             self.handle_exception(result_container, e, suspend=True)

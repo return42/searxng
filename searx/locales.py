@@ -27,6 +27,7 @@ SearXNG’s locale implementations
 
 from __future__ import annotations
 import typing
+import re
 from pathlib import Path
 
 import babel
@@ -39,9 +40,12 @@ from searx import (
     logger,
     searx_dir,
 )
+
 from searx.extended_types import sxng_request
 
 logger = logger.getChild('locales')
+
+VALID_LANGUAGE_CODE = re.compile(r"^[a-z]{2,3}(-[a-zA-Z]{2})?$")
 
 LOCALE_NAMES = {}
 """Mapping of locales and their description.  Locales e.g. 'fr' or 'pt-BR' (see
@@ -56,11 +60,13 @@ RTL_LOCALES: set[str] = set()
 
 TRANSLATION_BEST_MATCH = {
     "dv": "si",
-    "oc": 'fr-FR',
-    "szl": "pl",
     "nl-BE": "nl",
-    "zh-HK": "zh_Hant-TW",
+    "oc": "fr-FR",
     "pap": "pt-BR",
+    "szl": "pl",
+    "zh-CN": "zh_Hans-CN",
+    "zh-HK": "zh_Hant-TW",
+    "zh-TW": "zh_Hant-TW",
 }
 """Map a locale we do not have a translations for to a locale we have a
 translation for.  By example: use Taiwan version of the translation for Hong

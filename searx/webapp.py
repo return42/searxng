@@ -313,10 +313,10 @@ def render(template_name: str, **kwargs):
 
 @app.before_request
 def pre_request():
-    client = searx.client.HTTPClient.from_http_request()
-    prefs = searx.preferences.Preferences()
-    prefs.process_request(client)
-    SXNG_Request.init(prefs, client)
+
+    sxng_request.client = searx.client.HTTPClient.from_http_request()
+    sxng_request.preferences = searx.preferences.Preferences()
+    SXNG_Request.init()
 
 
 @app.after_request
@@ -854,22 +854,37 @@ def image_proxy():
 
 @app.route('/engine_descriptions.json', methods=['GET'])
 def engine_descriptions():
-    locale = get_locale().split('_')[0]
-    result = ENGINE_DESCRIPTIONS['en'].copy()
-    if locale != 'en':
-        for engine, description in ENGINE_DESCRIPTIONS.get(locale, {}).items():
+    lang = sxng_request.client.language_tag
+
+    # FIXME: needs to be tested for zh-HK, zh-Hans-CN, zh-Hant-TW, fa-IR, nl-BE ..
+
+    # by default the english description is used for all engines
+    result = ENGINE_DESCRIPTIONS["en"].copy()
+    if lang != "en":
+        # if l10n exists, update engine's description
+        for engine, description in ENGINE_DESCRIPTIONS.get(lang, {}).items():
             result[engine] = description
+
+    # process items like:
+    #     "gentoo":[
+    #        "gentoo:en",
+    #        "ref"
+    #     ],
+
     for engine, description in result.items():
-        if len(description) == 2 and description[1] == 'ref':
-            ref_engine, ref_lang = description[0].split(':')
+
+        if len(description) == 2 and description[1] == "ref":
+            ref_engine, ref_lang = description[0].split(":")
             description = ENGINE_DESCRIPTIONS[ref_lang][ref_engine]
+
         if isinstance(description, str):
-            description = [description, 'wikipedia']
+            description = [description, "wikipedia"]
         result[engine] = description
 
     # overwrite by about:description (from settings)
+
     for engine_name, engine_mod in searx.engines.engines.items():
-        descr = getattr(engine_mod, 'about', {}).get('description', None)
+        descr = getattr(engine_mod, "about", {}).get("description", None)
         if descr is not None:
             result[engine_name] = [descr, "SearXNG config"]
 
@@ -1021,7 +1036,7 @@ def opensearch():
 def favicon():
     theme = sxng_request.preferences.value("theme")
     return send_from_directory(
-        os.path.join(app.root_path, settings['ui']['static_path'], 'themes', theme, 'img'),  # type: ignore
+        os.path.join(app.root_path, get_setting("ui.static_path"), 'themes', theme, 'img'),
         'favicon.png',
         mimetype='image/vnd.microsoft.icon',
     )

@@ -81,9 +81,7 @@ class SXNG_Request(flask.Request):
     """
 
     @staticmethod
-    def init(preferences: "searx.preferences.Preferences", client: "searx.client.HTTPClient"):
-        sxng_request.preferences = preferences
-        sxng_request.client = client
+    def init():
         sxng_request.start_time = timeit.default_timer()  # pylint: disable=assigning-non-slot
         sxng_request.render_time = 0  # pylint: disable=assigning-non-slot
         sxng_request.timings = []  # pylint: disable=assigning-non-slot
@@ -100,8 +98,8 @@ class SXNG_Request(flask.Request):
 sxng_request = typing.cast(SXNG_Request, flask.request)
 
 
-class SXNG_Response(httpx.Response):
-    """SearXNG extends the class :py:obj:`httpx.Response` with properties from
+class SXNG_Response(flask.Response):
+    """SearXNG extends the class :py:obj:`flask.Response` with properties from
     *this* class (type cast of :py:obj:`httpx.Response`).
 
     .. code:: python

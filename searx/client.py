@@ -20,13 +20,15 @@ import searx.webutils
 from searx.exceptions import SearxParameterException
 from searx.settings_defaults import SafeSearchType, URLFormattingType, HTTPMethodeType
 from searx.extended_types import sxng_request
-from searx.preferences import Preferences
 from searx.components.form import SingleChoice, MultipleChoice
 from searx.query import RawTextQuery
 from searx.search import SearchQuery
 from searx.plugins.oa_doi_rewrite import get_doi_resolver
 
 from searx.utils import detect_language
+
+if typing.TYPE_CHECKING:
+    from searx.preferences import Preferences
 
 TimeRangeType = typing.Literal["day", "week", "month", "year", None]
 TIME_RANGE: tuple[TimeRangeType, ...] = typing.get_args(TimeRangeType)
@@ -42,12 +44,19 @@ class Client(abc.ABC):
     (:py:obj:`Client.language_tag`) and the region/language of the search query
     (:py:obj:`Client.region_tag`)."""
 
-    prefs: Preferences
-
     def __init__(self, locale: babel.Locale):
         self.locale = locale
-        self.pref = Preferences()
-        self.raw_query = RawTextQuery(self.search_term, self.pref.disabled_engines)
+        self._raw_query = None
+
+    @property
+    def raw_query(self) -> RawTextQuery:
+        if self._raw_query is None:
+            self._raw_query = RawTextQuery(self.search_term, self.pref.disabled_engines)
+        return self._raw_query
+
+    @property
+    def pref(self) -> "Preferences":
+        return sxng_request.preferences
 
     @property
     def language_tag(self) -> str | None:
@@ -134,9 +143,15 @@ class Client(abc.ABC):
 class HTTPClient(Client):
     """Implements server site of a HTTP client."""
 
-    def __init__(self, locale: babel.Locale, settings: HTTPClientSettings):
+    def __init__(self, locale: babel.Locale):
         super().__init__(locale)
-        self.settings = settings
+        self._settings = None
+
+    @property
+    def settings(self):
+        if not self._settings:
+            self._settings = HTTPClientSettings.get_instance()
+        return self._settings
 
     @classmethod
     def from_http_request(cls):
@@ -146,11 +161,10 @@ class HTTPClient(Client):
           <https://www.w3.org/International/questions/qa-accept-lang-locales.en>`__
 
         """
-        settings = HTTPClientSettings.get_instance()
 
         al_header = sxng_request.headers.get("Accept-Language")
         if not al_header:
-            return cls(locale=babel.Locale("en"), settings=settings)
+            return cls(locale=babel.Locale("en"))
 
         pairs = []
         for lang_item in al_header.split(","):
@@ -168,7 +182,7 @@ class HTTPClient(Client):
         if pairs:
             pairs.sort(reverse=True, key=lambda x: x[1])
             locale = pairs[0][0]
-        return cls(locale=babel.Locale(locale), settings=settings)
+        return cls(locale=babel.Locale.parse(locale))
 
     @property
     def search_term(self) -> str:
@@ -280,7 +294,7 @@ class HTTPClient(Client):
                 search_locale = tag
                 break
 
-        if not (search_locale in ["", "auto", "all"] or VALID_LANGUAGE_CODE.match(search_locale)):
+        if not (search_locale in ["", "auto", "all"] or searx.locales.VALID_LANGUAGE_CODE.match(search_locale)):
             raise SearxParameterException("search_locale", search_locale)
 
         if search_locale in ["", "auto"]:

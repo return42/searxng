@@ -12,7 +12,7 @@ import searx.engines
 from searx import get_setting
 from searx.sxng_locales import sxng_locales
 from searx.external_bang import get_bang_definition_and_autocomplete
-from searx.client import VALID_LANGUAGE_CODE
+from searx.locales import VALID_LANGUAGE_CODE
 
 
 class QueryPartParser(ABC):

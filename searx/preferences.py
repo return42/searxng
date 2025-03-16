@@ -2,11 +2,12 @@
 """Implementation of SearXNG's preferences.
 """
 from __future__ import annotations
+import typing
+
 import types
 
-from flask_babel import gettext
+from flask_babel import lazy_gettext
 
-import searx.client
 import searx.engines
 import searx.locales
 import searx.plugins
@@ -19,6 +20,9 @@ from searx.engines import DEFAULT_CATEGORY
 from .components import Form, FieldABC, Field, SingleChoice, Bool, SearchLocale, MultipleChoice, BoolGrp
 from .settings_defaults import get_typedef
 
+if typing.TYPE_CHECKING:
+    import searx.client
+
 log = logger.getChild("preferences")
 
 
@@ -29,13 +33,20 @@ class PluginStoragePrefs(BoolGrp):
     """
 
     def __init__(self, form_id: str, grp_name: str, plg_storage: searx.plugins.PluginStorage):
-        super().__init__(form_id, grp_name)
-
+        bool2str = {True: "1", False: "0"}
+        members: dict[str, Bool] = {}
         for plg in plg_storage:
             field_name = self.sep.join([self.grp_name, plg.id])
-            field = Bool(name=field_name, default=plg.active, legend="", description="")
+            field = Bool(
+                name=field_name,
+                default=bool2str[plg.active],
+                bool2str=bool2str,
+            )
             field.form_id = self.form_id
-            self.members[plg.id] = field
+            members[plg.id] = field
+
+        super().__init__(form_id, grp_name, members)
+
 
 
 class EngineMapPrefs(BoolGrp):
@@ -104,6 +115,7 @@ class Categories(MultipleChoice):
         # categories for which there is no active engine are filtered out.
         eng_pref: EngineMapPrefs = prefs["engines"]  # type: ignore
         eng_categs = eng_pref.categories.keys()
+
         for categ in self.str2obj.keys():
             if categ not in eng_categs:
                 del self.str2obj[categ]
@@ -120,10 +132,10 @@ def sxng_pref_list() -> list[FieldABC | BoolGrp]:
         PluginStoragePrefs("pref", "plugins", searx.plugins.STORAGE),
         SingleChoice(
             name="autocomplete",
-            default=get_setting("search.autocomplete"),
-            catalog={"-": None} | autocomplete.backends.keys(),
-            legend=gettext("Autocomplete"),
-            description=gettext("Find stuff as you type"),
+            default=get_setting("search.autocomplete") or None,
+            catalog={"-": None} | autocomplete.backends.items(),
+            legend=lazy_gettext("Autocomplete"),
+            description=lazy_gettext("Find stuff as you type"),
         ),
         Categories(
             name="categories",
@@ -133,62 +145,62 @@ def sxng_pref_list() -> list[FieldABC | BoolGrp]:
         Bool(
             name="center_alignment",
             default=get_setting("ui.center_alignment"),
-            legend=gettext("Center Alignment"),
-            description=gettext("Displays results in the center of the page (Oscar layout)."),
+            legend=lazy_gettext("Center Alignment"),
+            description=lazy_gettext("Displays results in the center of the page (Oscar layout)."),
         ),
         SingleChoice(
             name="doi_resolver",
             default=get_setting("default_doi_resolver"),
-            catalog=get_setting("doi_resolvers"),
-            legend=gettext("Open Access DOI resolver"),
-            description=gettext("Select service used by DOI rewrite"),
+            catalog=get_setting("doi_resolvers").keys(),
+            legend=lazy_gettext("Open Access DOI resolver"),
+            description=lazy_gettext("Select service used by DOI rewrite"),
         ),
         SingleChoice(
             name="favicon_resolver",
-            default=get_setting("search.favicon_resolver"),
+            default=get_setting("search.favicon_resolver") or "-",
             catalog={"-": None} | favicons.proxy.CFG.resolver_map,
-            legend=gettext("Favicon Resolver"),
-            description=gettext("Display favicons near search results"),
+            legend=lazy_gettext("Favicon Resolver"),
+            description=lazy_gettext("Display favicons near search results"),
         ),
         SingleChoice(
             name="hotkeys",
-            default=get_setting("ui.hotkeys"),
+            default=get_setting("ui.hotkeys") or "default",
             catalog=get_typedef("ui.hotkeys"),
-            legend=gettext("Hotkeys"),
-            description=gettext(
+            legend=lazy_gettext("Hotkeys"),
+            description=lazy_gettext(
                 """Navigate search results with hotkeys (JavaScript required). """
                 """Press "h" key on main or result page to get help."""
             ),
             catalog_descr={
                 "default": "SearXNG",
-                "vim": gettext("Vim-like"),
+                "vim": lazy_gettext("Vim-like"),
             },
         ),
         Bool(
             name="image_proxy",
             default=get_setting("server.image_proxy"),
-            legend=gettext("Image proxy"),
-            description=gettext("Proxying image results through SearXNG"),
+            legend=lazy_gettext("Image proxy"),
+            description=lazy_gettext("Proxying image results through SearXNG"),
         ),
         Bool(
             name="infinite_scroll",
             default=get_setting("ui.infinite_scroll"),
-            legend=gettext("Infinite scroll"),
-            description=gettext("Automatically load next page when scrolling to bottom of current page"),
+            legend=lazy_gettext("Infinite scroll"),
+            description=lazy_gettext("Automatically load next page when scrolling to bottom of current page"),
         ),
         SearchLocale(
             name="search_locale_tag",  # FIXME old name was "language"
-            legend=gettext("Search language"),
+            legend=lazy_gettext("Search language"),
             description=(
-                gettext("What language do you prefer for search?")
-                + gettext("Choose Auto-detect to let SearXNG detect the language of your query.")
+                lazy_gettext("What language do you prefer for search?")
+                + lazy_gettext("Choose Auto-detect to let SearXNG detect the language of your query.")
             ),
         ),
         SingleChoice(
             name="ui_locale_tag",  # FIXME old name was "locale"
             default=sxng_request.client.ui_locale_tag,
-            legend=gettext("Interface language"),
-            description=gettext("Change the language of the layout"),
+            legend=lazy_gettext("Interface language"),
+            description=lazy_gettext("Change the language of the layout"),
             catalog=set(searx.locales.LOCALE_NAMES.keys()),
             catalog_descr=searx.locales.LOCALE_NAMES,
         ),
@@ -196,40 +208,40 @@ def sxng_pref_list() -> list[FieldABC | BoolGrp]:
             name="method",
             default=get_setting("server.method"),
             catalog=get_typedef("server.method"),
-            legend=gettext("HTTP Method"),
-            description=gettext("Change how forms are submitted"),
+            legend=lazy_gettext("HTTP Method"),
+            description=lazy_gettext("Change how forms are submitted"),
         ),
         Bool(
             name="query_in_title",
             default=get_setting("ui.query_in_title"),
-            legend=gettext("Query in the page's title"),
-            description=gettext(
+            legend=lazy_gettext("Query in the page's title"),
+            description=lazy_gettext(
                 "When enabled, the result page's title contains your query. Your browser can record this title"
             ),
         ),
         Bool(
             name="results_on_new_tab",
             default=get_setting("ui.results_on_new_tab"),
-            legend=gettext("Results on new tabs"),
-            description=gettext("Open result links on new browser tabs"),
+            legend=lazy_gettext("Results on new tabs"),
+            description=lazy_gettext("Open result links on new browser tabs"),
         ),
         SingleChoice(
             name="safesearch",
             default=get_setting("server.safe_search"),
             catalog=get_typedef("server.safe_search"),
-            legend=gettext("SafeSearch"),
-            description=gettext("Filter content"),
+            legend=lazy_gettext("SafeSearch"),
+            description=lazy_gettext("Filter content"),
             catalog_descr={
-                "0": gettext("None"),
-                "1": gettext("Moderate"),
-                "2": gettext("Strict"),
+                "0": lazy_gettext("None"),
+                "1": lazy_gettext("Moderate"),
+                "2": lazy_gettext("Strict"),
             },
         ),
         Bool(
             name="search_on_category_select",
             default=get_setting("ui.search_on_category_select"),
-            legend=gettext("Search on category select"),
-            description=gettext(
+            legend=lazy_gettext("Search on category select"),
+            description=lazy_gettext(
                 "Perform search immediately if a category selected. Disable to select multiple categories."
             ),
         ),
@@ -237,33 +249,33 @@ def sxng_pref_list() -> list[FieldABC | BoolGrp]:
             name="theme",
             default=get_setting("ui.default_theme"),
             catalog=get_typedef("ui.default_theme"),
-            legend=gettext("Theme"),
-            description=gettext("Change SearXNG layout"),
+            legend=lazy_gettext("Theme"),
+            description=lazy_gettext("Change SearXNG layout"),
         ),
         SingleChoice(
             name="simple_style",
             default=get_setting("ui.theme_args.simple_style"),
             catalog=get_typedef("ui.theme_args.simple_style"),
-            legend=gettext("Theme style"),
-            description=gettext("Choose auto to follow your browser settings"),
+            legend=lazy_gettext("Theme style"),
+            description=lazy_gettext("Choose auto to follow your browser settings"),
         ),
         SingleChoice(
             name="url_formatting",
             default=get_setting("ui.url_formatting"),
             catalog=get_typedef("ui.url_formatting"),
-            legend=gettext("URL formatting"),
-            description=gettext("Change result URL formatting"),
+            legend=lazy_gettext("URL formatting"),
+            description=lazy_gettext("Change result URL formatting"),
             catalog_descr={
-                "pretty": gettext("Pretty"),
-                "full": gettext("Full"),
-                "host": gettext("Host"),
+                "pretty": lazy_gettext("Pretty"),
+                "full": lazy_gettext("Full"),
+                "host": lazy_gettext("Host"),
             },
         ),
         Field(
             name="tokens",
             default="",
-            legend=gettext("Engine tokens"),
-            description=gettext("Access tokens for private engines"),
+            legend=lazy_gettext("Engine tokens"),
+            description=lazy_gettext("Access tokens for private engines"),
         ),
     ]
 
@@ -283,13 +295,13 @@ class Preferences(Form):
         grp: EngineMapPrefs = self.components["engines"]  # type: ignore
         return grp.disabled_engines
 
-    def process_request(self, client: searx.client.HTTPClient):
+    def process_request(self, client: "searx.client.HTTPClient"):
 
         try:
-            self.parse_cookies(sxng_request.cookies)
+            self.parse_cookies(sxng_request)
         except Exception as exc:  # pylint: disable=broad-except
             log.exception(exc, exc_info=True)
-            sxng_request.errors.append(gettext("Invalid settings, please edit your preferences"))
+            sxng_request.errors.append(lazy_gettext("Invalid settings, please edit your preferences"))
 
         if sxng_request.form.get("pref_url_params"):
             self.parse_encoded_data(sxng_request.form["pref_url_params"])
@@ -298,7 +310,7 @@ class Preferences(Form):
                 self.parse_form(sxng_request.form)
             except Exception as exc:  # pylint: disable=broad-except
                 log.exception(exc, exc_info=True)
-                sxng_request.errors.append(gettext("Invalid settings"))
+                sxng_request.errors.append(lazy_gettext("Invalid settings"))
 
         if not self.value("search_locale_tag"):
 
