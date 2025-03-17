@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from __future__ import annotations
+from dataclasses import dataclass
 import typing
 
 import abc
 import base64
 import re
+import logging
 from collections import defaultdict
 
 import babel
@@ -18,22 +20,23 @@ import searx.engines
 import searx.webutils
 
 from searx.exceptions import SearxParameterException
-from searx.settings_defaults import SafeSearchType, URLFormattingType, HTTPMethodeType
+from searx.settings_defaults import URLFormattingType, HTTPMethodeType
 from searx.extended_types import sxng_request
-from searx.components.form import SingleChoice, MultipleChoice
 from searx.query import RawTextQuery
 from searx.search import SearchQuery
 from searx.plugins.oa_doi_rewrite import get_doi_resolver
 
 from searx.utils import detect_language
 
+from searx.components.filters import SafeSearchType, SAFE_SEARCH_CATALOG, TIME_RANGE_CATALOG, TimeRangeType
+
 if typing.TYPE_CHECKING:
     from searx.preferences import Preferences
 
-TimeRangeType = typing.Literal["day", "week", "month", "year", None]
-TIME_RANGE: tuple[TimeRangeType, ...] = typing.get_args(TimeRangeType)
+log = logging.getLogger(__name__)
 
 VALID_LANGUAGE_CODE = re.compile(r'^[a-z]{2,3}(-[a-zA-Z]{2})?$')
+PREF: "Preferences" = sxng_request.preferences
 
 
 class Client(abc.ABC):
@@ -51,12 +54,8 @@ class Client(abc.ABC):
     @property
     def raw_query(self) -> RawTextQuery:
         if self._raw_query is None:
-            self._raw_query = RawTextQuery(self.search_term, self.pref.disabled_engines)
+            self._raw_query = RawTextQuery(self.search_term, PREF.fields.engines.disabled_engines)
         return self._raw_query
-
-    @property
-    def pref(self) -> "Preferences":
-        return sxng_request.preferences
 
     @property
     def language_tag(self) -> str | None:
@@ -200,23 +199,35 @@ class HTTPClient(Client):
     @property
     def time_range(self) -> TimeRangeType:
         """Time range option from the HTML form (``time_range``)."""
-        val = sxng_request.form.get("time_range")
-        if val is not None and val not in TIME_RANGE:
+        # FIXME: implement a ..forms.filters.TimeRange component for the /search
+        # form.
+        val = sxng_request.form.get("time_range", "")
+        if val not in TIME_RANGE_CATALOG:
             raise SearxParameterException("time_range", val)
         return val
 
     @property
     def safesearch(self) -> SafeSearchType:
-        """Safesearch option from the HTML form (``safesearch``)."""
-        safe_search: SingleChoice = self.pref["safesearch"]  # type: ignore
-        str_val = sxng_request.form.get("safesearch", None)
-        if safe_search.locked or str_val is None:
-            return safe_search.value
-        try:
-            safe_search.validate(str_val)
-        except ValueError as exc:
-            raise SearxParameterException("safesearch", str_val) from exc
-        return safe_search.str2val(str_val)
+        """Safesearch option, first match is used:
+
+        - is set in the HTML form (``safesearch``) otherwise
+        - default value is taken from the preferences
+        """
+        value = PREF.fields.safesearch.value
+
+        # FIXME: implement a ..forms.filters.SafeSearch component for the /search
+        # form.
+        string = sxng_request.form.get("safesearch", None)
+
+        if string is not None:
+            try:
+                value = PREF.fields.safesearch.str2val(string)
+            except ValueError:
+                log.error(f"got invalid safesearch value from HTTP client: '{string}'")
+
+        if value not in SAFE_SEARCH_CATALOG:
+            log.error(f"invalid safesearch value: {repr(value)}")
+        return value
 
     @property
     def ui_locale_tag(self) -> str:
@@ -242,7 +253,7 @@ class HTTPClient(Client):
 
         tag = "en"
         for tag in [
-            self.pref.value("ui_locale_tag"),
+            PREF.fields.ui_locale_tag.value,
             searx.get_setting("ui.default_locale", ""),
             self.language_tag,
         ]:
@@ -286,7 +297,7 @@ class HTTPClient(Client):
         for tag in [
             self.raw_query.search_locale_tag,
             sxng_request.form.get("search_locale", ""),
-            self.pref.value("ui_locale_tag"),
+            PREF.fields.ui_locale_tag.value,
             # HINT: ui.default_locale is already the default of preference ui_locale_tag
             # searx.get_setting("ui.default_locale", ""),
         ]:
@@ -338,13 +349,13 @@ class HTTPClient(Client):
             e = set()
             for c in c_list:
                 for eng in searx.engines.categories.get(c, []):
-                    if eng.name not in self.pref.disabled_engines:
+                    if eng.name not in PREF.fields.engines.disabled_engines:
                         e.add(eng.name)
             return e
 
         # get engine names from categories, !bang & form data
 
-        categs: MultipleChoice = self.pref["categories"]  # type: ignore
+        categs: MultipleChoice = PREF["categories"]  # type: ignore
 
         if categs.locked:
             return _engines_in_categories(categs.value)
@@ -361,7 +372,7 @@ class HTTPClient(Client):
         eng_names: set[str] = set()
         for name in sxng_request.form.get("engines", "").split(","):
             name = name.strip()
-            if name in searx.engines.engines and name not in self.pref.disabled_engines:
+            if name in searx.engines.engines and name not in PREF.fields.engines.disabled_engines:
                 eng_names.add(name)
 
         category_names = [c.strip() for c in sxng_request.form.get("categories", "").split(",")]
@@ -382,7 +393,8 @@ class HTTPClient(Client):
         return data
 
 
-class HTTPClientSettings(msgspec.Struct, kw_only=True):
+@dataclass
+class HTTPClientSettings:
     """Container with informations and settings that are transferred to the
     client.  Those informations are required by the client but also by the
     template framework.
@@ -420,35 +432,28 @@ class HTTPClientSettings(msgspec.Struct, kw_only=True):
     def get_translations(cls):
         return {
             # when there is autocompletion
-            'no_item_found': gettext('No item found'),
+            "no_item_found": gettext("No item found"),
             # /preferences: the source of the engine description (wikipedata, wikidata, website)
-            'Source': gettext('Source'),
+            "Source": gettext("Source"),
             # infinite scroll
-            'error_loading_next_page': gettext('Error loading the next page'),
+            "error_loading_next_page": gettext("Error loading the next page"),
         }
 
     @classmethod
     def get_instance(cls):
-        kwargs = {}
 
-        # server settings passed to client
-        for k in ["autocomplete_min"]:
-            kwargs[k] = searx.get_setting('search.autocomplete_min')
+        theme = "simple"
+        theme_static_path = searx.webutils.custom_url_for("static", filename=f"themes/{theme}")
 
-        # preferences passed to the client
-        for k in [
-            "autocomplete",
-            "hotkeys",
-            "infinite_scroll",
-            "method",
-            "search_on_category_select",
-            "url_formatting",
-        ]:
-            kwargs[k] = sxng_request.preferences.value(k)
-
-        # other settings passed to client
-        kwargs["doi_resolver"] = get_doi_resolver(sxng_request.preferences)
-        kwargs["theme_static_path"] = (searx.webutils.custom_url_for("static", filename=f"themes/{kwargs['theme']}"),)
-        kwargs["translations"] = cls.get_translations()
-
-        return cls(**kwargs)
+        return cls(
+            autocomplete_min=searx.get_setting("search.autocomplete_min"),
+            autocomplete=PREF.fields.autocomplete.value,
+            hotkeys=PREF.fields.hotkeys.value,
+            infinite_scroll=PREF.fields.infinite_scroll.value,
+            method=PREF.fields.method.value,
+            search_on_category_select=PREF.fields.search_on_category_select.value,
+            url_formatting=PREF.fields.url_formatting.value,
+            doi_resolver=get_doi_resolver(),
+            theme_static_path=theme_static_path,
+            translations=cls.get_translations(),
+        )

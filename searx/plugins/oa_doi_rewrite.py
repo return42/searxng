@@ -9,15 +9,13 @@ from urllib.parse import urlparse, parse_qsl
 from flask_babel import gettext
 from searx import get_setting
 from searx.plugins import Plugin, PluginInfo
-
+from searx.extended_types import sxng_request
 
 if typing.TYPE_CHECKING:
-    import flask
     from searx.search import SearchWithPlugins
     from searx.extended_types import SXNG_Request
     from searx.result_types import Result
     from searx.plugins import PluginCfg
-    from searx.preferences import Preferences
 
 ahmia_blacklist: list = []
 
@@ -37,7 +35,10 @@ class SXNGPlugin(Plugin):
         )
 
     def on_result(
-        self, request: "SXNG_Request", search: "SearchWithPlugins", result: Result
+        self,
+        request: "SXNG_Request",
+        search: "SearchWithPlugins",
+        result: "Result",
     ) -> bool:  # pylint: disable=unused-argument
         if not result.parsed_url:
             return True
@@ -48,7 +49,7 @@ class SXNGPlugin(Plugin):
             for suffix in ("/", ".pdf", ".xml", "/full", "/meta", "/abstract"):
                 if doi.endswith(suffix):
                     doi = doi[: -len(suffix)]
-            result.url = get_doi_resolver(request.preferences) + doi
+            result.url = get_doi_resolver() + doi
             # FIXME: following lines needs to be fixed .. when
             # https://github.com/searxng/searxng/pull/4424 has been merged
             result.parsed_url = urlparse(result.url)
@@ -71,9 +72,9 @@ def extract_doi(url):
     return None
 
 
-def get_doi_resolver(prefs: Preferences) -> str:
+def get_doi_resolver() -> str:
     doi_resolvers = get_setting("doi_resolvers")
-    selected_resolver = prefs.value("doi_resolver")[0]
+    selected_resolver = sxng_request.preferences.fields.doi_resolver.value
     if selected_resolver not in doi_resolvers:
         selected_resolver = get_setting("default_doi_resolver")
     return doi_resolvers[selected_resolver]

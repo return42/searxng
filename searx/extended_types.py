@@ -28,7 +28,7 @@ import timeit
 import typing
 
 import flask
-import httpx
+from flask_babel.speaklater import LazyString
 
 if typing.TYPE_CHECKING:
     import searx.preferences
@@ -52,7 +52,7 @@ class SXNG_Request(flask.Request):
     client: "searx.client.HTTPClient"
     """Instance of the HTTPClient."""
 
-    errors: list[str]
+    errors: list[str | LazyString]
     """A list of errors (translated text) added by :py:obj:`searx.webapp` in
     case of errors."""
     # request.form is of type werkzeug.datastructures.ImmutableMultiDict
@@ -93,8 +93,15 @@ class SXNG_Request(flask.Request):
             if k not in sxng_request.form:
                 sxng_request.form[k] = v
 
+        # initialize client
+        sxng_request.client = searx.client.HTTPClient.from_http_request()
 
-#: A replacement for :py:obj:`flask.request` with type cast :py:`SXNG_Request`.
+        # initialize preferences
+        sxng_request.preferences = searx.preferences.Preferences()
+        sxng_request.preferences.process_request()
+
+
+# A replacement for :py:obj:`flask.request` with type cast :py:`SXNG_Request`.
 sxng_request = typing.cast(SXNG_Request, flask.request)
 
 

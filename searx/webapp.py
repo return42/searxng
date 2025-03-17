@@ -313,9 +313,6 @@ def render(template_name: str, **kwargs):
 
 @app.before_request
 def pre_request():
-
-    sxng_request.client = searx.client.HTTPClient.from_http_request()
-    sxng_request.preferences = searx.preferences.Preferences()
     SXNG_Request.init()
 
 

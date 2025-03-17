@@ -47,6 +47,7 @@ def initialize(settings_engines=None, enable_checker=False, check_network=False,
     if enable_checker:
         searx.search.checker.initialize()
 
+
 class Search:
     """Search information container"""
 

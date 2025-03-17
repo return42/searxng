@@ -3,15 +3,18 @@
 """Stuff to implement input forms."""
 
 from __future__ import annotations
-from ast import TypeAlias, TypeVar
-from dataclasses import dataclass, fields
+import dataclasses
 
-from pygments.lexer import default
-from redis.backoff import DecorrelatedJitterBackoff
-
-from searx.botdetection.config import value
-
-__all__ = ["Form", "Field", "FieldABC", "SingleChoice", "Bool", "SearchLocale", "MultipleChoice", "BoolGrp"]
+__all__ = [
+    "Bool",
+    "BoolGrp",
+    "Field",
+    "FieldABC",
+    "FieldCollection",
+    "Form",
+    "MultipleChoice",
+    "SingleChoice",
+]
 
 import abc
 import json
@@ -22,13 +25,9 @@ from zlib import compress, decompress
 from collections.abc import Sequence, MutableMapping, Iterable
 
 import babel.numbers
-import flask
 from flask_babel import lazy_gettext
 from flask_babel.speaklater import LazyString
 
-import searx.locales
-from searx import get_setting
-from searx.sxng_locales import sxng_locales
 from searx.extended_types import SXNG_Request, SXNG_Response, sxng_request
 
 COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 5  # 5 years
@@ -36,7 +35,7 @@ UNKNOWN = object()
 
 # JSONType =  str|int|float|bool|None|typing.Mapping[str,str|int|float|bool|None] |Iterable[str|int|float|bool|None] | None
 
-SerializableType = str | list[str] | dict[str,str | list[str] | dict[str,str]] | None
+SerializableType = str | list[str] | dict[str, str | list[str] | dict[str, str]] | None
 
 
 class FieldABC(abc.ABC):
@@ -52,7 +51,7 @@ class FieldABC(abc.ABC):
        <input name="{field_name}{sep}{name}" id="{field_name}{sep}{name}">
     """
 
-    default: str|list[str]
+    default: str | list[str]
     """Default string value for *this* input item.  If the input represents a
     string value, then the default must be a string.  However, if the input
     field represents several values, e.g. for multiple choice inputs, then the
@@ -80,10 +79,10 @@ class FieldABC(abc.ABC):
     def __init__(
         self,
         name: str,
-        default: str|list[str],
+        default: str | list[str],
         str2obj: MutableMapping[str, typing.Any] | Iterable[str] | typing.Callable[[str], typing.Any] = str,
-        description: LazyString|str = "",
-        legend: LazyString|str = "",
+        description: LazyString | str = "",
+        legend: LazyString | str = "",
         ui_class: str = "",
     ):
 
@@ -113,12 +112,12 @@ class FieldABC(abc.ABC):
             for string in self.default:
                 if self.str_sep in string:
                     raise ValueError(f"Invalid separator '{self.str_sep}' in default string '{string}'")
-            if isinstance(self.str2obj, (MutableMapping,Iterable)):
+            if isinstance(self.str2obj, (MutableMapping, Iterable)):
                 for string in self.str2obj:
                     if self.str_sep in string:
                         raise ValueError(f"Invalid separator '{self.str_sep}' in catalog value '{string}'")
 
-    def str2val(self, string: str|list[str]) -> typing.Any | list[typing.Any]:
+    def str2val(self, string: str | list[str]) -> typing.Any | list[typing.Any]:
         """Typcast of a string to a python object/value.  The function can also
         be used to validate a string value."""
 
@@ -151,7 +150,9 @@ class FieldABC(abc.ABC):
             for string in str_list:
 
                 if self.str2obj is float:
-                    value = float(babel.numbers.parse_decimal(string, sxng_request.client.locale, numbering_system="latn"))
+                    value = float(
+                        babel.numbers.parse_decimal(string, sxng_request.client.locale, numbering_system="latn")
+                    )
                 else:
                     value = self.str2obj(string)
                     if str(value) != string:
@@ -165,7 +166,7 @@ class FieldABC(abc.ABC):
             return list(val_set)
         return val_set.pop()
 
-    def val2str(self, value: typing.Any) -> str|list[str]:
+    def val2str(self, value: typing.Any) -> str | list[str]:
         """Typcast of a python object/value to a string (or a list of values to
         a list of strings).
 
@@ -230,15 +231,25 @@ class FieldABC(abc.ABC):
             return list(str_set)
         return str_set.pop()
 
-    def set(self, string: str|list[str]):
+    def set(self, string: str | list[str] | set[str]):
         """If *this* field is not *locked*, parse the string value (from a
         form field) and store the typed result at :py:obj:`Preference.value`.
         """
         if self.locked:
             return
-        if isinstance(string, str) and isinstance(self.default, list):
-            string = [ x.strip() for x in string.split(self.str_sep) ]
+
+        if isinstance(self.default, (list, set)):
+            # default is type list --> string value must also be of type list
+            if isinstance(string, str):
+                # build a str list from string
+                string = [x.strip() for x in string.split(self.str_sep)]
+            if not isinstance(string, list):
+                string = list(string)
             string.sort()
+
+        elif not isinstance(string, str):
+            # default is str --> string value must also be of type str
+            raise TypeError(f"field {self.field_id} is a single string (not a list of strings)")
 
         self.value = self.str2val(string)
 
@@ -274,11 +285,13 @@ class FieldABC(abc.ABC):
         :py:obj:`FieldABC.serializable`.
         """
 
-    # @abc.abstractmethod
-    # def parse_form(self, fields: dict[str, str]):
+    # def parse_form(self, form: dict[str,str]):
     #     """Parse dict from the input fields of a HTML ``<form>`` element and set
     #     *this* property.
     #     """
+    #     string = form.get(self.field_id, None)
+    #     if string is not None:
+    #         self.set(string)
 
 
 class Field(FieldABC):
@@ -291,8 +304,8 @@ class Field(FieldABC):
         name: str,
         default: str,
         str2obj: MutableMapping[str, typing.Any] | Iterable[str] | typing.Callable[[str], typing.Any] = str,
-        description: LazyString|str = "",
-        legend: LazyString|str = "",
+        description: LazyString | str = "",
+        legend: LazyString | str = "",
         ui_class: str = "",
     ):
         super().__init__(
@@ -311,7 +324,7 @@ class Field(FieldABC):
         switch, only the difference to the default is considered: If the value
         is the same as the default, ``None`` is returned.
         """
-        string: str = self.val2str(self.value)   # type: ignore
+        string: str = self.val2str(self.value)  # type: ignore
         if mod_only and string == self.default:
             return None
         return string
@@ -326,27 +339,22 @@ class Field(FieldABC):
             self.set(serializable)
         raise TypeError(f"field {self.field_id} can only process str (not '{type(serializable)}')")
 
-    # def parse_form(self, fields: dict[str, str]):
-    #     string = fields.get(self.field_id, None)
-    #     if string is not None:
-    #         self.set(string)
-
 
 class SingleChoice(Field):
     """Class suitable for the implementation of catalogs from which a (one)
     choice can be made."""
 
     str2obj: MutableMapping[str, typing.Any] | Iterable[str]  # type: ignore
-    catalog_descr: dict[str, LazyString|str]
+    catalog_descr: dict[str, LazyString | str]
 
     def __init__(
         self,
         name: str,
         default: str,
         catalog: MutableMapping[str, typing.Any] | Iterable[str],
-        description: LazyString|str = "",
-        legend: LazyString|str = "",
-        catalog_descr: dict[str, LazyString|str] | None = None,
+        description: LazyString | str = "",
+        legend: LazyString | str = "",
+        catalog_descr: dict[str, LazyString | str] | None = None,
         ui_class: str = "",
     ):
         self.catalog_descr = catalog_descr or {}
@@ -360,7 +368,7 @@ class SingleChoice(Field):
         )
 
     @property
-    def catalog(self) -> typing.Generator[tuple[str, LazyString|str, bool]]:
+    def catalog(self) -> typing.Generator[tuple[str, LazyString | str, bool]]:
         """Iterator suitable to generate a list of options.  Returns a three
         digit tuple::
 
@@ -384,70 +392,30 @@ class Bool(SingleChoice):
     """Class suitable for the implementation on/off switches."""
 
     value: bool
+    bool2str: dict[bool, str] = {True: "1", False: "0"}
 
     def __init__(
         self,
         name: str,
         default: str,
-        description: LazyString|str = "",
-        legend: LazyString|str = "",
-        bool2str: dict[bool,str] = {True: "1", False: "0"},
-        catalog_descr: dict[str, LazyString|str] | None = None,
+        description: LazyString | str = "",
+        legend: LazyString | str = "",
+        bool2str: dict[bool, str] | None = None,
+        catalog_descr: dict[str, LazyString | str] | None = None,
         ui_class: str = "",
     ):
+        if bool2str is not None:
+            self.bool2str = bool2str
+
         if catalog_descr is None:
             catalog_descr = {
-                bool2str[True]: lazy_gettext("On"),
-                bool2str[False]: lazy_gettext("Off"),
+                self.bool2str[True]: lazy_gettext("On"),
+                self.bool2str[False]: lazy_gettext("Off"),
             }
         super().__init__(
             name=name,
             default=default,
-            catalog={ v:k for k,v in bool2str.items()},
-            description=description,
-            legend=legend,
-            catalog_descr=catalog_descr,
-            ui_class=ui_class,
-        )
-
-
-class SearchLocale(SingleChoice):
-    """Catalog for the search language, built from :py:obj:`searx.sxng_locales`
-    including special entries like ``[all]`` and *auto-detect*.
-    """
-
-    value: str
-
-    def __init__(
-        self,
-        name: str,
-        description: LazyString|str = "",
-        legend: LazyString|str = "",
-        auto_locale: str = "auto",
-        ui_class: str = "",
-    ):
-
-        special_locales: tuple[tuple[str, str, str, str, str], ...] = (
-            ("all", lazy_gettext("Default language") + " [all]", "", "", ""),
-            ("auto", lazy_gettext("Auto-detect") + f" [{auto_locale}]", "", "", ""),
-        )
-        catalog = set()
-        catalog_descr = {}
-        allowed_tags = get_setting("search.languages")
-
-        for sxng_tag, lang_name, country_name, _, flag in special_locales + sxng_locales:
-            if sxng_tag in allowed_tags:
-                catalog.add(sxng_tag)
-                catalog_descr[sxng_tag] = " ".join(filter(None, [lang_name, country_name, flag]))
-
-        default = searx.locales.match_locale(sxng_request.client.search_locale_tag, allowed_tags)
-        if default is None:
-            raise ValueError(f"default value '{default}' not in: {allowed_tags}")
-
-        super().__init__(
-            name=name,
-            default=default,
-            catalog=catalog,
+            catalog={v: k for k, v in self.bool2str.items()},
             description=description,
             legend=legend,
             catalog_descr=catalog_descr,
@@ -463,18 +431,17 @@ class MultipleChoice(FieldABC):
 
     value: list[typing.Any]
     str2obj: MutableMapping[str, typing.Any] | Iterable[str]  # type: ignore
-    catalog_descr: dict[str, LazyString|str]
+    catalog_descr: dict[str, LazyString | str]
 
     def __init__(
         self,
         name: str,
         default: list[str],
         catalog: dict[str, typing.Any] | Sequence[typing.Any] | set[typing.Any],
-        description: LazyString|str = "",
-        legend: LazyString|str = "",
-        catalog_descr: dict[str, LazyString|str] | None = None,
+        description: LazyString | str = "",
+        legend: LazyString | str = "",
+        catalog_descr: dict[str, LazyString | str] | None = None,
         ui_class: str = "",
-
     ):
         self.catalog_descr = catalog_descr or {}
 
@@ -504,7 +471,7 @@ class MultipleChoice(FieldABC):
         return self.sep.join([self.field_id, item_name])
 
     @property
-    def catalog(self) -> typing.Generator[tuple[str, str, LazyString|str, bool]]:
+    def catalog(self) -> typing.Generator[tuple[str, str, LazyString | str, bool]]:
         """Iterator suitable to generate a list of options.  Returns a three
         digit tuple::
 
@@ -528,7 +495,6 @@ class MultipleChoice(FieldABC):
             selected = str_val in _val
             yield (name, str_val, descr, selected)
 
-
     # ABC methods ..
 
     def serializable(self, mod_only: bool = True) -> list[str] | None:
@@ -536,7 +502,7 @@ class MultipleChoice(FieldABC):
         switch, only the difference to the default is considered: If the value
         is the same as the default, ``None`` is returned.
         """
-        str_list: list = self.val2str(self.value)   # type: ignore
+        str_list: list = self.val2str(self.value)  # type: ignore
         if mod_only and set(str_list) == set(self.default):
             return None
         return str_list
@@ -548,18 +514,18 @@ class MultipleChoice(FieldABC):
         if serializable is None:
             return
         if isinstance(serializable, list):
-            invalid_types = [ type(i).__name__ for i in serializable if type(i) != str]
+            invalid_types = [type(i).__name__ for i in serializable if type(i) != str]
             TypeError(f"field {self.field_id} can only process list of str (not {','.join(invalid_types)})")
             self.set(serializable)
         raise TypeError(f"field {self.field_id} can only process list (not '{type(serializable)}')")
 
-    # def parse_form(self, fields: dict[str, str]):
+    # def parse_form(self, form: dict[str,str]):
     #     new_val = set()
     #     for item_name in self.str2obj:
-    #         string = fields.get(self.item_id(item_name), UNKNOWN)
-    #         if string is not UNKNOWN:
-    #             new_val.add(self.val2str(string))
-    #     self.value = list(new_val)
+    #         str_val = form.get(self.item_id(item_name), UNKNOWN)
+    #         if str_val is not UNKNOWN:
+    #             new_val.add(self.val2str(str_val))
+    #     self.set(new_val)
 
 
 class BoolGrp(abc.ABC):
@@ -583,7 +549,7 @@ class BoolGrp(abc.ABC):
     def group_prefix(self):
         return self.sep.join([self.form_id, self.grp_id])
 
-    def serializable(self, mod_only: bool = True) -> dict[str,list[str]] | list[str] | None:
+    def serializable(self, mod_only: bool = True) -> dict[str, list[str]] | list[str] | None:
         """Returns a *serializable* object of this group.
 
         With the ``mod_only`` switch, only the difference to the default is
@@ -601,7 +567,7 @@ class BoolGrp(abc.ABC):
            group are False.
         """
         if not mod_only:
-            return [ m.name for m in self.members.values() if m.value]
+            return [m.name for m in self.members.values() if m.value]
 
         on_off = {"on": [], "off": []}
         for name, member in self.members.items():
@@ -618,7 +584,7 @@ class BoolGrp(abc.ABC):
 
         return on_off or None
 
-    def apply(self, serializable: dict[str,list[str]] | list[str] | None):
+    def apply(self, serializable: dict[str, list[str]] | list[str] | None):
         """Apply the settings to this field as generated by the method
         :py:obj:`BoolGrp.serializable`.
         """
@@ -637,32 +603,102 @@ class BoolGrp(abc.ABC):
                 self.members[name].value = False
         raise TypeError(f"bool group {self.grp_id} can only process list or dict (not '{type(serializable)}')")
 
-
-    # def parse_form(self, input_fields: dict[str, str]):
+    # def parse_form(self, form: dict[str,str]):
     #     """Parse dict from the input fields of a HTML ``<form>`` element and set
     #     the members of *this* group to values of the fields with prefix
     #     :py:obj:`Preference.grp_prefix`.
     #     """
-    #     for field_id in input_fields.keys():
+    #     for field_id, field_val in form.items():
     #         if not field_id.startswith(self.group_prefix):
     #             continue
-    #         for field in self.members.values():
-    #             field.parse_form(input_fields)
+    #         self.members[field_id].set(field_val)
 
 
-@dataclass
+@dataclasses.dataclass
 class FieldCollection:
-    """A collection of fields (:py:obj:`FieldABC` | :py:obj:`BoolGrp`)."""
+    """Typedefinition for a collection of fields (:py:obj:`FieldABC` |
+    :py:obj:`BoolGrp`)."""
+
+    def __post_init__(self):
+
+        # We need to "lazy evaluate" this mapping (see self.__getitem___): the
+        # fields are not “frozen” and can be changed in the initialization phase
+        # of the surrounding Form object and its Form.form_id value on wich the
+        # field_id depends on.
+
+        self.__form_id2field: dict[str, FieldABC] | None = None
 
     def __iter__(self):
-        for f in fields(self):
-            field: FieldABC|BoolGrp = getattr(self, f.name)
+
+        for f in dataclasses.fields(self):
+            field: FieldABC | BoolGrp = getattr(self, f.name)
             yield field
+
+    def __getitem__(self, field_id: str) -> FieldABC:
+
+        if self.__form_id2field is not None:
+            return self.__form_id2field[field_id]
+
+        _fields: list[tuple[str, FieldABC]] = []
+        for field in self:
+            if isinstance(field, BoolGrp):
+                for m in field.members.values():
+                    _fields.append((m.field_id, m))
+            else:
+                _fields.append((field.field_id, field))
+
+        self.__form_id2field = {}
+        id_list = []
+        for f_id, field in _fields:
+            if f_id in id_list:
+                raise ValueError(f"duplicate use of field_id {f_id}")
+            self.__form_id2field[f_id] = field
+        return self.__form_id2field[field_id]
+
+
+class Form:
+    """A component to implement forms."""
+
+    form_id: str = "form"
+    """The ``form_id`` is used in ``id`` and ``name`` attributes in the
+    corresponding HTML elements (e.g. form_, fieldset_, ..) and should therefore
+    not have any special characters.
+
+    _form: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/form#name
+    _fieldset: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/fieldset#form
+    """
+
+    sep: str = "»"
+    """Separator used to generate IDs for the form and its fields."""
+
+    def __init__(self, form_id: str, fields: FieldCollection, cookie_name: str | None):
+        self.form_id = form_id
+        self.fields = fields
+        self.cookie_name = cookie_name
+        for field in self.fields:
+            field.form_id = self.form_id
+            field.sep = self.sep
+
+    def save_cookie(self, resp: SXNG_Response, max_age: int = COOKIE_MAX_AGE):
+        """Save field settings in a cookie of name :py:obj:`Form.cookie_name`"""
+        if not self.cookie_name:
+            raise ValueError(f"Form {self.form_id} does not have a cooky name.")
+        resp.set_cookie(self.cookie_name, self.get_b64encode(mod_only=True), max_age=max_age)
+
+    def parse_cookies(self, req: SXNG_Request):
+        """Read cookie of name :py:obj:`Form.cookie_name` from domain cookies
+        and load the field settings from this cookie.
+        """
+        if not self.cookie_name:
+            raise ValueError(f"Form {self.form_id} does not have a cooky name.")
+        cookie = req.cookies.get(self.cookie_name)
+        if cookie:
+            self.load_b64encode(cookie)
 
     def serializable(self, mod_only: bool = True) -> dict | None:
         """Returns a *serializable* object of this collection of fields"""
-        ret_val =  {}
-        for field in self:
+        ret_val = {}
+        for field in self.fields:
             s = field.serializable(mod_only=mod_only)
             if s is not None:
                 if isinstance(field, BoolGrp):
@@ -678,7 +714,7 @@ class FieldCollection:
         if serializable is None:
             return
         for name, value in serializable.items():
-            field: FieldABC|BoolGrp = getattr(self, name)
+            field: FieldABC | BoolGrp = getattr(self.fields, name)
             field.apply(value)
 
     def get_JSON(self, mod_only=True) -> str:
@@ -705,7 +741,7 @@ class FieldCollection:
     def lock(self, field_names: list[str]):
         """Locks fields with the given names."""
         for name in field_names:
-            field = getattr(self, name)
+            field = getattr(self.fields, name)
             if isinstance(field, FieldABC):
                 field.lock()
             else:
@@ -714,62 +750,19 @@ class FieldCollection:
     def unlock(self, field_names: list[str]):
         """Unlocks fields with the given names."""
         for name in field_names:
-            field = getattr(self, name)
+            field = getattr(self.fields, name)
             if isinstance(field, FieldABC):
                 field.unlock()
             else:
                 raise TypeError(f"field {name} of type {type(field)} can't be unlocked")
 
+    def parse_request(self):
+        """Set the field values from the form of the request."""
 
-class Form:
-    """A component to implement forms."""
-
-    form_id: str = "form"
-    """The ``form_id`` is used in ``id`` and ``name`` attributes in the
-    corresponding HTML elements (e.g. form_, fieldset_, ..) and should therefore
-    not have any special characters.
-
-    _form: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/form#name
-    _fieldset: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/fieldset#form
-    """
-
-    sep: str = "»"
-    """Separator used to generate IDs for the form and its fields."""
-
-    def __init__(self, form_id:str, fields: FieldCollection, cookie_name: str|None):
-        self.form_id = form_id
-        self.fields = fields
-        self.cookie_name = cookie_name
-        for field in self.fields:
-            field.form_id = self.form_id
-            field.sep = self.sep
-
-    def lock(self, field_names: list[str]):
-        self.fields.lock(field_names=field_names)
-
-    def unlock(self, field_names: list[str]):
-        self.fields.unlock(field_names=field_names)
-
-    def save_cookie(self, resp: SXNG_Response, max_age: int = COOKIE_MAX_AGE):
-        """Save field settings in a cookie of name :py:obj:`Form.cookie_name`"""
-        if not self.cookie_name:
-            raise ValueError(f"Form {self.form_id} does not have a cooky name.")
-        resp.set_cookie(self.cookie_name, self.fields.get_b64encode(mod_only=True), max_age=max_age)
-
-    def parse_cookies(self, req: SXNG_Request):
-        """Read cookie of name :py:obj:`Form.cookie_name` from domain cookies
-        and load the field settings from this cookie.
-        """
-        if not self.cookie_name:
-            raise ValueError(f"Form {self.form_id} does not have a cooky name.")
-        cookie = req.cookies.get(self.cookie_name)
-        if cookie:
-            self.fields.load_b64encode(cookie)
-
-    # def parse_form(self, form_fields: dict[str, str]):
-    #     for comp in self.components.values():
-    #         comp.parse_form(form_fields)
-
+        for field_id, string in sxng_request.form.items():
+            if not field_id.startswith(self.form_id):
+                continue
+            self.fields[field_id].set(string)
 
     # def is_locked(self, comp_name: str) -> bool:
     #     """Returns lock state True/False of the component ``comp_name``."""

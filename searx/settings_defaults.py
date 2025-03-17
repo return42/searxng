@@ -42,14 +42,14 @@ STR_TO_BOOL = {
 }
 _UNDEFINED = object()
 
-SafeSearchType = typing.Literal[0, 1, 2]
-SAFE_SEARCH_CATALOG: tuple[SafeSearchType, ...] = typing.get_args(SafeSearchType)
+HTTPMethodeType = typing.Literal["POST", "GET"]
+HTTP_METHODE_CATALOG: tuple[HTTPMethodeType, ...] = typing.get_args(HTTPMethodeType)
 
 URLFormattingType = typing.Literal["pretty", "full", "host"]
 URL_FORMATTING_CATALOG: tuple[URLFormattingType, ...] = typing.get_args(URLFormattingType)
 
-HTTPMethodeType = typing.Literal["POST", "GET"]
-HTTP_METHODE_TYPE: tuple[HTTPMethodeType, ...] = typing.get_args(HTTPMethodeType)
+SafeSearchType = typing.Literal[0, 1, 2]
+SAFE_SEARCH_CATALOG: tuple[SafeSearchType, ...] = typing.get_args(SafeSearchType)
 
 
 class SettingsValue:
@@ -192,7 +192,7 @@ SCHEMA = {
         'base_url': SettingsValue((False, str), False, 'SEARXNG_BASE_URL'),
         'image_proxy': SettingsValue(bool, False, 'SEARXNG_IMAGE_PROXY'),
         'http_protocol_version': SettingsValue(('1.0', '1.1'), '1.0'),
-        'method': SettingsValue(HTTP_METHODE_TYPE, 'POST'),
+        'method': SettingsValue(HTTP_METHODE_CATALOG, 'POST'),
         'default_http_headers': SettingsValue(dict, {}),
     },
     'redis': {

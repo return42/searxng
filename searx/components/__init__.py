@@ -5,14 +5,25 @@
 from __future__ import annotations
 
 __all__ = [
-    "Form",
+    "Bool",
+    "BoolGrp",
     "Field",
     "FieldABC",
-    "SingleChoice",
-    "Bool",
-    "SearchLocale",
+    "FieldCollection",
+    "Form",
     "MultipleChoice",
-    "BoolGrp",
+    "SearchLocale",
+    "SingleChoice",
 ]
 
-from .form import Form, Field, FieldABC, SingleChoice, Bool, SearchLocale, MultipleChoice, BoolGrp
+from .form import (
+    Bool,
+    BoolGrp,
+    Field,
+    FieldABC,
+    FieldCollection,
+    Form,
+    MultipleChoice,
+    SearchLocale,
+    SingleChoice,
+)
