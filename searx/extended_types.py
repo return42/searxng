@@ -30,10 +30,11 @@ import typing
 import flask
 from flask_babel.speaklater import LazyString
 
+import searx.client
+
 if typing.TYPE_CHECKING:
     import searx.preferences
     import searx.results
-    import searx.client
 
 
 class SXNG_Request(flask.Request):
@@ -115,11 +116,19 @@ class SXNG_Response(flask.Response):
        response = typing.cast(SXNG_Response, response)
        if response.ok:
           ...
+
+    .. note::
+
+       This type cast is not used for the response from SearXNG itself, its only
+       used in the ``searx.network`` context for the response from the origin
+       engines.
     """
 
     ok: bool
-    """Response is OK (``True`` if :py:obj:`httpx.Response.is_error` is
-    ``False``"""
+    """Response is from origin engine is OK.
+
+    ``True`` if :py:obj:`httpx.Response.is_error` is ``False``
+    """
 
     search_params: dict
     """Parameters used to send the HTTP request."""

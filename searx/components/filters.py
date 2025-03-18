@@ -28,9 +28,10 @@ TIME_RANGE_CATALOG: tuple[TimeRangeType, ...] = typing.get_args(TimeRangeType)
 
 
 class TimeRange(SingleChoice):
+    """Time range filter which is available in the search mask."""
 
     value: TimeRangeType
-    str2obj: dict[str, TimeRangeTypeType]  # type: ignore
+    str2obj: dict[str, TimeRangeType]  # type: ignore
 
     def __init__(self, name: str, default: str, legend: LazyString | str = "", description: LazyString | str = ""):
 
@@ -57,6 +58,8 @@ class TimeRange(SingleChoice):
 
 
 class SafeSearch(SingleChoice):
+    """Safe search filter which is available in the search mask and the
+    prefernces menu."""
 
     value: SafeSearchType
     str2obj: dict[str, SafeSearchType]  # type: ignore
@@ -82,6 +85,8 @@ class SafeSearch(SingleChoice):
 
 
 class CategoriesAsTabs(MultipleChoice):
+    """Categorie tabs that can be selected in the search mask.  Also used for
+    preferences menu."""
 
     str2obj: set[str]  # type: ignore
 
@@ -109,7 +114,8 @@ class CategoriesAsTabs(MultipleChoice):
 
 class SearchLocale(SingleChoice):
     """Catalog for the search language, built from :py:obj:`searx.sxng_locales`
-    including special entries like ``[all]`` and *auto-detect*.
+    including special entries like ``[all]`` and *auto-detect*.  Also used for
+    preferences menu.
     """
 
     value: str

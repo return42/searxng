@@ -372,7 +372,7 @@ def custom_url_for(endpoint: str, **values):
         file_hash = static_files.get(values['filename'])
         if not file_hash:
             # try file in the current theme
-            theme_name = sxng_request.preferences.value('theme')
+            theme_name = sxng_request.preferences.fields.theme.value
             filename_with_theme = "themes/{}/{}".format(theme_name, values['filename'])
             file_hash = static_files.get(filename_with_theme)
             if file_hash:
@@ -380,7 +380,7 @@ def custom_url_for(endpoint: str, **values):
         if get_setting('ui.static_use_hash') and file_hash:
             suffix = "?" + file_hash
     if endpoint == 'info' and 'locale' not in values:
-        locale = sxng_request.preferences.value('locale')
+        locale = sxng_request.preferences.fields.ui_locale_tag.value
         if infopage.INFO_PAGES.get_page(values['pagename'], locale) is None:
             locale = infopage.INFO_PAGES.locale_default
         values['locale'] = locale

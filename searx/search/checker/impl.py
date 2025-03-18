@@ -18,7 +18,7 @@ from searx import network, logger
 from searx.utils import gen_useragent, detect_language
 from searx.results import ResultContainer
 from searx.search.processors import EngineProcessor
-from searx.search import SearchQuery
+from searx.search.models import SearchQuery
 from searx.metrics import counter_inc
 
 

@@ -1,4 +1,24 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+"""Integration of the client protocols.
+
+HTTP protocol:
+  An instance of :py:obj:`HTTPClient` is created on the server side for the
+  incomming HTTP request.  The instance is used on the server side to evaluate
+  properties of the client (e.g. the default language of the web browser, if the
+  user has not explicitly selected a language).
+
+  Note the instance of :py:obj:`HTTPClient` is not a session context; there is
+  no session context in SearXNG!
+
+  Server-side settings and any other data generated on the server side and
+  needed on the client-side are returned to the HTTP client by means of an
+  :py:obj:`HTTPClientSettings` object.  In order for the client to be able to
+  evaluate this data, the client must support Javascript.  Data that is also
+  required by a no-JS client cannot be transferred with this.  However, this
+  client data can also be used in the HTM templates to make it available
+  elsewhere for a no-JS client.
+"""
+
 from __future__ import annotations
 from dataclasses import dataclass
 import typing
@@ -23,7 +43,7 @@ from searx.exceptions import SearxParameterException
 from searx.settings_defaults import URLFormattingType, HTTPMethodeType
 from searx.extended_types import sxng_request
 from searx.query import RawTextQuery
-from searx.search import SearchQuery
+from searx.search.models import SearchQuery
 from searx.plugins.oa_doi_rewrite import get_doi_resolver
 
 from searx.utils import detect_language
@@ -223,10 +243,10 @@ class HTTPClient(Client):
             try:
                 value = PREF.fields.safesearch.str2val(string)
             except ValueError:
-                log.error(f"got invalid safesearch value from HTTP client: '{string}'")
+                log.error("got invalid safesearch value from HTTP client: '%s'", string)
 
         if value not in SAFE_SEARCH_CATALOG:
-            log.error(f"invalid safesearch value: {repr(value)}")
+            log.error("invalid safesearch value: %s", repr(value))
         return value
 
     @property
@@ -355,10 +375,8 @@ class HTTPClient(Client):
 
         # get engine names from categories, !bang & form data
 
-        categs: MultipleChoice = PREF["categories"]  # type: ignore
-
-        if categs.locked:
-            return _engines_in_categories(categs.value)
+        if PREF.fields.categories_as_tabs.locked:
+            return _engines_in_categories(PREF.fields.categories_as_tabs.value)
 
         if self.raw_query.engine_names:
             # use engines selected in the search term by !bang search syntax

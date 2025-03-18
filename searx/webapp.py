@@ -219,7 +219,7 @@ def image_proxify(url: str):
     if url.startswith('//'):
         url = 'https:' + url
 
-    if not sxng_request.preferences.value("image_proxy"):
+    if not sxng_request.preferences.fields.image_proxy.value:
         return url
 
     if url.startswith('data:image/'):
@@ -242,7 +242,7 @@ def image_proxify(url: str):
 
 
 def get_pretty_url(parsed_url: urllib.parse.ParseResult):
-    url_formatting_pref = sxng_request.preferences.value("url_formatting")
+    url_formatting_pref = sxng_request.preferences.fields.url_formatting.value
 
     if url_formatting_pref == 'full':
         return [parsed_url.geturl()]
@@ -297,8 +297,8 @@ def render(template_name: str, **kwargs):
         + '?'
         + urlencode(
             {
-                'method': sxng_request.preferences.value("method"),
-                'autocomplete': sxng_request.preferences.value("autocomplete"),
+                'method': sxng_request.preferences.fields.method.value,
+                'autocomplete': sxng_request.preferences.fields.autocomplete.value,
             }
         )
     )
@@ -398,7 +398,7 @@ def client_token(token=None):
 @app.route('/rss.xsl', methods=['GET', 'POST'])
 def rss_xsl():
     return render_template(
-        f"{sxng_request.preferences.value('theme')}/rss.xsl",
+        f"{sxng_request.preferences.fields.theme.value}/rss.xsl",
         url_for=custom_url_for,
     )
 
@@ -576,7 +576,7 @@ def info(pagename, locale):
     if page is None:
         flask.abort(404)
 
-    user_locale = sxng_request.preferences.value("ui_locale_tag")
+    user_locale = sxng_request.preferences.fields.ui_locale_tag.value
     return render(
         'info.html',
         all_pages=infopage.INFO_PAGES.iter_pages(user_locale, fallback_to_default=True),
@@ -595,7 +595,7 @@ def autocompleter():
     # parse query
     raw_text_query = RawTextQuery(
         sxng_request.form.get('q', ''),
-        sxng_request.preferences.disabled_engines,
+        sxng_request.preferences.fields.engines.disabled_engines,
     )
     sug_prefix = raw_text_query.getQuery()
 
@@ -608,8 +608,8 @@ def autocompleter():
     if len(raw_text_query.autocomplete_list) == 0 and len(sug_prefix) > 0:
 
         # get SearXNG's locale and autocomplete backend from cookie
-        sxng_locale = sxng_request.preferences.value("ui_locale_tag")
-        backend_name = sxng_request.preferences.value("autocomplete")
+        sxng_locale = sxng_request.preferences.fields.ui_locale_tag.value
+        backend_name = sxng_request.preferences.fields.autocomplete.value
 
         for result in search_autocomplete(backend_name, sug_prefix, sxng_locale):
             # attention: this loop will change raw_text_query object and this is
@@ -644,23 +644,23 @@ def preferences():
     # save preferences using the link the /preferences?preferences=...
     if sxng_request.args.get("preferences") or sxng_request.form.get("preferences"):
         resp = make_response(redirect(url_for('index', _external=True)))
-        sxng_request.preferences.save_cookies(resp)
+        sxng_request.preferences.save_cookie(resp)
         return resp
 
     # save preferences
     if sxng_request.method == 'POST':
         resp = make_response(redirect(url_for('index', _external=True)))
         try:
-            sxng_request.preferences.parse_form(sxng_request.form)
+            sxng_request.preferences.parse_cookie(sxng_request)
         except ValueError:
             sxng_request.errors.append(gettext('Invalid settings, please edit your preferences'))
             return resp
-        sxng_request.preferences.save_cookies(resp)
+        sxng_request.preferences.save_cookie(resp)
         return resp
 
     # render preferences
 
-    image_proxy = sxng_request.preferences.value("image_proxy")  # pylint: disable=redefined-outer-name
+    img_proxy = sxng_request.preferences.fields.image_proxy.value
 
     # stats for preferences page
 
@@ -669,7 +669,7 @@ def preferences():
     stats = {}  # pylint: disable=redefined-outer-name
     max_rate95 = 0
 
-    eng_list = [searx.engines.engines[e] for e in sxng_request.preferences["engines"].members.keys()]
+    eng_list = [searx.engines.engines[e] for e in sxng_request.preferences.fields.engines.members.keys()]
 
     for e in eng_list:
         h = histogram('engine', e.name, 'time', 'total')
@@ -689,7 +689,7 @@ def preferences():
             'rate95': rate95,
             'warn_timeout': e.timeout > get_setting("outgoing.request_timeout"),
             'supports_selected_language': e.traits.is_locale_supported(
-                str(sxng_request.preferences.value("search_locale_tag"))
+                str(sxng_request.preferences.fields.search_locale_tag.value)
             ),
             'result_count': result_count,
         }
@@ -743,7 +743,9 @@ def preferences():
 
     supports = {}
     for e in eng_list:
-        supports_selected_language = e.traits.is_locale_supported(sxng_request.preferences.value("search_locale_tag"))
+        supports_selected_language = e.traits.is_locale_supported(
+            sxng_request.preferences.fields.search_locale_tag.value
+        )
         safesearch = e.safesearch
         time_range_support = e.time_range_support
         for checker_test_name in checker_results.get(e.name, {}).get('errors', {}):
@@ -761,7 +763,7 @@ def preferences():
 
     return render(
         "preferences.html",
-        image_proxy=image_proxy,
+        image_proxy=img_proxy,
         stats=stats,
         max_rate95=max_rate95,
         reliabilities=reliabilities,
@@ -1014,8 +1016,8 @@ Disallow: /*?*q=*
 
 @app.route('/opensearch.xml', methods=['GET'])
 def opensearch():
-    method = sxng_request.preferences.value("method")
-    autocomplete = sxng_request.preferences.value("autocomplete")
+    method = sxng_request.preferences.fields.method.value
+    autocomplete = sxng_request.preferences.fields.autocomplete.value
 
     # chrome/chromium only supports HTTP GET....
     if sxng_request.headers.get('User-Agent', '').lower().find('webkit') >= 0:
@@ -1031,7 +1033,7 @@ def opensearch():
 
 @app.route('/favicon.ico')
 def favicon():
-    theme = sxng_request.preferences.value("theme")
+    theme = sxng_request.preferences.fields.theme.value
     return send_from_directory(
         os.path.join(app.root_path, get_setting("ui.static_path"), 'themes', theme, 'img'),
         'favicon.png',

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# pylint: disable=missing-module-docstring, cyclic-import
+# pylint: disable=too-many-branches
 """Stuff to implement input forms."""
 
 from __future__ import annotations
@@ -25,15 +25,16 @@ from zlib import compress, decompress
 from collections.abc import Sequence, MutableMapping, Iterable
 
 import babel.numbers
+import flask
 from flask_babel import lazy_gettext
 from flask_babel.speaklater import LazyString
 
-from searx.extended_types import SXNG_Request, SXNG_Response, sxng_request
+from searx.extended_types import SXNG_Request, sxng_request
 
 COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 5  # 5 years
 UNKNOWN = object()
 
-# JSONType =  str|int|float|bool|None|typing.Mapping[str,str|int|float|bool|None] |Iterable[str|int|float|bool|None] | None
+# JSONType = str|int|float|bool|None|typing.Mapping[str,str|int|float|bool|None] |Iterable[str|int|float|bool|None] | None
 
 SerializableType = str | list[str] | dict[str, str | list[str] | dict[str, str]] | None
 
@@ -120,6 +121,7 @@ class FieldABC(abc.ABC):
     def str2val(self, string: str | list[str]) -> typing.Any | list[typing.Any]:
         """Typcast of a string to a python object/value.  The function can also
         be used to validate a string value."""
+        # pylint: disable=too-many-branches
 
         str_list = string
         if isinstance(string, str):
@@ -129,35 +131,33 @@ class FieldABC(abc.ABC):
 
         if isinstance(self.str2obj, MutableMapping):
             # the catalog is a table that maps a string to a python object
-            for string in str_list:
-                value = self.str2obj.get(string, UNKNOWN)
+            for s in str_list:
+                value = self.str2obj.get(s, UNKNOWN)
                 if value is UNKNOWN:
-                    raise ValueError(f"string value '{string}' is unknown to the catalog.")
+                    raise ValueError(f"string value '{s}' is unknown to the catalog.")
                 val_set.add(value)
 
         elif isinstance(self.str2obj, Iterable):
             # the catalog is a list/set of strings -> the string has to be
             # in the catalog (string-value and typed-value are both str)
-            for string in str_list:
-                if string not in self.str2obj:
-                    raise ValueError(f"string value '{string}' is unknown to the catalog.")
-                val_set.add(string)
+            for s in str_list:
+                if s not in self.str2obj:
+                    raise ValueError(f"string value '{s}' is unknown to the catalog.")
+                val_set.add(s)
 
         else:
             # self.str2obj is a type or a factory.  The forward / backward
             # conversion must be possible and unambiguous; if this is not the
             # case, the typecast would result in a loss of information.
-            for string in str_list:
+            for s in str_list:
 
                 if self.str2obj is float:
-                    value = float(
-                        babel.numbers.parse_decimal(string, sxng_request.client.locale, numbering_system="latn")
-                    )
+                    value = float(babel.numbers.parse_decimal(s, sxng_request.client.locale, numbering_system="latn"))
                 else:
-                    value = self.str2obj(string)
-                    if str(value) != string:
+                    value = self.str2obj(s)
+                    if str(value) != s:
                         raise ValueError(
-                            f"The typcast from string '{string}' to type {self.str2obj}"
+                            f"The typcast from string '{s}' to type {self.str2obj}"
                             f" is not possible without loss: {repr(value)}"
                         )
                 val_set.add(value)
@@ -192,37 +192,37 @@ class FieldABC(abc.ABC):
 
         if isinstance(self.str2obj, MutableMapping):
             # the catalog is a table that maps a string to a python object
-            for value in val_list:
+            for obj in val_list:
                 str_val: str = UNKNOWN  # type: ignore
                 for k, v in self.str2obj.items():
-                    if v == value:
+                    if v == obj:
                         str_val = k
                         break
                 if str_val is UNKNOWN:
-                    raise ValueError(f"typed value {repr(value)} is unknown to the catalog.")
+                    raise ValueError(f"typed value {repr(obj)} is unknown to the catalog.")
                 str_set.add(str_val)
 
         elif isinstance(self.str2obj, Iterable):
             # the catalog is a list/set of strings -> the value has to be
             # in the catalog (string-value and typed-value are both str)
-            for value in val_list:
-                if value not in self.str2obj:
-                    raise ValueError(f"typed value '{value}' is unknown to the catalog.")
-                str_set.add(value)
+            for obj in val_list:
+                if obj not in self.str2obj:
+                    raise ValueError(f"typed value '{obj}' is unknown to the catalog.")
+                str_set.add(obj)
 
         else:
             # self.str2obj is a type or a factory.  The forward / backward
             # conversion must be possible and unambiguous; if this is not the
             # case, the typecast would result in a loss of information.
-            for value in val_list:
+            for v in val_list:
 
                 if self.str2obj is float:
-                    str_val = babel.numbers.format_number(value, sxng_request.client.locale)
+                    str_val = babel.numbers.format_number(v, sxng_request.client.locale)
                 else:
-                    str_val = str(value)
-                    if self.str2obj(str_val) != value:
+                    str_val = str(v)
+                    if self.str2obj(str_val) != v:
                         raise ValueError(
-                            f"The typcast from value {repr(value)} of type {self.str2obj}"
+                            f"The typcast from value {repr(v)} of type {self.str2obj}"
                             f" to string is not possible without loss: '{str_val}'"
                         )
                 str_set.add(str_val)
@@ -514,8 +514,9 @@ class MultipleChoice(FieldABC):
         if serializable is None:
             return
         if isinstance(serializable, list):
-            invalid_types = [type(i).__name__ for i in serializable if type(i) != str]
-            TypeError(f"field {self.field_id} can only process list of str (not {','.join(invalid_types)})")
+            invalid_types = [type(i).__name__ for i in serializable if not isinstance(i, str)]
+            if invalid_types:
+                raise TypeError(f"field {self.field_id} can only process list of str (not {','.join(invalid_types)})")
             self.set(serializable)
         raise TypeError(f"field {self.field_id} can only process list (not '{type(serializable)}')")
 
@@ -620,13 +621,12 @@ class FieldCollection:
     :py:obj:`BoolGrp`)."""
 
     def __post_init__(self):
-
         # We need to "lazy evaluate" this mapping (see self.__getitem___): the
         # fields are not “frozen” and can be changed in the initialization phase
         # of the surrounding Form object and its Form.form_id value on wich the
         # field_id depends on.
 
-        self.__form_id2field: dict[str, FieldABC] | None = None
+        self.__form_id2field: dict[str, FieldABC] = {}  # pylint: disable=attribute-defined-outside-init
 
     def __iter__(self):
 
@@ -636,7 +636,7 @@ class FieldCollection:
 
     def __getitem__(self, field_id: str) -> FieldABC:
 
-        if self.__form_id2field is not None:
+        if not self.__form_id2field:
             return self.__form_id2field[field_id]
 
         _fields: list[tuple[str, FieldABC]] = []
@@ -647,7 +647,6 @@ class FieldCollection:
             else:
                 _fields.append((field.field_id, field))
 
-        self.__form_id2field = {}
         id_list = []
         for f_id, field in _fields:
             if f_id in id_list:
@@ -674,23 +673,19 @@ class Form:
     def __init__(self, form_id: str, fields: FieldCollection, cookie_name: str | None):
         self.form_id = form_id
         self.fields = fields
-        self.cookie_name = cookie_name
+        self.cookie_name = cookie_name or self.form_id
         for field in self.fields:
             field.form_id = self.form_id
             field.sep = self.sep
 
-    def save_cookie(self, resp: SXNG_Response, max_age: int = COOKIE_MAX_AGE):
+    def save_cookie(self, resp: flask.Response, max_age: int = COOKIE_MAX_AGE):
         """Save field settings in a cookie of name :py:obj:`Form.cookie_name`"""
-        if not self.cookie_name:
-            raise ValueError(f"Form {self.form_id} does not have a cooky name.")
         resp.set_cookie(self.cookie_name, self.get_b64encode(mod_only=True), max_age=max_age)
 
-    def parse_cookies(self, req: SXNG_Request):
+    def parse_cookie(self, req: SXNG_Request):
         """Read cookie of name :py:obj:`Form.cookie_name` from domain cookies
         and load the field settings from this cookie.
         """
-        if not self.cookie_name:
-            raise ValueError(f"Form {self.form_id} does not have a cooky name.")
         cookie = req.cookies.get(self.cookie_name)
         if cookie:
             self.load_b64encode(cookie)

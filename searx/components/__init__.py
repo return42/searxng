@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# pylint: disable=missing-module-docstring, cyclic-import
+# pylint: disable=missing-module-docstring
 """Components"""
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ __all__ = [
     "FieldCollection",
     "Form",
     "MultipleChoice",
-    "SearchLocale",
     "SingleChoice",
 ]
 
@@ -24,6 +23,5 @@ from .form import (
     FieldCollection,
     Form,
     MultipleChoice,
-    SearchLocale,
     SingleChoice,
 )

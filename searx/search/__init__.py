@@ -12,40 +12,37 @@ from flask import copy_current_request_context
 
 from searx import logger
 from searx import get_setting
+
 import searx.answerers
-import searx.plugins
 import searx.metrics
+import searx.network
+import searx.plugins
 
 from searx.engines import load_engines
 from searx.extended_types import SXNG_Request
 from searx.external_bang import get_bang_url
 from searx.results import ResultContainer
-from searx.search.models import SearchQuery
-from searx.search.processors import PROCESSORS
 
+from searx.search import models
+from searx.search import processors
+from searx.search import checker
 
-from .models import SearchQuery
 
 logger = logger.getChild('search')
 
 
 def initialize(settings_engines=None, enable_checker=False, check_network=False, enable_metrics=True):
 
-    import searx.network
-    import searx.search.checker
-    import searx.metrics
-    import searx.search.processors
-
     settings_engines = settings_engines or get_setting("engines")
     load_engines(settings_engines)
     searx.network.initialize(settings_engines, get_setting("outgoing"))
     searx.metrics.initialize([engine['name'] for engine in settings_engines], enable_metrics)
-    searx.search.processors.initialize(settings_engines)
+    processors.initialize(settings_engines)
 
     if check_network:
         searx.network.check_network_configuration()
     if enable_checker:
-        searx.search.checker.initialize()
+        checker.initialize()
 
 
 class Search:
@@ -53,7 +50,7 @@ class Search:
 
     __slots__ = "search_query", "result_container", "start_time", "actual_timeout"
 
-    def __init__(self, search_query: SearchQuery):
+    def __init__(self, search_query: models.SearchQuery):
         """Initialize the Search"""
         # init vars
         super().__init__()
@@ -92,7 +89,7 @@ class Search:
 
         # start search-request for all selected engines
         for eng_name in self.search_query.engine_names:  # FIXME
-            processor = PROCESSORS[eng_name]
+            processor = processors.PROCESSORS[eng_name]
 
             # stop the request now if the engine is suspend
             if processor.extend_container_if_suspended(self.result_container):
@@ -142,7 +139,7 @@ class Search:
         search_id = str(uuid4())
 
         for engine_name, query, request_params in requests:
-            _search = copy_current_request_context(PROCESSORS[engine_name].search)
+            _search = copy_current_request_context(processors.PROCESSORS[engine_name].search)
             th = threading.Thread(  # pylint: disable=invalid-name
                 target=_search,
                 args=(query, request_params, self.result_container, self.start_time, self.actual_timeout),
@@ -160,7 +157,7 @@ class Search:
                     th._timeout = True  # type: ignore
                     _eng_name = th._engine_name  # type: ignore
                     self.result_container.add_unresponsive_engine(_eng_name, 'timeout')
-                    PROCESSORS[_eng_name].logger.error('engine timeout')
+                    processors.PROCESSORS[_eng_name].logger.error('engine timeout')
 
     def search_standard(self):
         """
@@ -187,7 +184,7 @@ class Search:
 class SearchWithPlugins(Search):
     """Inherit from the Search class, add calls to the plugins."""
 
-    def __init__(self, search_query: SearchQuery, sxng_request: SXNG_Request):
+    def __init__(self, search_query: models.SearchQuery, sxng_request: SXNG_Request):
         super().__init__(search_query)
         self.result_container.on_result = self._on_result
         self.request = sxng_request

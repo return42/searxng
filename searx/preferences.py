@@ -132,6 +132,8 @@ class EngineMapPrefs(BoolGrp):
 class PrefFields(FieldCollection):
     """Type definition of the fields used in preferences."""
 
+    # pylint: disable=too-many-instance-attributes
+
     engines: EngineMapPrefs
     plugins: PluginStoragePrefs
     autocomplete: SingleChoice
@@ -325,7 +327,7 @@ class Preferences(Form):
     def process_request(self):
 
         try:
-            self.parse_cookies(sxng_request)
+            self.parse_cookie(sxng_request)
         except Exception as exc:  # pylint: disable=broad-except
             log.exception(exc, exc_info=True)
             sxng_request.errors.append(lazy_gettext("Invalid settings, please edit your preferences"))
@@ -351,6 +353,5 @@ class Preferences(Form):
         # - https://github.com/searx/searx/issues/1666
         user_agent = sxng_request.headers.get("User-Agent", "").lower()
         if "webkit" in user_agent and "android" in user_agent:
-            http_method: SingleChoice = self.components["method"]  # type: ignore
-            http_method.set("GET")
-            http_method.lock()
+            self.fields.method.set("GET")
+            self.fields.method.lock()

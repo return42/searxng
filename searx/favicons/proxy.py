@@ -139,7 +139,7 @@ def favicon_proxy():
     ):
         return '', 400
 
-    resolver = sxng_request.preferences.value('favicon_resolver')  # type: ignore
+    resolver = sxng_request.preferences.fields.favicon_resolver.value
     # if resolver is empty or not valid, just return HTTP 400.
     if not resolver or resolver not in CFG.resolver_map.keys():
         return "", 400
@@ -147,12 +147,12 @@ def favicon_proxy():
     data, mime = search_favicon(resolver, authority)
 
     if data is not None and mime is not None:
-        resp = flask.Response(data, mimetype=mime)  # type: ignore
+        resp = flask.Response(data, mimetype=mime)
         resp.headers['Cache-Control'] = f"max-age={CFG.max_age}"
         return resp
 
     # return default favicon from static path
-    theme = sxng_request.preferences.value("theme")  # type: ignore
+    theme = sxng_request.preferences.fields.theme.value
     fav, mimetype = CFG.favicon(theme=theme)
     return flask.send_from_directory(fav.parent, fav.name, mimetype=mimetype)
 
@@ -216,7 +216,7 @@ def favicon_url(authority: str) -> str:
 
     """
 
-    resolver = sxng_request.preferences.value('favicon_resolver')  # type: ignore
+    resolver = sxng_request.preferences.fields.favicon_resolver.value
     # if resolver is empty or not valid, just return nothing.
     if not resolver or resolver not in CFG.resolver_map.keys():
         return ""
@@ -225,7 +225,7 @@ def favicon_url(authority: str) -> str:
 
     if data_mime == (None, None):
         # we have already checked, the resolver does not have a favicon
-        theme = sxng_request.preferences.value("theme")  # type: ignore
+        theme = sxng_request.preferences.fields.theme.value
         return CFG.favicon_data_url(theme=theme)
 
     if data_mime is not None:

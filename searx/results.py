@@ -78,7 +78,7 @@ class ResultContainer:
         self._lock = RLock()
         self._main_results_sorted: list[MainResult | LegacyResult] = None  # type: ignore
 
-    def extend(self, engine_name: str | None, results):  # pylint: disable=too-many-branches
+    def extend_results(self, engine_name: str | None, results):  # pylint: disable=too-many-branches
         if self._closed:
             log.debug("container is closed, ignoring results: %s", results)
             return

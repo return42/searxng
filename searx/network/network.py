@@ -302,8 +302,8 @@ class Network:
         await asyncio.gather(*[network.aclose() for network in NETWORKS.values()], return_exceptions=False)
 
 
-def get_network(name=None):
-    return NETWORKS.get(name or DEFAULT_NAME)
+def get_network(name=None) -> Network:
+    return NETWORKS.get(name or DEFAULT_NAME)  # type: ignore
 
 
 def check_network_configuration():
