@@ -1,67 +1,53 @@
 .. _settings plugins:
 
-=======
-Plugins
-=======
+============
+``plugins:``
+============
 
 .. sidebar:: Further reading ..
 
    - :ref:`plugins admin`
    - :ref:`dev plugin`
-   - :ref:`builtin plugins`
 
+In SearXNG, plugins can be registered in the :py:obj:`PluginStore
+<searx.plugins.PluginStorage>` via a fully qualified class name.
 
-The built-in plugins can be activated or deactivated via the settings
-(:ref:`settings enabled_plugins`) and external plugins can be integrated into
-SearXNG (:ref:`settings external_plugins`).
+A configuration (:py:obj:`PluginCfg <searx.plugins.PluginCfg>`) can be
+transferred to the plugin, e.g. to activate it by default / *opt-in* or
+*opt-out* from user's point of view.
 
+Please note that some plugins, such as the :ref:`hostnames plugin` plugin,
+require further configuration before they can be made available for selection.
 
-.. _settings enabled_plugins:
-
-``enabled_plugins:`` (internal)
-===============================
-
-In :ref:`plugins admin` you find a complete list of all plugins, the default
-configuration looks like:
+The built-in plugins are all located in the namespace `searx.plugins`.
 
 .. code:: yaml
 
-   enabled_plugins:
-     - 'Basic Calculator'
-     - 'Hash plugin'
-     - 'Self Information'
-     - 'Tracker URL remover'
-     - 'Unit converter plugin'
-     - 'Ahmia blacklist'
+    plugins:
 
+      searx.plugins.calculator.SXNGPlugin:
+        active: true
 
-.. _settings external_plugins:
+      searx.plugins.hash_plugin.SXNGPlugin:
+        active: true
 
-``plugins:`` (external)
-=======================
+      searx.plugins.self_info.SXNGPlugin:
+        active: true
 
-SearXNG supports *external plugins* / there is no need to install one, SearXNG
-runs out of the box.  But to demonstrate; in the example below we install the
-SearXNG plugins from *The Green Web Foundation* `[ref]
-<https://www.thegreenwebfoundation.org/news/searching-the-green-web-with-searx/>`__:
+      searx.plugins.tracker_url_remover.SXNGPlugin:
+        active: true
 
-.. code:: bash
+      searx.plugins.unit_converter.SXNGPlugin:
+        active: true
 
-   $ sudo utils/searxng.sh instance cmd bash -c
-   (searxng-pyenv)$ pip install git+https://github.com/return42/tgwf-searx-plugins
+      searx.plugins.ahmia_filter.SXNGPlugin:
+        active: true
 
-In the :ref:`settings.yml` activate the ``plugins:`` section and add module
-``only_show_green_results`` from ``tgwf-searx-plugins``.
+      searx.plugins.hostnames.SXNGPlugin:
+        active: true
 
-.. code:: yaml
+      searx.plugins.oa_doi_rewrite.SXNGPlugin:
+        active: false
 
-   plugins:
-     - only_show_green_results
-     # - mypackage.mymodule.MyPlugin
-     # - mypackage.mymodule.MyOtherPlugin
-
-.. hint::
-
-   ``only_show_green_results`` is an old plugin that was still implemented in
-   the old style.  There is a legacy treatment for backward compatibility, but
-   new plugins should be implemented as a :py:obj:`searx.plugins.Plugin` class.
+      searx.plugins.tor_check.SXNGPlugin:
+        active: false
