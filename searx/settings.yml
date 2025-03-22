@@ -262,8 +262,8 @@ plugins:
 
   # custom plugins
 
-  # only_show_green_results.SXNGPlugin:
-  #   active: false
+  only_show_green_results.SXNGPlugin:
+    active: false
 
 
 # Configuration of the "Hostnames plugin":
