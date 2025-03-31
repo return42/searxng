@@ -8,13 +8,12 @@ from typing import Literal
 import string
 import os
 import abc
-import dataclasses
-import hashlib
-import logging
-import sqlite3
 import tempfile
 import time
+import typing
 import typer
+
+from collections.abc import Generator
 
 import msgspec
 
@@ -26,6 +25,11 @@ app = typer.Typer()
 
 CACHE: "ExpireCache"
 
+def _normalize_name(name: str) -> str:
+    _valid = "-_." + string.ascii_letters + string.digits
+    return "".join([ c for c in name if c in _valid ] )
+
+
 class ExpireCfg(msgspec.Struct):  # pylint: disable=too-few-public-methods
     """Configuration of a :py:obj:`ExpireCache` cache."""
 
@@ -35,6 +39,9 @@ class ExpireCfg(msgspec.Struct):  # pylint: disable=too-few-public-methods
     db_url: str = ""
     """URL of the SQLite DB, the path to the database file.  If unset a default
     DB will be created in `/tmp/sxng_cache_{self.name}.db`"""
+
+    MAX_VALUE_LEN: int = 1024 * 10
+    """Max lenght of a *serialized* value."""
 
     MAXHOLD_TIME: int = 60 * 60 * 24 * 7  # 7 days
     """Hold time (default in sec.), after which a value is removed from the cache."""
@@ -57,19 +64,15 @@ class ExpireCfg(msgspec.Struct):  # pylint: disable=too-few-public-methods
 
     def __post_init__(self):
 
-        # if db_url is unset, use a default DB in /tmp/sxng_cache_{self.name}.db
+        # if db_url is unset, use a default DB in /tmp/sxng_cache_{name}.db
         if not self.db_url:
-            _valid = "-_.()" + string.ascii_letters + string.digits
-            db_fname = "".join([ c for c in self.name if c in _valid ] )
-            self.db_url = tempfile.gettempdir() + os.sep + f"sxng_cache_{self.name}.db"
+            self.db_url = tempfile.gettempdir() + os.sep + f"sxng_cache_{_normalize_name(self.name)}.db"
 
 class ExpireCache(abc.ABC):
     """Abstract base class for the implementation of a key/value cache
     with expire date."""
 
-    @abc.abstractmethod
-    def __init__(self, cfg: ExpireCfg):
-        """An instance of the cache is build up from the configuration."""
+    cfg: ExpireCfg
 
     @abc.abstractmethod
     def set(self, key: str, value: str|int, expire: int | None) -> bool:
@@ -80,148 +83,68 @@ class ExpireCache(abc.ABC):
         """
 
     @abc.abstractmethod
-    def get(self, key: str) -> str | int | None:
+    def get(self, keys: str | list[str], default=None) -> str | Generator:
         """Return *value* of *key*.  If key is unset, ``None`` is returned."""
 
-
     @abc.abstractmethod
-    def maintenance(self, force=False):
-        """Performs maintenance on the cache"""
+    def maintenance(self, force=False) -> bool:
+        """Performs maintenance on the cache.  Force mantinance by ``force=True``
+        even if the maintenance interwall is not yet reached."""
 
 
 
 class ExpireCacheSQLite(sqlitedb.SQLiteAppl, ExpireCache):
-    """
-
-
-
-    Favicon cache that manages the favicon BLOBs in a SQLite DB.  The DB
-    model in the SQLite DB is implemented using the abstract class
-    :py:obj:`sqlitedb.SQLiteAppl`.
+    """Cache that manages key/value pairs in a SQLite DB.  The DB model in the
+    SQLite DB is implemented using the abstract
+    class :py:obj:`sqlitedb.SQLiteAppl`.
 
     The following configurations are required / supported:
 
-    - :py:obj:`FaviconCacheConfig.db_url`
-    - :py:obj:`FaviconCacheConfig.HOLD_TIME`
-    - :py:obj:`FaviconCacheConfig.LIMIT_TOTAL_BYTES`
-    - :py:obj:`FaviconCacheConfig.BLOB_MAX_BYTES`
-    - :py:obj:`MAINTENANCE_PERIOD`
-    - :py:obj:`MAINTENANCE_MODE`
+    - :py:obj:`ExpireCfg.db_url`
+    - :py:obj:`ExpireCfg.MAXHOLD_TIME`
+    - :py:obj:`ExpireCfg.MAINTENANCE_PERIOD`
+    - :py:obj:`ExpireCfg.MAINTENANCE_MODE`
     """
 
     DB_SCHEMA = 1
 
-    DDL_BLOBS = """\
-CREATE TABLE IF NOT EXISTS blobs (
-  sha256     TEXT,
-  bytes_c    INTEGER,
-  mime       TEXT NOT NULL,
-  data       BLOB NOT NULL,
-  PRIMARY KEY (sha256))"""
 
-    """Table to store BLOB objects by their sha256 hash values."""
+    # DDL_CREATE_TABLES = {
+    #     "blobs": DDL_BLOBS,
+    #     "blob_map": DDL_BLOB_MAP,
+    # }
 
-    DDL_BLOB_MAP = """\
-CREATE TABLE IF NOT EXISTS blob_map (
-    m_time     INTEGER DEFAULT (strftime('%s', 'now')),  -- last modified (unix epoch) time in sec.
-    sha256     TEXT,
-    resolver   TEXT,
-    authority  TEXT,
-    PRIMARY KEY (resolver, authority))"""
 
-    """Table to map from (resolver, authority) to sha256 hash values."""
 
-    DDL_CREATE_TABLES = {
-        "blobs": DDL_BLOBS,
-        "blob_map": DDL_BLOB_MAP,
-    }
+    def __init__(self, cfg: ExpireCfg):
+        """An instance of the expire cache is build up from the configuration."""  #
 
-    SQL_DROP_LEFTOVER_BLOBS = (
-        "DELETE FROM blobs WHERE sha256 IN ("
-        " SELECT b.sha256"
-        "   FROM blobs b"
-        "   LEFT JOIN blob_map bm"
-        "     ON b.sha256 = bm.sha256"
-        "  WHERE bm.sha256 IS NULL)"
-    )
-    """Delete blobs.sha256 (BLOBs) no longer in blob_map.sha256."""
-
-    SQL_ITER_BLOBS_SHA256_BYTES_C = (
-        "SELECT b.sha256, b.bytes_c FROM blobs b"
-        "  JOIN blob_map bm "
-        "    ON b.sha256 = bm.sha256"
-        " ORDER BY bm.m_time ASC"
-    )
-
-    SQL_INSERT_BLOBS = (
-        "INSERT INTO blobs (sha256, bytes_c, mime, data) VALUES (?, ?, ?, ?)"
-        "    ON CONFLICT (sha256) DO NOTHING"
-    )  # fmt: skip
-
-    SQL_INSERT_BLOB_MAP = (
-        "INSERT INTO blob_map (sha256, resolver, authority) VALUES (?, ?, ?)"
-        "    ON CONFLICT DO UPDATE "
-        "   SET sha256=excluded.sha256, m_time=strftime('%s', 'now')"
-    )
-
-    def __init__(self, cfg: FaviconCacheConfig):
-        """An instance of the favicon cache is build up from the configuration."""  #
-
+        self.cfg = cfg
         if cfg.db_url == ":memory:":
             logger.critical("don't use SQLite DB in :memory: in production!!")
         super().__init__(cfg.db_url)
-        self.cfg = cfg
 
-    def __call__(self, resolver: str, authority: str) -> None | tuple[None | bytes, None | str]:
+    def SQL_TABLE_KEY_VALUE(self, table: str) -> str:
+        return f"""
+CREATE TABLE IF NOT EXISTS {table} (
+    key        TEXT PRIMARY KEY,
+    value      val BLOB,
+    expire     INTEGER DEFAULT (strftime('%s', 'now') + {self.cfg.MAXHOLD_TIME})
+):
+CREATE INDEX IF NOT EXISTS index_expire_{table} ON {table}(expire);
+"""
 
-        sql = "SELECT sha256 FROM blob_map WHERE resolver = ? AND authority = ?"
-        res = self.DB.execute(sql, (resolver, authority)).fetchone()
-        if res is None:
-            return None
+    def SQL_DELETE_KEYS(self, table: str, keys: str|list[str]) -> str:
+        if isinstance(keys, str):
+            keys = [keys]
+        if not keys:
+            return ""
+        key_list = "', '".join(keys)
+        return f"""DELETE FROM {table} WHERE key IN ('{key_list}')"""
 
-        data, mime = (None, None)
-        sha256 = res[0]
-        if sha256 == FALLBACK_ICON:
-            return data, mime
+    def SQL_TRUNCTATE_TABLE(self, table: str) -> str:
+        return f"""DELETE FROM {table} """
 
-        sql = "SELECT data, mime FROM blobs WHERE sha256 = ?"
-        res = self.DB.execute(sql, (sha256,)).fetchone()
-        if res is not None:
-            data, mime = res
-        return data, mime
-
-    def set(self, resolver: str, authority: str, mime: str | None, data: bytes | None) -> bool:
-
-        if self.cfg.MAINTENANCE_MODE == "auto" and int(time.time()) > self.next_maintenance_time:
-            # Should automatic maintenance be moved to a new thread?
-            self.maintenance()
-
-        if data is not None and mime is None:
-            logger.error(
-                "favicon resolver %s tries to cache mime-type None for authority %s",
-                resolver,
-                authority,
-            )
-            return False
-
-        bytes_c = len(data or b"")
-        if bytes_c > self.cfg.BLOB_MAX_BYTES:
-            logger.info(
-                "favicon of resolver: %s / authority: %s to big to cache (bytes: %s) " % (resolver, authority, bytes_c)
-            )
-            return False
-
-        if data is None:
-            sha256 = FALLBACK_ICON
-        else:
-            sha256 = hashlib.sha256(data).hexdigest()
-
-        with self.connect() as conn:
-            if sha256 != FALLBACK_ICON:
-                conn.execute(self.SQL_INSERT_BLOBS, (sha256, bytes_c, mime, data))
-            conn.execute(self.SQL_INSERT_BLOB_MAP, (sha256, resolver, authority))
-
-        return True
 
     @property
     def next_maintenance_time(self) -> int:
@@ -229,59 +152,88 @@ CREATE TABLE IF NOT EXISTS blob_map (
 
         return self.cfg.MAINTENANCE_PERIOD + self.properties.m_time("LAST_MAINTENANCE")
 
-    def maintenance(self, force=False):
+    def serialize(self, value: typing.Any) -> str:
+        return str(value)
+
+    def deserialize(self, value: str) -> typing.Any:
+        return value
+
+    # implement ABC methods of ExpireCache
+
+    def set(self, key: str, value: str|int, expire: int | None) -> bool:
+
+        table: str = _normalize_name(self.cfg.name)
+
+        value = self.serialize(value=value)
+        if not expire:
+            expire = self.cfg.MAXHOLD_TIME
+        expire = int(time.time()) + expire
+
+        if len(value) > self.cfg.MAX_VALUE_LEN:
+            log.warning("ExpireCache.set(): %s.key='%s' - value to big to cache (len: %s)  ", table, value, len(value))
+            return False
+
+        if self.cfg.MAINTENANCE_MODE == "auto" and int(time.time()) > self.next_maintenance_time:
+            # Should automatic maintenance be moved to a new thread?
+            self.maintenance()
+
+        SQL_INSERT = (
+            f"INSERT INTO {table} (key, value, expire) VALUES (?, ?, ?)"
+            f"    ON CONFLICT DO"
+            f"UPDATE SET value=?, expire=?"
+            )
+
+        with self.connect() as conn:
+            conn.execute(SQL_INSERT,(key, value, expire, value, expire))
+
+        return True
+
+
+    def get(self, keys: str | list[str], default=None) -> str|Generator:
+        table: str = _normalize_name(self.cfg.name)
+
+        fetchone = False
+        if isinstance(keys, str):
+            fetchone = True
+            keys = [keys]
+
+        if not keys:
+            return default
+
+        key_list = "', '".join(keys)
+        SQL_SELECT_VALUE = f"SELECT value FROM {table} WHERE key IN ('{key_list}')"
+
+        if fetchone:
+            res = self.DB.execute(SQL_SELECT_VALUE).fetchone()
+            if res is None:
+                return default
+            return self.deserialize(res[0])
+        else:
+            res = self.DB.execute(SQL_SELECT_VALUE).fetchall()
+            if res is None:
+                return default
+            for row in res:
+                yield self.deserialize(row[0])
+
+
+    def maintenance(self, force=False) -> bool:
 
         # Prevent parallel DB maintenance cycles from other DB connections
         # (e.g. in multi thread or process environments).
 
         if not force and int(time.time()) < self.next_maintenance_time:
             logger.debug("no maintenance required yet, next maintenance interval is in the future")
-            return
+            return False
         self.properties.set("LAST_MAINTENANCE", "")  # hint: this (also) sets the m_time of the property!
 
-        # do maintenance tasks
+        table: str = _normalize_name(self.cfg.name)
+
+        # drop items by expire time stamp ..
+        expire = int(time.time())
+        SQL_PURGE_EXPIRE = f"""DELETE FROM {table} WHERE expire < {expire}"""
 
         with self.connect() as conn:
+            res = conn.execute(SQL_PURGE_EXPIRE)
+            log.debug("deleted %s keys whose expiry date has been reached", res.rowcount)
 
-            # drop items not in HOLD time
-            res = conn.execute(
-                f"DELETE FROM blob_map"
-                f" WHERE cast(m_time as integer) < cast(strftime('%s', 'now') as integer) - {self.cfg.HOLD_TIME}"
-            )
-            logger.debug("dropped %s obsolete blob_map items from db", res.rowcount)
-            res = conn.execute(self.SQL_DROP_LEFTOVER_BLOBS)
-            logger.debug("dropped %s obsolete BLOBS from db", res.rowcount)
-
-            # drop old items to be in LIMIT_TOTAL_BYTES
-            total_bytes = conn.execute("SELECT SUM(bytes_c) FROM blobs").fetchone()[0] or 0
-            if total_bytes > self.cfg.LIMIT_TOTAL_BYTES:
-
-                x = total_bytes - self.cfg.LIMIT_TOTAL_BYTES
-                c = 0
-                sha_list = []
-                for row in conn.execute(self.SQL_ITER_BLOBS_SHA256_BYTES_C):
-                    sha256, bytes_c = row
-                    sha_list.append(sha256)
-                    c += bytes_c
-                    if c > x:
-                        break
-                if sha_list:
-                    conn.execute("DELETE FROM blobs WHERE sha256 IN ('%s')" % "','".join(sha_list))
-                    conn.execute("DELETE FROM blob_map WHERE sha256 IN ('%s')" % "','".join(sha_list))
-                    logger.debug("dropped %s blobs with total size of %s bytes", len(sha_list), c)
-
-    def _query_val(self, sql, default=None):
-        val = self.DB.execute(sql).fetchone()
-        if val is not None:
-            val = val[0]
-        if val is None:
-            val = default
-        return val
-
-    def state(self) -> FaviconCacheStats:
-        return FaviconCacheStats(
-            favicons=self._query_val("SELECT count(*) FROM blobs", 0),
-            bytes=self._query_val("SELECT SUM(bytes_c) FROM blobs", 0),
-            domains=self._query_val("SELECT count(*) FROM (SELECT authority FROM blob_map GROUP BY authority)", 0),
-            resolvers=self._query_val("SELECT count(*) FROM (SELECT resolver FROM blob_map GROUP BY resolver)", 0),
-        )
+        return True
