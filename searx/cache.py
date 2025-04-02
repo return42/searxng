@@ -10,6 +10,7 @@ import os
 import abc
 import tempfile
 import time
+import sqlite3
 import typing
 import typer
 
@@ -108,31 +109,72 @@ class ExpireCacheSQLite(sqlitedb.SQLiteAppl, ExpireCache):
 
     DB_SCHEMA = 1
 
-
     # DDL_CREATE_TABLES = {
     #     "blobs": DDL_BLOBS,
     #     "blob_map": DDL_BLOB_MAP,
     # }
 
-
-
     def __init__(self, cfg: ExpireCfg):
-        """An instance of the expire cache is build up from the configuration."""  #
+        """An instance of the SQLite expire cache is build up from a
+        :py:obj:`config <ExpireCfg>`."""
 
         self.cfg = cfg
         if cfg.db_url == ":memory:":
             logger.critical("don't use SQLite DB in :memory: in production!!")
         super().__init__(cfg.db_url)
 
-    def SQL_TABLE_KEY_VALUE(self, table: str) -> str:
-        return f"""
-CREATE TABLE IF NOT EXISTS {table} (
-    key        TEXT PRIMARY KEY,
-    value      val BLOB,
-    expire     INTEGER DEFAULT (strftime('%s', 'now') + {self.cfg.MAXHOLD_TIME})
-):
-CREATE INDEX IF NOT EXISTS index_expire_{table} ON {table}(expire);
-"""
+    def create_schema(self, conn):
+        """The key/value tables will be created on demand by
+        :py:obj:`ExpireCacheSQLite.create_table` called from
+        :py:obj:`ExpireCacheSQLite.set`.
+        """
+        return
+
+    @property
+    def table_names(self) -> list[str]:
+        SQL_TABLE_NAMES = "SELECT name FROM sqlite_master WHERE type='table'"
+        rows = self.DB.execute(SQL_TABLE_NAMES).fetchall() or []
+        return [ r[0] for r in rows ]
+
+    def create_table(self, table: str, conn: sqlite3.Connection) -> bool:
+        """Creates DB ``table`` if it has not yet been created, no
+        *recreates* are initiated if the table already exists.
+        """
+        if table in self.table_names:
+            log.debug("key/value table {table} exists in DB (no need to re-create")
+            return False
+
+        log.info("key/value table {table} NOT exists in DB -> create DB table ..", )
+        CREATE_TABLE = (
+            f"CREATE TABLE IF NOT EXISTS {table} ("
+            "     key        TEXT PRIMARY KEY,"
+            "     value      val BLOB,"
+            "     expire     INTEGER DEFAULT (strftime('%s', 'now') + {self.cfg.MAXHOLD_TIME})"
+            ");"
+            f"CREATE INDEX IF NOT EXISTS index_expire_{table} ON {table}(expire);"
+            )
+        conn.execute(CREATE_TABLE)
+
+        self.properties.set(f"create_table: {table}", table)
+        return True
+
+
+
+    secret_key: str = get_setting("server.secret_key")  # type: ignore
+    """By default, the value from :ref:`server.secret_key <settings server>`
+    setting is used."""
+
+
+    def serialize(self, value: typing.Any) -> str:
+        # FIXME: encrypt / decrypt value
+        # https://dnmtechs.com/efficient-string-encoding-with-password-based-encryption-in-python-3/
+        return str(value)
+
+    def deserialize(self, value: str) -> typing.Any:
+        return value
+
+
+
 
     def SQL_DELETE_KEYS(self, table: str, keys: str|list[str]) -> str:
         if isinstance(keys, str):
@@ -145,33 +187,34 @@ CREATE INDEX IF NOT EXISTS index_expire_{table} ON {table}(expire);
     def SQL_TRUNCTATE_TABLE(self, table: str) -> str:
         return f"""DELETE FROM {table} """
 
-
     @property
     def next_maintenance_time(self) -> int:
         """Returns (unix epoch) time of the next maintenance."""
 
         return self.cfg.MAINTENANCE_PERIOD + self.properties.m_time("LAST_MAINTENANCE")
 
-    def serialize(self, value: typing.Any) -> str:
-        return str(value)
-
-    def deserialize(self, value: str) -> typing.Any:
-        return value
 
     # implement ABC methods of ExpireCache
 
-    def set(self, key: str, value: str|int, expire: int | None) -> bool:
+    def set(self, key: str, value: str|int, expire: int | None, table: str|None = None) -> bool:
+        """Set key/value in ``table``.  When ``table`` argument is ``None`` (the
+        default), a table name is generated from the :py:obj:`ExpireCfg.name`.
 
-        table: str = _normalize_name(self.cfg.name)
-
-        value = self.serialize(value=value)
+        If DB ``table`` does not exists, it will be created (on demand) by
+        :py:obj:`ExpireCacheSQLite.create_table`.
+        """
+        if not table:
+            table = _normalize_name(self.cfg.name)
         if not expire:
             expire = self.cfg.MAXHOLD_TIME
         expire = int(time.time()) + expire
 
+        value = self.serialize(value=value)
         if len(value) > self.cfg.MAX_VALUE_LEN:
             log.warning("ExpireCache.set(): %s.key='%s' - value to big to cache (len: %s)  ", table, value, len(value))
             return False
+
+        self.create_table(table, self.DB)
 
         if self.cfg.MAINTENANCE_MODE == "auto" and int(time.time()) > self.next_maintenance_time:
             # Should automatic maintenance be moved to a new thread?
