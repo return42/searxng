@@ -210,7 +210,7 @@ class SQLiteAppl(abc.ABC):
                 raise sqlite3.DatabaseError("Expected DB schema v%s, DB schema is v%s" % (self.DB_SCHEMA, ver))
             logger.debug("DB_SCHEMA = %s", ver)
 
-    def create_schema(self, conn):
+    def create_schema(self, conn: sqlite3.Connection):
 
         logger.debug("create schema ..")
         with conn:
@@ -279,7 +279,7 @@ CREATE TABLE IF NOT EXISTS properties (
             if res.fetchone() is None:  # DB schema needs to be be created
                 self.create_schema(conn)
 
-    def __call__(self, name, default=None):
+    def __call__(self, name: str, default=None):
         """Returns the value of the property ``name`` or ``default`` if property
         not exists in DB."""
 
@@ -288,7 +288,7 @@ CREATE TABLE IF NOT EXISTS properties (
             return default
         return res[0]
 
-    def set(self, name, value):
+    def set(self, name: str, value: str):
         """Set ``value`` of property ``name`` in DB.  If property already
         exists, update the ``m_time`` (and the value)."""
 
@@ -299,7 +299,7 @@ CREATE TABLE IF NOT EXISTS properties (
             # explicitely.
             self.DB.commit()
 
-    def row(self, name, default=None):
+    def row(self, name: str, default=None):
         """Returns the DB row of property ``name`` or ``default`` if property
         not exists in DB."""
 
@@ -311,7 +311,7 @@ CREATE TABLE IF NOT EXISTS properties (
         col_names = [column[0] for column in cur.description]
         return dict(zip(col_names, res))
 
-    def m_time(self, name, default: int = 0) -> int:
+    def m_time(self, name: str, default: int = 0) -> int:
         """Last modification time of this property."""
         res = self.DB.execute(self.SQL_M_TIME, (name,)).fetchone()
         if res is None:

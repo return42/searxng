@@ -5,6 +5,7 @@ from __future__ import annotations
 from __future__ import annotations
 from typing import Literal
 
+import secrets
 import string
 import os
 import abc
@@ -16,7 +17,12 @@ import typer
 
 from collections.abc import Generator
 
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
 import msgspec
+
 
 from searx import sqlitedb
 from searx import logger
@@ -63,11 +69,86 @@ class ExpireCfg(msgspec.Struct):  # pylint: disable=too-few-public-methods
       if required.
     """
 
+    crypt_values: bool = True
+    crypt_password: str = get_setting("server.secret_key")  # type: ignore
+    hmac_iterations: int = 10_000
+
     def __post_init__(self):
 
         # if db_url is unset, use a default DB in /tmp/sxng_cache_{name}.db
         if not self.db_url:
             self.db_url = tempfile.gettempdir() + os.sep + f"sxng_cache_{_normalize_name(self.name)}.db"
+
+from base64 import urlsafe_b64encode, urlsafe_b64decode
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+class Crypt:
+    """Encode and decode values by a method using `Fernet with password`_
+    where the key is derived from the password (PBKDF2HMAC_).
+
+    .. _Fernet with password:  https://stackoverflow.com/a/55147077
+    .. _PBKDF2HMAC: https://cryptography.io/en/latest/hazmat/primitives/key-derivation-functions/#pbkdf2
+    """
+
+    cfg: ExpireCfg
+
+    def derive_key(self, password: bytes, salt: bytes, iterations: int) -> bytes:
+        """Derive a secret-key from a given password and salt."""
+
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=iterations,
+        )
+        return urlsafe_b64encode(kdf.derive(password))
+
+    def encrypt(self, message: bytes, password: str|bytes) -> bytes:
+        if isinstance(password, str):
+            password = password.encode()
+
+        # Including the salt in the output makes it possible to use a random
+        # salt value, which in turn ensures the encrypted output is guaranteed
+        # to be fully random regardless of password reuse or message
+        # repetition.
+
+        salt = secrets.token_bytes(16)  # randomly generated salt
+
+        # Including the iteration count ensures that you can adjust
+        # for CPU performance increases over time without losing the ability to
+        # decrypt older messages.
+
+        iterations = int(self.cfg.hmac_iterations)
+
+        key = self.derive_key(password, salt, iterations)
+        crypted_msg = Fernet(key).encrypt(message)
+
+        # Put salt and iteration count on the beginning of the binary
+        token = b"%b%b%b" % (salt, iterations.to_bytes(4, "big"), urlsafe_b64encode(crypted_msg))
+        return urlsafe_b64encode(token)
+
+    def decrypt(self, token: bytes, password: str) -> bytes:
+        token = urlsafe_b64decode(token)
+
+        # Strip salt and iteration count from the beginning of the binary
+        salt = token[:16]
+        iterations = int.from_bytes(token[16:20], "big")
+
+        key = self.derive_key(password.encode(), salt, iterations)
+        crypted_msg = urlsafe_b64encode(token[20:])
+
+        message = Fernet(key).decrypt(crypted_msg)
+        return message
+
+#     secret_key: str = get_setting("server.secret_key")  type: ignore
+#     """By default, the value from :ref:`server.secret_key <settings server>`
+#     setting is used."""
+
+
+
+
 
 class ExpireCache(abc.ABC):
     """Abstract base class for the implementation of a key/value cache
@@ -91,6 +172,18 @@ class ExpireCache(abc.ABC):
     def maintenance(self, force=False) -> bool:
         """Performs maintenance on the cache.  Force mantinance by ``force=True``
         even if the maintenance interwall is not yet reached."""
+
+
+
+
+    def serialize(self, value: typing.Any) -> str:
+        # FIXME: encrypt / decrypt value
+        # https://dnmtechs.com/efficient-string-encoding-with-password-based-encryption-in-python-3/
+        return str(value)
+
+    def deserialize(self, value: str) -> typing.Any:
+        return value
+
 
 
 
@@ -122,6 +215,9 @@ class ExpireCacheSQLite(sqlitedb.SQLiteAppl, ExpireCache):
         if cfg.db_url == ":memory:":
             logger.critical("don't use SQLite DB in :memory: in production!!")
         super().__init__(cfg.db_url)
+
+        self.salt =
+        salt = secrets.token_bytes(16)
 
     def create_schema(self, conn):
         """The key/value tables will be created on demand by
@@ -160,18 +256,6 @@ class ExpireCacheSQLite(sqlitedb.SQLiteAppl, ExpireCache):
 
 
 
-    secret_key: str = get_setting("server.secret_key")  # type: ignore
-    """By default, the value from :ref:`server.secret_key <settings server>`
-    setting is used."""
-
-
-    def serialize(self, value: typing.Any) -> str:
-        # FIXME: encrypt / decrypt value
-        # https://dnmtechs.com/efficient-string-encoding-with-password-based-encryption-in-python-3/
-        return str(value)
-
-    def deserialize(self, value: str) -> typing.Any:
-        return value
 
 
 
