@@ -17,6 +17,7 @@ import re
 import sqlite3
 import threading
 import abc
+import atexit
 
 from searx import logger
 
@@ -64,6 +65,11 @@ class SQLiteAppl(abc.ABC):
     """
 
     SQLITE_JOURNAL_MODE = "WAL"
+    """``SQLiteAppl`` applications are optimzed for WAL_ mode, its not recommend
+    to change the journal mode (see :py:obj:`SQLiteAppl.tear_down`).
+
+    .. _WAL: https://sqlite.org/wal.html
+    """
     SQLITE_CONNECT_ARGS = {
         # "timeout": 5.0,
         # "detect_types": 0,
@@ -105,6 +111,15 @@ class SQLiteAppl(abc.ABC):
         self.thread_local = threading.local()
         self._init_done = False
         self._compatibility()
+        atexit.register(self.tear_down)
+
+    def tear_down(self):
+        """:ref:`Vacuuming the WALs` upon normal interpreter termination
+        (:py:obj:`atexit.register`).
+
+        .. _SQLite: Vacuuming the WALs: https://www.theunterminatedstring.com/sqlite-vacuuming/
+        """
+        self.DB.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     def _compatibility(self):
 

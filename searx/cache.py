@@ -93,6 +93,9 @@ class CryptMixin:
 
     cfg: ExpireCfg
 
+    # FIXME: what happens when server.secret_key is change .. the we should
+    # remove all old items in the DB
+
     password: bytes = get_setting("server.secret_key").encode()  # type: ignore
     hmac_iterations: int = 10_000
 
