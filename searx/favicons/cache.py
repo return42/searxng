@@ -353,10 +353,10 @@ CREATE TABLE IF NOT EXISTS blob_map (
         else:
             sha256 = hashlib.sha256(data).hexdigest()
 
-        with self.connect() as conn:
+        with self.DB:
             if sha256 != FALLBACK_ICON:
-                conn.execute(self.SQL_INSERT_BLOBS, (sha256, bytes_c, mime, data))
-            conn.execute(self.SQL_INSERT_BLOB_MAP, (sha256, resolver, authority))
+                self.DB.execute(self.SQL_INSERT_BLOBS, (sha256, bytes_c, mime, data))
+            self.DB.execute(self.SQL_INSERT_BLOB_MAP, (sha256, resolver, authority))
 
         return True
 
@@ -376,7 +376,8 @@ CREATE TABLE IF NOT EXISTS blob_map (
             return
         self.properties.set("LAST_MAINTENANCE", "")  # hint: this (also) sets the m_time of the property!
 
-        # do maintenance tasks
+        # Do maintenance tasks.  This can be take a little more time, to avoid
+        # DB locks, etablish a new DB connecton.
 
         with self.connect() as conn:
 
@@ -406,6 +407,11 @@ CREATE TABLE IF NOT EXISTS blob_map (
                     conn.execute("DELETE FROM blobs WHERE sha256 IN ('%s')" % "','".join(sha_list))
                     conn.execute("DELETE FROM blob_map WHERE sha256 IN ('%s')" % "','".join(sha_list))
                     logger.debug("dropped %s blobs with total size of %s bytes", len(sha_list), c)
+
+        # hint: the with context of the connection object closes the transaction
+        # but not the DB connection.  The connection has to be closed by the
+        # caller of self.connect()!
+        conn.close()
 
     def _query_val(self, sql, default=None):
         val = self.DB.execute(sql).fetchone()

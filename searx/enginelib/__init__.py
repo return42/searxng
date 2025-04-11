@@ -13,10 +13,35 @@
 
 
 from __future__ import annotations
-from typing import List, Callable, TYPE_CHECKING
+from typing import List, Callable, TYPE_CHECKING, Any
+import string
+
+from ..cache import ExpireCacheSQLite, ExpireCfg
 
 if TYPE_CHECKING:
     from searx.enginelib import traits
+
+_ENGINE_CACHE: ExpireCacheSQLite = None  # type: ignore
+
+
+class EngineCache:
+
+    def __init__(self, engine_name: str):
+        _valid = "-_." + string.ascii_letters + string.digits
+        self.cache_table = "".join([c if c in _valid else "_" for c in engine_name])
+
+    def _init(self):
+        global _ENGINE_CACHE
+        if _ENGINE_CACHE is None:
+            _ENGINE_CACHE = ExpireCacheSQLite(ExpireCfg("ENGINES", MAXHOLD_TIME=30))  # FIXME
+
+    def set(self, key: str, value: Any, expire: int | None) -> bool:
+        self._init()
+        return _ENGINE_CACHE.set(key=key, value=value, expire=expire, table=self.cache_table)
+
+    def get(self, key: str, default=None) -> Any:
+        self._init()
+        return _ENGINE_CACHE.get(key, default=default, table=self.cache_table)
 
 
 class Engine:  # pylint: disable=too-few-public-methods
@@ -28,6 +53,8 @@ class Engine:  # pylint: disable=too-few-public-methods
 
        This class is currently never initialized and only used for type hinting.
     """
+
+    CACHE: EngineCache
 
     # Common options in the engine module
 

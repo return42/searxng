@@ -14,15 +14,13 @@ import sys
 import copy
 from os.path import realpath, dirname
 
-from typing import TYPE_CHECKING, Dict
 import types
 import inspect
 
 from searx import logger, settings
 from searx.utils import load_module
 
-if TYPE_CHECKING:
-    from searx.enginelib import Engine
+from searx.enginelib import Engine, EngineCache
 
 logger = logger.getChild('engines')
 ENGINE_DIR = dirname(realpath(__file__))
@@ -53,7 +51,7 @@ DEFAULT_CATEGORY = 'other'
 # Defaults for the namespace of an engine module, see :py:func:`load_engine`
 
 categories = {'general': []}
-engines: Dict[str, Engine | types.ModuleType] = {}
+engines: dict[str, Engine | types.ModuleType] = {}
 engine_shortcuts = {}
 """Simple map of registered *shortcuts* to name of the engine (or ``None``).
 
@@ -249,5 +247,6 @@ def load_engines(engine_list):
     for engine_data in engine_list:
         engine = load_engine(engine_data)
         if engine:
+            engine.CACHE = EngineCache(engine.name)
             register_engine(engine)
     return engines

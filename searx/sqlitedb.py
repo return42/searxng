@@ -23,6 +23,19 @@ from searx import logger
 logger = logger.getChild('sqlitedb')
 
 
+class DBWrapper:
+    """Wrap a *thread-local* DB connection."""
+
+    def __init__(self, conn: sqlite3.Connection):
+        self.conn = conn
+
+    def __del__(self):
+        # This destructor is called while tear-down the thread or process, don't
+        # use the logger in the tear-down phase!
+        # print(f"DBWrapper: close DB connection")
+        self.conn.close()
+
+
 class SQLiteAppl(abc.ABC):
     """Abstract base class for implementing convenient DB access in SQLite
     applications.  In the constructor, a :py:obj:`SQLiteProperties` instance is
@@ -115,14 +128,23 @@ class SQLiteAppl(abc.ABC):
 
     def connect(self) -> sqlite3.Connection:
         """Creates a new DB connection (:py:obj:`SQLITE_CONNECT_ARGS`).  If not
-        already done, the DB schema is set up
+        already done, the DB schema is set up.  The caller must take care of
+        closing the resource. Alternatively, :py:obj:`SQLiteAppl.DB` can also be
+        used (the resource behind `self.DB` is automatically closed when the
+        process or thread is terminated).
         """
         if sys.version_info < (3, 12):
             # Prior Python 3.12 there is no "autocommit" option
             self.SQLITE_CONNECT_ARGS.pop("autocommit", None)
 
         self.init()
-        logger.debug("%s: connect to DB: %s // %s", self.__class__.__name__, self.db_url, self.SQLITE_CONNECT_ARGS)
+        logger.debug(
+            "%s: connect to DB: %s // %s // %s",
+            self.__class__.__name__,
+            self.db_url,
+            self.SQLITE_CONNECT_ARGS,
+            self.SQLITE_JOURNAL_MODE,
+        )
         conn = sqlite3.Connection(self.db_url, **self.SQLITE_CONNECT_ARGS)  # type: ignore
         conn.execute(f"PRAGMA journal_mode={self.SQLITE_JOURNAL_MODE}")
         self.register_functions(conn)
@@ -168,15 +190,17 @@ class SQLiteAppl(abc.ABC):
             https://docs.python.org/3/library/sqlite3.html#sqlite3-controlling-transactions
         """
 
-        if getattr(self.thread_local, 'DB', None) is None:
-            self.thread_local.DB = self.connect()
+        if getattr(self.thread_local, "DB", None) is None:
+            thread = threading.current_thread().name
+            logger.debug("SQLiteAppl.DB: open DB connection (thread %s)", thread)
+            self.thread_local.DB = DBWrapper(self.connect())
 
         # Theoretically it is possible to reuse the DB cursor across threads as
         # of Python 3.12, in practice the threading of the cursor seems to me to
         # be so faulty that I prefer to establish one connection per thread
 
-        self.thread_local.DB.commit()
-        return self.thread_local.DB
+        self.thread_local.DB.conn.commit()
+        return self.thread_local.DB.conn
 
         # In "serialized" mode, SQLite can be safely used by multiple threads
         # with no restriction.
@@ -210,15 +234,15 @@ class SQLiteAppl(abc.ABC):
                 raise sqlite3.DatabaseError("Expected DB schema v%s, DB schema is v%s" % (self.DB_SCHEMA, ver))
             logger.debug("DB_SCHEMA = %s", ver)
 
-    def create_schema(self, conn):
+    def create_schema(self, conn: sqlite3.Connection):
 
         logger.debug("create schema ..")
         with conn:
+            self.properties.set("DB_SCHEMA", self.DB_SCHEMA)
+            self.properties.set("LAST_MAINTENANCE", "")
             for table_name, sql in self.DDL_CREATE_TABLES.items():
                 conn.execute(sql)
                 self.properties.set(f"Table {table_name} created", table_name)
-                self.properties.set("DB_SCHEMA", self.DB_SCHEMA)
-                self.properties.set("LAST_MAINTENANCE", "")
 
 
 class SQLiteProperties(SQLiteAppl):
@@ -279,7 +303,7 @@ CREATE TABLE IF NOT EXISTS properties (
             if res.fetchone() is None:  # DB schema needs to be be created
                 self.create_schema(conn)
 
-    def __call__(self, name, default=None):
+    def __call__(self, name: str, default=None):
         """Returns the value of the property ``name`` or ``default`` if property
         not exists in DB."""
 
@@ -288,7 +312,7 @@ CREATE TABLE IF NOT EXISTS properties (
             return default
         return res[0]
 
-    def set(self, name, value):
+    def set(self, name: str, value: str | int):
         """Set ``value`` of property ``name`` in DB.  If property already
         exists, update the ``m_time`` (and the value)."""
 
@@ -299,7 +323,7 @@ CREATE TABLE IF NOT EXISTS properties (
             # explicitely.
             self.DB.commit()
 
-    def row(self, name, default=None):
+    def row(self, name: str, default=None):
         """Returns the DB row of property ``name`` or ``default`` if property
         not exists in DB."""
 
@@ -311,7 +335,7 @@ CREATE TABLE IF NOT EXISTS properties (
         col_names = [column[0] for column in cur.description]
         return dict(zip(col_names, res))
 
-    def m_time(self, name, default: int = 0) -> int:
+    def m_time(self, name: str, default: int = 0) -> int:
         """Last modification time of this property."""
         res = self.DB.execute(self.SQL_M_TIME, (name,)).fetchone()
         if res is None:

@@ -57,8 +57,8 @@ def search(query, request_params) -> EngineResults:
     results.
     """
     res = EngineResults()
+    count = CACHE.get("count", 0)
 
-    count = 0
     for row in json.loads(_my_offline_engine):
         count += 1
         kvmap = {
@@ -75,4 +75,5 @@ def search(query, request_params) -> EngineResults:
             )
         )
     res.add(res.types.LegacyResult(number_of_results=count))
+    CACHE.set("count", count, expire=10)  # FIXME
     return res
