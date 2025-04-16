@@ -13,10 +13,45 @@
 
 
 from __future__ import annotations
-from typing import List, Callable, TYPE_CHECKING
+from typing import List, Callable, TYPE_CHECKING, Any
+import string
+
+from ..cache import ExpireCacheSQLite, ExpireCfg
 
 if TYPE_CHECKING:
     from searx.enginelib import traits
+
+
+# import typer
+# app = typer.Typer()  # FIXME
+
+ENGINES_CACHE = ExpireCacheSQLite(ExpireCfg(name="ENGINES_CACHE"))
+
+
+class EngineCache:
+    """Persistent (SQLite) key/value cache that deletes its values again after
+    ``expire`` seconds (default/max: :py:obj:`ExpireCfg.MAXHOLD_TIME`).
+
+    This class is a wrapper around :py:obj:`ExpireCacheSQLite` that creates a
+    table for each engine (``engine_name``) in the SQL database, which reduces
+    the risk of a table lock.
+    """
+
+    def __init__(self, engine_name: str, expire: int | None = None):
+        self.expire = expire or ExpireCfg.MAXHOLD_TIME
+        _valid = "-_." + string.ascii_letters + string.digits
+        self.table_name = "".join([c if c in _valid else "_" for c in engine_name])
+
+    def set(self, key: str, value: Any, expire: int | None = None) -> bool:
+        return ENGINES_CACHE.set(
+            key=key,
+            value=value,
+            expire=expire or self.expire,
+            table=self.table_name,
+        )
+
+    def get(self, key: str, default=None) -> Any:
+        return ENGINES_CACHE.get(key, default=default, table=self.table_name)
 
 
 class Engine:  # pylint: disable=too-few-public-methods
