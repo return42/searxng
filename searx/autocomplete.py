@@ -39,7 +39,7 @@ def post(*args, **kwargs) -> SXNG_Response:
     return http_post(*args, **kwargs)
 
 
-def baidu(query, _lang):
+def baidu(query, _lang) -> list[str]:
     # baidu search autocompleter
     base_url = "https://www.baidu.com/sugrec?"
     response = get(base_url + urlencode({'ie': 'utf-8', 'json': 1, 'prod': 'pc', 'wd': query}))
@@ -54,7 +54,7 @@ def baidu(query, _lang):
     return results
 
 
-def brave(query, _lang):
+def brave(query, _lang) -> list[str]:
     # brave search autocompleter
     url = 'https://search.brave.com/api/suggest?'
     url += urlencode({'q': query})
@@ -73,7 +73,7 @@ def brave(query, _lang):
     return results
 
 
-def dbpedia(query, _lang):
+def dbpedia(query, _lang) -> list[str]:
     # dbpedia autocompleter, no HTTPS
     autocomplete_url = 'https://lookup.dbpedia.org/api/search.asmx/KeywordSearch?'
 
@@ -88,7 +88,7 @@ def dbpedia(query, _lang):
     return results
 
 
-def duckduckgo(query, sxng_locale):
+def duckduckgo(query, sxng_locale) -> list[str]:
     """Autocomplete from DuckDuckGo. Supports DuckDuckGo's languages"""
 
     traits = engines['duckduckgo'].traits
@@ -108,7 +108,7 @@ def duckduckgo(query, sxng_locale):
     return ret_val
 
 
-def google_complete(query, sxng_locale):
+def google_complete(query, sxng_locale) -> list[str]:
     """Autocomplete from Google.  Supports Google's languages and subdomains
     (:py:obj:`searx.engines.google.get_google_info`) by using the async REST
     API::
@@ -137,7 +137,7 @@ def google_complete(query, sxng_locale):
     return results
 
 
-def mwmbl(query, _lang):
+def mwmbl(query, _lang) -> list[str]:
     """Autocomplete from Mwmbl_."""
 
     # mwmbl autocompleter
@@ -149,7 +149,7 @@ def mwmbl(query, _lang):
     return [result for result in results if not result.startswith("go: ") and not result.startswith("search: ")]
 
 
-def naver(query, _lang):
+def naver(query, _lang) -> list[str]:
     # Naver search autocompleter
     url = f"https://ac.search.naver.com/nx/ac?{urlencode({'q': query, 'r_format': 'json', 'st': 0})}"
     response = get(url)
@@ -164,7 +164,7 @@ def naver(query, _lang):
     return results
 
 
-def qihu360search(query, _lang):
+def qihu360search(query, _lang) -> list[str]:
     # 360Search search autocompleter
     url = f"https://sug.so.360.cn/suggest?{urlencode({'format': 'json', 'word': query})}"
     response = get(url)
@@ -193,7 +193,7 @@ def quark(query, _lang):
     return results
 
 
-def seznam(query, _lang):
+def seznam(query, _lang) -> list[str]:
     # seznam search autocompleter
     url = 'https://suggest.seznam.cz/fulltext/cs?{query}'
 
@@ -216,7 +216,7 @@ def seznam(query, _lang):
     ]
 
 
-def sogou(query, _lang):
+def sogou(query, _lang) -> list[str]:
     # Sogou search autocompleter
     base_url = "https://sor.html5.qq.com/api/getsug?"
     response = get(base_url + urlencode({'m': 'searxng', 'key': query}))
@@ -233,7 +233,7 @@ def sogou(query, _lang):
     return []
 
 
-def stract(query, _lang):
+def stract(query, _lang) -> list[str]:
     # stract autocompleter (beta)
     url = f"https://stract.com/beta/api/autosuggest?q={quote_plus(query)}"
 
@@ -245,7 +245,7 @@ def stract(query, _lang):
     return [html.unescape(suggestion['raw']) for suggestion in resp.json()]
 
 
-def swisscows(query, _lang):
+def swisscows(query, _lang) -> list[str]:
     # swisscows autocompleter
     url = 'https://swisscows.ch/api/suggest?{query}&itemsCount=5'
 
@@ -253,7 +253,7 @@ def swisscows(query, _lang):
     return resp
 
 
-def qwant(query, sxng_locale):
+def qwant(query, sxng_locale) -> list[str]:
     """Autocomplete from Qwant. Supports Qwant's regions."""
     results = []
 
@@ -270,7 +270,7 @@ def qwant(query, sxng_locale):
     return results
 
 
-def wikipedia(query, sxng_locale):
+def wikipedia(query, sxng_locale) -> list[str]:
     """Autocomplete from Wikipedia. Supports Wikipedia's languages (aka netloc)."""
     results = []
     eng_traits = engines['wikipedia'].traits
@@ -297,7 +297,7 @@ def wikipedia(query, sxng_locale):
     return results
 
 
-def yandex(query, _lang):
+def yandex(query, _lang) -> list[str]:
     # yandex autocompleter
     url = "https://suggest.yandex.com/suggest-ff.cgi?{0}"
 
@@ -327,7 +327,7 @@ backends = {
 }
 
 
-def search_autocomplete(backend_name, query, sxng_locale):
+def search_autocomplete(backend_name, query, sxng_locale) -> list[str]:
     backend = backends.get(backend_name)
     if backend is None:
         return []

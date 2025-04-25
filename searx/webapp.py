@@ -10,12 +10,10 @@ import inspect
 import json
 import os
 import sys
-import base64
 
 from timeit import default_timer
 from html import escape
 from io import StringIO
-import typing
 
 import urllib
 import urllib.parse
@@ -49,13 +47,20 @@ from flask_babel import (
     format_decimal,
 )
 
-import searx
-from searx.extended_types import sxng_request
+from searx.extended_types import sxng_request, SXNG_Request
 from searx import (
     logger,
     get_setting,
-    settings,
+    searx_debug,
 )
+
+import searx.preferences
+import searx.client
+import searx.answerers
+import searx.locales
+import searx.plugins
+import searx.search
+import searx.engines
 
 from searx import infopage
 from searx import limiter
@@ -66,17 +71,11 @@ from searx.result_types import Answer
 from searx.settings_defaults import OUTPUT_FORMATS
 from searx.settings_loader import DEFAULT_SETTINGS_FILE
 from searx.exceptions import SearxParameterException
-from searx.engines import (
-    DEFAULT_CATEGORY,
-    categories,
-    engines,
-    engine_shortcuts,
-)
+
 
 from searx import webutils
 from searx.webutils import (
     highlight_content,
-    get_static_files,
     get_result_templates,
     get_themes,
     exception_classname_to_text,
@@ -84,59 +83,26 @@ from searx.webutils import (
     is_hmac_of,
     group_engines_in_tab,
 )
-from searx.webadapter import (
-    get_search_query_from_webapp,
-    get_selected_categories,
-    parse_lang,
-)
 from searx.utils import gen_useragent, dict_subset
 from searx.version import VERSION_STRING, GIT_URL, GIT_BRANCH
 from searx.query import RawTextQuery
-from searx.plugins.oa_doi_rewrite import get_doi_resolver
-from searx.preferences import (
-    Preferences,
-    ClientPref,
-    ValidationException,
-)
-import searx.answerers
-import searx.plugins
-
 
 from searx.metrics import get_engines_stats, get_engine_errors, get_reliabilities, histogram, counter, openmetrics
 from searx.flaskfix import patch_application
-
-from searx.locales import (
-    LOCALE_BEST_MATCH,
-    LOCALE_NAMES,
-    RTL_LOCALES,
-    localeselector,
-    locales_initialize,
-    match_locale,
-)
-
-# renaming names from searx imports ...
-from searx.autocomplete import search_autocomplete, backends as autocomplete_backends
+from searx.autocomplete import search_autocomplete
 from searx import favicons
-
 from searx.redisdb import initialize as redis_initialize
-from searx.sxng_locales import sxng_locales
-import searx.search
 from searx.network import stream as http_stream, set_context_network_name
 from searx.search.checker import get_result as checker_get_result
-
 
 logger = logger.getChild('webapp')
 
 warnings.simplefilter("always")
 
-# about static
-logger.debug('static directory is %s', settings['ui']['static_path'])
-static_files = get_static_files(settings['ui']['static_path'])
-
 # about templates
-logger.debug('templates directory is %s', settings['ui']['templates_path'])
-default_theme = settings['ui']['default_theme']
-templates_path = settings['ui']['templates_path']
+logger.debug('templates directory is %s', get_setting("ui.templates_path"))
+default_theme = get_setting("ui.default_theme")
+templates_path = get_setting("ui.templates_path")
 themes = get_themes(templates_path)
 result_templates = get_result_templates(templates_path)
 
@@ -149,28 +115,15 @@ STATS_SORT_PARAMETERS = {
 }
 
 # Flask app
-app = Flask(__name__, static_folder=settings['ui']['static_path'], template_folder=templates_path)
+app = Flask(__name__, static_folder=get_setting("ui.static_path"), template_folder=templates_path)
 
 app.jinja_env.trim_blocks = True
 app.jinja_env.lstrip_blocks = True
 app.jinja_env.add_extension('jinja2.ext.loopcontrols')  # pylint: disable=no-member
 app.jinja_env.filters['group_engines_in_tab'] = group_engines_in_tab  # pylint: disable=no-member
-app.secret_key = settings['server']['secret_key']
+app.secret_key = get_setting("server.secret_key")
 
-
-def get_locale():
-    locale = localeselector()
-    logger.debug("%s uses locale `%s`", urllib.parse.quote(sxng_request.url), locale)
-    return locale
-
-
-babel = Babel(app, locale_selector=get_locale)
-
-
-def _get_browser_language(req, lang_list):
-    client = ClientPref.from_http_request(req)
-    locale = match_locale(client.locale_tag, lang_list, fallback='en')
-    return locale
+_ = Babel(app, locale_selector=searx.locales.babel_locale_selector)
 
 
 def _get_locale_rfc5646(locale):
@@ -239,35 +192,12 @@ def get_result_template(theme_name: str, template_name: str):
     return 'result_templates/' + template_name
 
 
-def custom_url_for(endpoint: str, **values):
-    suffix = ""
-    if endpoint == 'static' and values.get('filename'):
-        file_hash = static_files.get(values['filename'])
-        if not file_hash:
-            # try file in the current theme
-            theme_name = sxng_request.preferences.get_value('theme')
-            filename_with_theme = "themes/{}/{}".format(theme_name, values['filename'])
-            file_hash = static_files.get(filename_with_theme)
-            if file_hash:
-                values['filename'] = filename_with_theme
-        if get_setting('ui.static_use_hash') and file_hash:
-            suffix = "?" + file_hash
-    if endpoint == 'info' and 'locale' not in values:
-        locale = sxng_request.preferences.get_value('locale')
-        if infopage.INFO_PAGES.get_page(values['pagename'], locale) is None:
-            locale = infopage.INFO_PAGES.locale_default
-        values['locale'] = locale
-    return url_for(endpoint, **values) + suffix
-
-
 def image_proxify(url: str):
-    if not url:
-        return url
 
     if url.startswith('//'):
         url = 'https:' + url
 
-    if not sxng_request.preferences.get_value('image_proxy'):
+    if not sxng_request.preferences.fields.image_proxy.value:
         return url
 
     if url.startswith('data:image/'):
@@ -281,35 +211,11 @@ def image_proxify(url: str):
             return url
         return None
 
-    h = new_hmac(settings['server']['secret_key'], url.encode())
-
+    h = new_hmac(get_setting("server.secret_key"), url.encode())
     return '{0}?{1}'.format(url_for('image_proxy'), urlencode(dict(url=url.encode(), h=h)))
 
-
-def get_translations():
-    return {
-        # when there is autocompletion
-        'no_item_found': gettext('No item found'),
-        # /preferences: the source of the engine description (wikipedata, wikidata, website)
-        'Source': gettext('Source'),
-        # infinite scroll
-        'error_loading_next_page': gettext('Error loading the next page'),
-    }
-
-
-def get_enabled_categories(category_names: typing.Iterable[str]):
-    """The categories in ``category_names```for which there is no active engine
-    are filtered out and a reduced list is returned."""
-
-    enabled_engines = [item[0] for item in sxng_request.preferences.engines.get_enabled()]
-    enabled_categories = set()
-    for engine_name in enabled_engines:
-        enabled_categories.update(engines[engine_name].categories)
-    return [x for x in category_names if x in enabled_categories]
-
-
 def get_pretty_url(parsed_url: urllib.parse.ParseResult):
-    url_formatting_pref = sxng_request.preferences.get_value('url_formatting')
+    url_formatting_pref = sxng_request.preferences.fields.url_formatting.value
 
     if url_formatting_pref == 'full':
         return [parsed_url.geturl()]
@@ -322,44 +228,11 @@ def get_pretty_url(parsed_url: urllib.parse.ParseResult):
     path = unquote(path.replace("/", " › "))
     return [parsed_url.scheme + "://" + parsed_url.netloc, path]
 
-
-def get_client_settings():
-    req_pref = sxng_request.preferences
-    return {
-        'autocomplete': req_pref.get_value('autocomplete'),
-        'autocomplete_min': get_setting('search.autocomplete_min'),
-        'method': req_pref.get_value('method'),
-        'infinite_scroll': req_pref.get_value('infinite_scroll'),
-        'translations': get_translations(),
-        'search_on_category_select': req_pref.get_value('search_on_category_select'),
-        'hotkeys': req_pref.get_value('hotkeys'),
-        'url_formatting': req_pref.get_value('url_formatting'),
-        'theme_static_path': custom_url_for('static', filename='themes/simple'),
-        'results_on_new_tab': req_pref.get_value('results_on_new_tab'),
-        'favicon_resolver': req_pref.get_value('favicon_resolver'),
-        'advanced_search': req_pref.get_value('advanced_search'),
-        'query_in_title': req_pref.get_value('query_in_title'),
-        'safesearch': str(req_pref.get_value('safesearch')),
-        'theme': req_pref.get_value('theme'),
-        'doi_resolver': get_doi_resolver(),
-    }
-
-
 def render(template_name: str, **kwargs):
-    # values from the preferences
-    # pylint: disable=too-many-statements
-    client_settings = get_client_settings()
-    kwargs['client_settings'] = str(
-        base64.b64encode(
-            bytes(
-                json.dumps(client_settings),
-                encoding='utf-8',
-            )
-        ),
-        encoding='utf-8',
-    )
-    kwargs['preferences'] = sxng_request.preferences
-    kwargs.update(client_settings)
+
+    kwargs["get_setting"] = get_setting
+    kwargs["PREF"] = sxng_request.preferences
+    kwargs["CLIENT"] = sxng_request.client
 
     # values from the HTTP requests
     kwargs['endpoint'] = 'results' if 'q' in kwargs else sxng_request.endpoint
@@ -367,29 +240,14 @@ def render(template_name: str, **kwargs):
     kwargs['errors'] = sxng_request.errors
     kwargs['link_token'] = link_token.get_token()
 
-    kwargs['categories_as_tabs'] = list(settings['categories_as_tabs'].keys())
-    kwargs['categories'] = get_enabled_categories(settings['categories_as_tabs'].keys())
-    kwargs['DEFAULT_CATEGORY'] = DEFAULT_CATEGORY
-
-    # i18n
-    kwargs['sxng_locales'] = [l for l in sxng_locales if l[0] in settings['search']['languages']]
-
-    locale = sxng_request.preferences.get_value('locale')
-    kwargs['locale_rfc5646'] = _get_locale_rfc5646(locale)
-
-    if locale in RTL_LOCALES and 'rtl' not in kwargs:
-        kwargs['rtl'] = True
-
-    if 'current_language' not in kwargs:
-        kwargs['current_language'] = parse_lang(sxng_request.preferences, {}, RawTextQuery('', []))
+    kwargs['DEFAULT_CATEGORY'] = searx.engines.DEFAULT_CATEGORY
 
     # values from settings
-    kwargs['search_formats'] = [x for x in settings['search']['formats'] if x != 'html']
+    kwargs['search_formats'] = [x for x in get_setting("search.formats") if x != 'html']
     kwargs['instance_name'] = get_setting('general.instance_name')
     kwargs['searx_version'] = VERSION_STRING
     kwargs['searx_git_url'] = GIT_URL
     kwargs['enable_metrics'] = get_setting('general.enable_metrics')
-    kwargs['get_setting'] = get_setting
     kwargs['get_pretty_url'] = get_pretty_url
 
     # values from settings: donation_url
@@ -402,15 +260,15 @@ def render(template_name: str, **kwargs):
     kwargs['url_for'] = custom_url_for  # override url_for function in templates
     kwargs['image_proxify'] = image_proxify
     kwargs['favicon_url'] = favicons.favicon_url
-    kwargs['cache_url'] = settings['ui']['cache_url']
+    kwargs['cache_url'] = get_setting("ui.cache_url")
     kwargs['get_result_template'] = get_result_template
     kwargs['opensearch_url'] = (
         url_for('opensearch')
         + '?'
         + urlencode(
             {
-                'method': sxng_request.preferences.get_value('method'),
-                'autocomplete': sxng_request.preferences.get_value('autocomplete'),
+                'method': sxng_request.preferences.fields.method.value,
+                'autocomplete': sxng_request.preferences.fields.autocomplete.value,
             }
         )
     )
@@ -422,78 +280,19 @@ def render(template_name: str, **kwargs):
 
     return result
 
-
 @app.before_request
 def pre_request():
-    sxng_request.start_time = default_timer()  # pylint: disable=assigning-non-slot
-    sxng_request.render_time = 0  # pylint: disable=assigning-non-slot
-    sxng_request.timings = []  # pylint: disable=assigning-non-slot
-    sxng_request.errors = []  # pylint: disable=assigning-non-slot
-
-    client_pref = ClientPref.from_http_request(sxng_request)
-    # pylint: disable=redefined-outer-name
-    preferences = Preferences(themes, list(categories.keys()), engines, searx.plugins.STORAGE, client_pref)
-
-    user_agent = sxng_request.headers.get('User-Agent', '').lower()
-    if 'webkit' in user_agent and 'android' in user_agent:
-        preferences.key_value_settings['method'].value = 'GET'
-    sxng_request.preferences = preferences  # pylint: disable=assigning-non-slot
-
-    try:
-        preferences.parse_dict(sxng_request.cookies)
-
-    except Exception as e:  # pylint: disable=broad-except
-        logger.exception(e, exc_info=True)
-        sxng_request.errors.append(gettext('Invalid settings, please edit your preferences'))
-
-    # merge GET, POST vars
-    # HINT request.form is of type werkzeug.datastructures.ImmutableMultiDict
-    sxng_request.form = dict(sxng_request.form.items())  # type: ignore
-    for k, v in sxng_request.args.items():
-        if k not in sxng_request.form:
-            sxng_request.form[k] = v
-
-    if sxng_request.form.get('preferences'):
-        preferences.parse_encoded_data(sxng_request.form['preferences'])
-    else:
-        try:
-            preferences.parse_dict(sxng_request.form)
-        except Exception as e:  # pylint: disable=broad-except
-            logger.exception(e, exc_info=True)
-            sxng_request.errors.append(gettext('Invalid settings'))
-
-    # language is defined neither in settings nor in preferences
-    # use browser headers
-    if not preferences.get_value("language"):
-        language = _get_browser_language(sxng_request, settings['search']['languages'])
-        preferences.parse_dict({"language": language})
-        logger.debug('set language %s (from browser)', preferences.get_value("language"))
-
-    # UI locale is defined neither in settings nor in preferences
-    # use browser headers
-    if not preferences.get_value("locale"):
-        locale = _get_browser_language(sxng_request, LOCALE_NAMES.keys())
-        preferences.parse_dict({"locale": locale})
-        logger.debug('set locale %s (from browser)', preferences.get_value("locale"))
-
-    # request.user_plugins
-    sxng_request.user_plugins = []  # pylint: disable=assigning-non-slot
-    allowed_plugins = preferences.plugins.get_enabled()
-    disabled_plugins = preferences.plugins.get_disabled()
-    for plugin in searx.plugins.STORAGE:
-        if (plugin.id not in disabled_plugins) or plugin.id in allowed_plugins:
-            sxng_request.user_plugins.append(plugin.id)
+    SXNG_Request.init()
 
 
 @app.after_request
 def add_default_headers(response: flask.Response):
     # set default http headers
-    for header, value in settings['server']['default_http_headers'].items():
+    for header, value in get_setting("server.default_http_headers").items():
         if header in response.headers:
             continue
         response.headers[header] = value
     return response
-
 
 @app.after_request
 def post_request(response: flask.Response):
@@ -516,7 +315,6 @@ def post_request(response: flask.Response):
     response.headers.add('Server-Timing', ', '.join(timings_all))
     return response
 
-
 def index_error(output_format: str, error_message: str):
     if output_format == 'json':
         return Response(json.dumps({'error': error_message}), mimetype='application/json')
@@ -538,12 +336,7 @@ def index_error(output_format: str, error_message: str):
 
     # html
     sxng_request.errors.append(gettext('search error'))
-    return render(
-        # fmt: off
-        'index.html',
-        selected_categories=get_selected_categories(sxng_request.preferences, sxng_request.form),
-        # fmt: on
-    )
+    return render("index.html")
 
 
 @app.route('/', methods=['GET', 'POST'])
@@ -555,13 +348,7 @@ def index():
         query = ('?' + sxng_request.query_string.decode()) if sxng_request.query_string else ''
         return redirect(url_for('search') + query, 308)
 
-    return render(
-        # fmt: off
-        'index.html',
-        selected_categories=get_selected_categories(sxng_request.preferences, sxng_request.form),
-        current_locale = sxng_request.preferences.get_value("locale"),
-        # fmt: on
-    )
+    return render("index.html")
 
 
 @app.route('/healthz', methods=['GET'])
@@ -578,10 +365,9 @@ def client_token(token=None):
 @app.route('/rss.xsl', methods=['GET', 'POST'])
 def rss_xsl():
     return render_template(
-        f"{sxng_request.preferences.get_value('theme')}/rss.xsl",
+        f"{sxng_request.preferences.fields.theme.value}/rss.xsl",
         url_for=custom_url_for,
     )
-
 
 @app.route('/search', methods=['GET', 'POST'])
 def search():
@@ -597,29 +383,18 @@ def search():
     if output_format not in OUTPUT_FORMATS:
         output_format = 'html'
 
-    if output_format not in settings['search']['formats']:
+    if output_format not in get_setting("search.formats"):
         flask.abort(403)
 
     # check if there is query (not None and not an empty string)
     if not sxng_request.form.get('q'):
         if output_format == 'html':
-            return render(
-                # fmt: off
-                'index.html',
-                selected_categories=get_selected_categories(sxng_request.preferences, sxng_request.form),
-                # fmt: on
-            )
+            return render("index.html")
         return index_error(output_format, 'No query'), 400
 
-    # search
-    search_query = None
-    raw_text_query = None
-    result_container = None
     try:
-        search_query, raw_text_query, _, _, selected_locale = get_search_query_from_webapp(
-            sxng_request.preferences, sxng_request.form
-        )
-        search_obj = searx.search.SearchWithPlugins(search_query, sxng_request, sxng_request.user_plugins)
+        search_query = sxng_request.client.get_search_query()
+        search_obj = searx.search.SearchWithPlugins(search_query, sxng_request)
         result_container = search_obj.search()
 
     except SearxParameterException as e:
@@ -672,6 +447,15 @@ def search():
             if 'title' in result and result['title']:
                 result['title'] = highlight_content(escape(result['title'] or ''), search_query.query)
 
+        # FIXME: das gehört nicht hier hin / muss in die Result Klasse?
+        if getattr(result, 'publishedDate', None):  # do not try to get a date from an empty string or a None type
+            try:  # test if publishedDate >= 1900 (datetime module bug)
+                result['pubdate'] = result['publishedDate'].strftime('%Y-%m-%d %H:%M:%S%z')
+            except ValueError:
+                result['publishedDate'] = None
+            else:
+                result['publishedDate'] = webutils.searxng_l10n_timespan(result['publishedDate'])
+
         # set result['open_group'] = True when the template changes from the previous result
         # set result['close_group'] = True when the template changes on the next result
         if current_template != result.template:
@@ -700,14 +484,20 @@ def search():
     # suggestions: use RawTextQuery to get the suggestion URLs with the same bang
     suggestion_urls = list(
         map(
-            lambda suggestion: {'url': raw_text_query.changeQuery(suggestion).getFullQuery(), 'title': suggestion},
+            lambda suggestion: {
+                'url': sxng_request.client.raw_query.changeQuery(suggestion).getFullQuery(),
+                'title': suggestion,
+            },
             result_container.suggestions,
         )
     )
 
     correction_urls = list(
         map(
-            lambda correction: {'url': raw_text_query.changeQuery(correction).getFullQuery(), 'title': correction},
+            lambda correction: {
+                'url': sxng_request.client.raw_query.changeQuery(correction).getFullQuery(),
+                'title': correction,
+            },
             result_container.corrections,
         )
     )
@@ -721,34 +511,21 @@ def search():
     # when the user choice is "auto", search.search_query.lang contains the detected language
     # otherwise it is equals to search_query.lang
     return render(
-        # fmt: off
-        'results.html',
-        results = results,
+        "results.html",
+        results=results,
         q=sxng_request.form['q'],
-        selected_categories = search_query.categories,
-        pageno = search_query.pageno,
-        time_range = search_query.time_range or '',
-        number_of_results = format_decimal(result_container.number_of_results),
-        suggestions = suggestion_urls,
-        answers = result_container.answers,
-        corrections = correction_urls,
-        infoboxes = result_container.infoboxes,
-        engine_data = result_container.engine_data,
-        paging = result_container.paging,
-        unresponsive_engines = webutils.get_translated_errors(
-            result_container.unresponsive_engines
-        ),
-        current_locale = sxng_request.preferences.get_value("locale"),
-        current_language = selected_locale,
-        search_language = match_locale(
-            search_obj.search_query.lang,
-            settings['search']['languages'],
-            fallback=sxng_request.preferences.get_value("language")
-        ),
-        timeout_limit = sxng_request.form.get('timeout_limit', None),
-        timings = engine_timings_pairs,
-        max_response_time = max_response_time
-        # fmt: on
+        time_range=search_query.time_range or '',
+        number_of_results=format_decimal(result_container.number_of_results),
+        suggestions=suggestion_urls,
+        answers=result_container.answers,
+        corrections=correction_urls,
+        infoboxes=result_container.infoboxes,
+        engine_data=result_container.engine_data,
+        paging=result_container.paging,
+        unresponsive_engines=webutils.get_translated_errors(result_container.unresponsive_engines),
+        timeout_limit=sxng_request.form.get('timeout_limit', None),
+        timings=engine_timings_pairs,
+        max_response_time=max_response_time,
     )
 
 
@@ -766,7 +543,7 @@ def info(pagename, locale):
     if page is None:
         flask.abort(404)
 
-    user_locale = sxng_request.preferences.get_value('locale')
+    user_locale = sxng_request.preferences.fields.ui_locale_tag.value
     return render(
         'info.html',
         all_pages=infopage.INFO_PAGES.iter_pages(user_locale, fallback_to_default=True),
@@ -782,11 +559,11 @@ def autocompleter():
     # run autocompleter
     results = []
 
-    # set blocked engines
-    disabled_engines = sxng_request.preferences.engines.get_disabled()
-
     # parse query
-    raw_text_query = RawTextQuery(sxng_request.form.get('q', ''), disabled_engines)
+    raw_text_query = RawTextQuery(
+        sxng_request.form.get('q', ''),
+        sxng_request.preferences.fields.engines.disabled_engines,
+    )
     sug_prefix = raw_text_query.getQuery()
 
     for obj in searx.answerers.STORAGE.ask(sug_prefix):
@@ -798,8 +575,8 @@ def autocompleter():
     if len(raw_text_query.autocomplete_list) == 0 and len(sug_prefix) > 0:
 
         # get SearXNG's locale and autocomplete backend from cookie
-        sxng_locale = sxng_request.preferences.get_value('language')
-        backend_name = sxng_request.preferences.get_value('autocomplete')
+        sxng_locale = sxng_request.preferences.fields.ui_locale_tag.value
+        backend_name = sxng_request.preferences.fields.autocomplete.value
 
         for result in search_autocomplete(backend_name, sug_prefix, sxng_locale):
             # attention: this loop will change raw_text_query object and this is
@@ -832,40 +609,36 @@ def preferences():
     # pylint: disable=too-many-statements
 
     # save preferences using the link the /preferences?preferences=...
-    if sxng_request.args.get('preferences') or sxng_request.form.get('preferences'):
+    if sxng_request.args.get("preferences") or sxng_request.form.get("preferences"):
         resp = make_response(redirect(url_for('index', _external=True)))
-        return sxng_request.preferences.save(resp)
+        sxng_request.preferences.save_cookie(resp)
+        return resp
 
     # save preferences
     if sxng_request.method == 'POST':
         resp = make_response(redirect(url_for('index', _external=True)))
         try:
-            sxng_request.preferences.parse_form(sxng_request.form)
-        except ValidationException:
+            sxng_request.preferences.parse_cookie(sxng_request)
+        except ValueError:
             sxng_request.errors.append(gettext('Invalid settings, please edit your preferences'))
             return resp
-        return sxng_request.preferences.save(resp)
+        sxng_request.preferences.save_cookie(resp)
+        return resp
 
     # render preferences
-    image_proxy = sxng_request.preferences.get_value('image_proxy')  # pylint: disable=redefined-outer-name
-    disabled_engines = sxng_request.preferences.engines.get_disabled()
-    allowed_plugins = sxng_request.preferences.plugins.get_enabled()
+
+    img_proxy = sxng_request.preferences.fields.image_proxy.value
 
     # stats for preferences page
-    filtered_engines = dict(filter(lambda kv: sxng_request.preferences.validate_token(kv[1]), engines.items()))
 
-    engines_by_category = {}
-
-    for c in categories:  # pylint: disable=consider-using-dict-items
-        engines_by_category[c] = [e for e in categories[c] if e.name in filtered_engines]
-        # sort the engines alphabetically since the order in settings.yml is meaningless.
-        list.sort(engines_by_category[c], key=lambda e: e.name)
-
-    # get first element [0], the engine time,
-    # and then the second element [1] : the time (the first one is the label)
+    # get first element [0], the engine time, and then the second element [1] :
+    # the time (the first one is the label)
     stats = {}  # pylint: disable=redefined-outer-name
     max_rate95 = 0
-    for _, e in filtered_engines.items():
+
+    eng_list = [searx.engines.engines[e] for e in sxng_request.preferences.fields.engines.members.keys()]
+
+    for e in eng_list:
         h = histogram('engine', e.name, 'time', 'total')
         median = round(h.percentage(50), 1) if h.count > 0 else None
         rate80 = round(h.percentage(80), 1) if h.count > 0 else None
@@ -881,22 +654,23 @@ def preferences():
             'time': median,
             'rate80': rate80,
             'rate95': rate95,
-            'warn_timeout': e.timeout > settings['outgoing']['request_timeout'],
+            'warn_timeout': e.timeout > get_setting("outgoing.request_timeout"),
             'supports_selected_language': e.traits.is_locale_supported(
-                str(sxng_request.preferences.get_value('language') or 'all')
+                str(sxng_request.preferences.fields.search_locale_tag.value)
             ),
             'result_count': result_count,
         }
-    # end of stats
 
     # reliabilities
+
     reliabilities = {}
-    engine_errors = get_engine_errors(filtered_engines)
+    engine_errors = get_engine_errors(eng_list)
     checker_results = checker_get_result()
     checker_results = (
         checker_results['engines'] if checker_results['status'] == 'ok' and 'engines' in checker_results else {}
     )
-    for _, e in filtered_engines.items():
+
+    for e in eng_list:
         checker_result = checker_results.get(e.name, {})
         checker_success = checker_result.get('success', True)
         errors = engine_errors.get(e.name) or []
@@ -933,10 +707,11 @@ def preferences():
         reliabilities[e.name]['errors'] = reliabilities_errors
 
     # supports
+
     supports = {}
-    for _, e in filtered_engines.items():
+    for e in eng_list:
         supports_selected_language = e.traits.is_locale_supported(
-            str(sxng_request.preferences.get_value('language') or 'all')
+            sxng_request.preferences.fields.search_locale_tag.value
         )
         safesearch = e.safesearch
         time_range_support = e.time_range_support
@@ -954,31 +729,16 @@ def preferences():
         }
 
     return render(
-        # fmt: off
-        'preferences.html',
-        preferences = True,
-        selected_categories = get_selected_categories(sxng_request.preferences, sxng_request.form),
-        locales = LOCALE_NAMES,
-        current_locale = sxng_request.preferences.get_value("locale"),
-        image_proxy = image_proxy,
-        engines_by_category = engines_by_category,
-        stats = stats,
-        max_rate95 = max_rate95,
-        reliabilities = reliabilities,
-        supports = supports,
-        answer_storage = searx.answerers.STORAGE.info,
-        disabled_engines = disabled_engines,
-        autocomplete_backends = autocomplete_backends,
-        favicon_resolver_names = favicons.proxy.CFG.resolver_map.keys(),
-        shortcuts = {y: x for x, y in engine_shortcuts.items()},
-        themes = themes,
-        plugins_storage = searx.plugins.STORAGE.info,
-        current_doi_resolver = get_doi_resolver(),
-        allowed_plugins = allowed_plugins,
-        preferences_url_params = sxng_request.preferences.get_as_url_params(),
-        locked_preferences = get_setting("preferences.lock", []),
-        doi_resolvers = get_setting("doi_resolvers", {}),
-        # fmt: on
+        "preferences.html",
+        image_proxy=img_proxy,
+        stats=stats,
+        max_rate95=max_rate95,
+        reliabilities=reliabilities,
+        supports=supports,
+        answer_storage=searx.answerers.STORAGE.info,
+        shortcuts={y: x for x, y in searx.engines.engine_shortcuts.items()},
+        themes=themes,
+        plugins_storage=searx.plugins.STORAGE.info,
     )
 
 
@@ -993,7 +753,7 @@ def image_proxy():
     if not url:
         return '', 400
 
-    if not is_hmac_of(settings['server']['secret_key'], url.encode(), sxng_request.args.get('h', '')):
+    if not is_hmac_of(get_setting("server.secret_key"), url.encode(), sxng_request.args.get('h', '')):
         return '', 400
 
     maximum_size = 5 * 1024 * 1024
@@ -1060,24 +820,37 @@ def image_proxy():
 
 @app.route('/engine_descriptions.json', methods=['GET'])
 def engine_descriptions():
-    sxng_ui_lang_tag = get_locale().replace("_", "-")
-    sxng_ui_lang_tag = LOCALE_BEST_MATCH.get(sxng_ui_lang_tag, sxng_ui_lang_tag)
+    lang = sxng_request.client.language_tag
 
-    result = ENGINE_DESCRIPTIONS['en'].copy()
-    if sxng_ui_lang_tag != 'en':
-        for engine, description in ENGINE_DESCRIPTIONS.get(sxng_ui_lang_tag, {}).items():
+    # FIXME: needs to be tested for zh-HK, zh-Hans-CN, zh-Hant-TW, fa-IR, nl-BE ..
+
+    # by default the english description is used for all engines
+    result = ENGINE_DESCRIPTIONS["en"].copy()
+    if lang != "en":
+        # if l10n exists, update engine's description
+        for engine, description in ENGINE_DESCRIPTIONS.get(lang, {}).items():
             result[engine] = description
+
+    # process items like:
+    #     "gentoo":[
+    #        "gentoo:en",
+    #        "ref"
+    #     ],
+
     for engine, description in result.items():
-        if len(description) == 2 and description[1] == 'ref':
-            ref_engine, ref_lang = description[0].split(':')
+
+        if len(description) == 2 and description[1] == "ref":
+            ref_engine, ref_lang = description[0].split(":")
             description = ENGINE_DESCRIPTIONS[ref_lang][ref_engine]
+
         if isinstance(description, str):
-            description = [description, 'wikipedia']
+            description = [description, "wikipedia"]
         result[engine] = description
 
     # overwrite by about:description (from settings)
-    for engine_name, engine_mod in engines.items():
-        descr = getattr(engine_mod, 'about', {}).get('description', None)
+
+    for engine_name, engine_mod in searx.engines.engines.items():
+        descr = getattr(engine_mod, "about", {}).get("description", None)
         if descr is not None:
             result[engine_name] = [descr, "SearXNG config"]
 
@@ -1090,7 +863,9 @@ def stats():
     sort_order = sxng_request.args.get('sort', default='name', type=str)
     selected_engine_name = sxng_request.args.get('engine', default=None, type=str)
 
-    filtered_engines = dict(filter(lambda kv: sxng_request.preferences.validate_token(kv[1]), engines.items()))
+    filtered_engines = dict(
+        filter(lambda kv: sxng_request.preferences.validate_token(kv[1]), searx.engines.engines.items())
+    )
     if selected_engine_name:
         if selected_engine_name not in filtered_engines:
             selected_engine_name = None
@@ -1153,7 +928,9 @@ def stats():
 
 @app.route('/stats/errors', methods=['GET'])
 def stats_errors():
-    filtered_engines = dict(filter(lambda kv: sxng_request.preferences.validate_token(kv[1]), engines.items()))
+    filtered_engines = dict(
+        filter(lambda kv: sxng_request.preferences.validate_token(kv[1]), searx.engines.engines.items())
+    )
     result = get_engine_errors(filtered_engines)
     return jsonify(result)
 
@@ -1166,15 +943,17 @@ def stats_checker():
 
 @app.route('/metrics')
 def stats_open_metrics():
-    password = settings['general'].get("open_metrics")
+    password = get_setting("general.open_metrics", None)
 
-    if not (settings['general'].get("enable_metrics") and password):
+    if not (get_setting("general.enable_metrics", None) and password):
         return Response('open metrics is disabled', status=404, mimetype='text/plain')
 
     if not sxng_request.authorization or sxng_request.authorization.password != password:
         return Response('access forbidden', status=401, mimetype='text/plain')
 
-    filtered_engines = dict(filter(lambda kv: sxng_request.preferences.validate_token(kv[1]), engines.items()))
+    filtered_engines = dict(
+        filter(lambda kv: sxng_request.preferences.validate_token(kv[1]), searx.engines.engines.items())
+    )
 
     checker_results = checker_get_result()
     checker_results = (
@@ -1204,8 +983,8 @@ Disallow: /*?*q=*
 
 @app.route('/opensearch.xml', methods=['GET'])
 def opensearch():
-    method = sxng_request.preferences.get_value('method')
-    autocomplete = sxng_request.preferences.get_value('autocomplete')
+    method = sxng_request.preferences.fields.method.value
+    autocomplete = sxng_request.preferences.fields.autocomplete.value
 
     # chrome/chromium only supports HTTP GET....
     if sxng_request.headers.get('User-Agent', '').lower().find('webkit') >= 0:
@@ -1221,9 +1000,9 @@ def opensearch():
 
 @app.route('/favicon.ico')
 def favicon():
-    theme = sxng_request.preferences.get_value("theme")
+    theme = sxng_request.preferences.fields.theme.value
     return send_from_directory(
-        os.path.join(app.root_path, settings['ui']['static_path'], 'themes', theme, 'img'),  # type: ignore
+        os.path.join(app.root_path, get_setting("ui.static_path"), 'themes', theme, 'img'),
         'favicon.png',
         mimetype='image/vnd.microsoft.icon',
     )
@@ -1236,12 +1015,11 @@ def clear_cookies():
         resp.delete_cookie(cookie_name)
     return resp
 
-
 @app.route('/config')
 def config():
     """Return configuration in JSON format."""
     _engines = []
-    for name, engine in engines.items():
+    for name, engine in searx.engines.engines.items():
         if not sxng_request.preferences.validate_token(engine):
             continue
 
@@ -1262,23 +1040,20 @@ def config():
             }
         )
 
-    _plugins = []
-    for _ in searx.plugins.STORAGE:
-        _plugins.append({'name': _.id, 'enabled': _.active})
-
+    _plugins = [plg.info.__dict__ for plg in searx.plugins.STORAGE]
     _limiter_cfg = limiter.get_cfg()
 
     return jsonify(
         {
-            'categories': list(categories.keys()),
+            'categories': list(searx.engines.categories.keys()),
             'engines': _engines,
             'plugins': _plugins,
-            'instance_name': settings['general']['instance_name'],
-            'locales': LOCALE_NAMES,
-            'default_locale': settings['ui']['default_locale'],
-            'autocomplete': settings['search']['autocomplete'],
-            'safe_search': settings['search']['safe_search'],
-            'default_theme': settings['ui']['default_theme'],
+            'instance_name': get_setting("general.instance_name"),
+            'locales': searx.locales.LOCALE_NAMES,
+            'default_locale': get_setting("ui.default_locale"),
+            'autocomplete': get_setting("search.autocomplete"),
+            'safe_search': get_setting("search.safe_search"),
+            'default_theme': get_setting("ui.default_theme"),
             'version': VERSION_STRING,
             'brand': {
                 'PRIVACYPOLICY_URL': get_setting('general.privacypolicy_url'),
@@ -1292,9 +1067,9 @@ def config():
                 'botdetection.ip_limit.link_token': _limiter_cfg.get('botdetection.ip_limit.link_token'),
                 'botdetection.ip_lists.pass_searxng_org': _limiter_cfg.get('botdetection.ip_lists.pass_searxng_org'),
             },
-            'doi_resolvers': list(settings['doi_resolvers'].keys()),
-            'default_doi_resolver': settings['default_doi_resolver'],
-            'public_instance': settings['server']['public_instance'],
+            'doi_resolvers': list(get_setting("doi_resolvers").keys()),
+            'default_doi_resolver': get_setting("default_doi_resolver"),
+            'public_instance': get_setting("server.public_instance"),
         }
     )
 
@@ -1396,14 +1171,14 @@ def init():
         logger.info("in reloading mode and not in main loop, cancel the initialization")
         return
 
-    locales_initialize()
+    searx.locales.locales_initialize()
     redis_initialize()
     searx.plugins.initialize(app)
 
     metrics: bool = get_setting("general.enable_metrics")  # type: ignore
     searx.search.initialize(enable_checker=True, check_network=True, enable_metrics=metrics)
 
-    limiter.initialize(app, settings)
+    limiter.initialize(app, searx.settings)
     favicons.init()
 
 

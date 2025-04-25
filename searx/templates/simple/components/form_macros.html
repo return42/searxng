@@ -1,0 +1,47 @@
+
+{#  Drop down menu for searx.components.form.SingleChoice #}
+
+{% macro choice_drop_down(comp) %}
+  {% if comp.legend %}
+    <fieldset>
+      <legend id="label_{{ comp.field_id }}">{{ comp.legend }}</legend>
+      <div class="{{ ui_class or "value" }}">
+        <select id="{{ comp.field_id }}" name="{{ comp.field_id }}" aria-labelledby="label_{{ comp.field_id }}">
+          {% for value, selected, name in comp.menu_options() %}
+            <option value="{{ value }}" {% if selected %} selected="selected" {% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if comp.description %}<div class="description">{{ comp.description }}</div>{% endif %}
+    </fieldset>
+  {% else %}
+    <select id="{{ comp.field_id }}" name="{{ comp.field_id }}" class="{{ ui_class }}" aria-label="{{ comp.description }}">
+      {% for value, selected, name in comp.menu_options() %}
+        <option value="{{ value }}" {% if selected %} selected="selected"{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  {% endif %}
+{% endmacro %}
+
+{#  Bool slider for searx.components.form.Bool #}
+
+{% macro bool_checkbox(comp) %}
+  {% if comp.legend %}
+    <fieldset>
+      <legend id="label_{{ comp.field_id }}">{{ comp.legend }}</legend>
+      <label class="{{ ui_class or "value" }}">
+        <input class="checkbox-onoff" type="checkbox" name="{{ comp.field_id }}" aria-labelledby="label_{{ comp.field_id }}" {% if comp.value %} checked {% endif %}>
+      </label>
+      {% if comp.description %}<div class="description">{{ comp.description }}</div>{% endif %}
+    </fieldset>
+  {% elif comp.description %}
+    <p class="{{ ui_class }}">
+      <label class="{{ ui_class }}">
+        <input class="checkbox-onoff" type="checkbox" name="{{ comp.field_id }}"  {% if comp.value %} checked {% endif %}>
+        {{ comp.description }}
+      </label>
+    </p>
+  {% else %}
+    <input class="checkbox-onoff" type="checkbox" name="{{ comp.field_id }}"  {% if comp.value %} checked {% endif %}>
+  {% endif %}
+{% endmacro %}

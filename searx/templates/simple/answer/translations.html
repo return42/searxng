@@ -30,7 +30,7 @@
       <div>{{ _('Synonyms') }}</div>
       <ul>
 	{%- for i in item.synonyms -%}
-	<li>{{ i }}</li>
+	  <li>{{ i }}</li>
 	{%- endfor -%}
       </ul>
       {%- endif -%}
@@ -40,13 +40,13 @@
 </details>
 
 {%- if answer.url -%}
-<a href="{{ answer.url }}" class="answer-url"
-   {%- if results_on_new_tab %}
-   target="_blank" rel="noopener noreferrer"
-   {%- else -%}
-   rel="noreferrer"
-   {%- endif -%}
-   >{{ answer.engine }}</a>
+  <a href="{{ answer.url }}" class="answer-url"
+    {%- if PREF["results_on_new_tab"].value %}
+    target="_blank" rel="noopener noreferrer"
+    {%- else -%}
+    rel="noreferrer"
+    {%- endif -%}
+  >{{ answer.engine }}</a>
 {%- else -%}
 <span class="answer-url">{{ answer.engine }}</span>
 {% endif -%}

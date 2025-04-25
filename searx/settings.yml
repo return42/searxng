@@ -153,21 +153,23 @@ ui:
 #
 # preferences:
 #   lock:
-#     - categories
-#     - language
 #     - autocomplete
-#     - favicon
-#     - safesearch
-#     - method
+#     - categories
+#     - center_alignment
 #     - doi_resolver
-#     - locale
-#     - theme
-#     - results_on_new_tab
-#     - infinite_scroll
-#     - search_on_category_select
-#     - method
+#     - favicon_resolver
+#     - hotkeys
 #     - image_proxy
+#     - infinite_scroll
+#     - language
+#     - locale
+#     - method
 #     - query_in_title
+#     - results_on_new_tab
+#     - safesearch
+#     - search_on_category_select
+#     - theme
+#     - url_formatting
 
 # communication with search engines
 #

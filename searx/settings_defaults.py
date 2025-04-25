@@ -2,6 +2,7 @@
 """Implementation of the default settings.
 
 """
+from __future__ import annotations
 
 import typing
 import numbers
@@ -40,6 +41,15 @@ STR_TO_BOOL = {
     'on': True,
 }
 _UNDEFINED = object()
+
+HTTPMethodeType = typing.Literal["POST", "GET"]
+HTTP_METHODE_CATALOG: tuple[HTTPMethodeType, ...] = typing.get_args(HTTPMethodeType)
+
+URLFormattingType = typing.Literal["pretty", "full", "host"]
+URL_FORMATTING_CATALOG: tuple[URLFormattingType, ...] = typing.get_args(URLFormattingType)
+
+SafeSearchType = typing.Literal[0, 1, 2]
+SAFE_SEARCH_CATALOG: tuple[SafeSearchType, ...] = typing.get_args(SafeSearchType)
 
 
 class SettingsValue:
@@ -154,7 +164,7 @@ SCHEMA = {
         'custom': SettingsValue(dict, {'links': {}}),
     },
     'search': {
-        'safe_search': SettingsValue((0, 1, 2), 0),
+        'safe_search': SettingsValue(SAFE_SEARCH_CATALOG, 0),
         'autocomplete': SettingsValue(str, ''),
         'autocomplete_min': SettingsValue(int, 4),
         'favicon_resolver': SettingsValue(str, ''),
@@ -182,7 +192,7 @@ SCHEMA = {
         'base_url': SettingsValue((False, str), False, 'SEARXNG_BASE_URL'),
         'image_proxy': SettingsValue(bool, False, 'SEARXNG_IMAGE_PROXY'),
         'http_protocol_version': SettingsValue(('1.0', '1.1'), '1.0'),
-        'method': SettingsValue(('POST', 'GET'), 'POST', 'SEARXNG_METHOD'),
+        'method': SettingsValue(HTTP_METHODE_CATALOG, 'POST', 'SEARXNG_METHOD'),
         'default_http_headers': SettingsValue(dict, {}),
     },
     'redis': {
@@ -192,20 +202,19 @@ SCHEMA = {
         'static_path': SettingsDirectoryValue(str, os.path.join(searx_dir, 'static')),
         'static_use_hash': SettingsValue(bool, False, 'SEARXNG_STATIC_USE_HASH'),
         'templates_path': SettingsDirectoryValue(str, os.path.join(searx_dir, 'templates')),
-        'default_theme': SettingsValue(str, 'simple'),
+        'default_theme': SettingsValue(("simple",), "simple"),
         'default_locale': SettingsValue(str, ''),
         'theme_args': {
             'simple_style': SettingsValue(SIMPLE_STYLE, 'auto'),
         },
         'center_alignment': SettingsValue(bool, False),
         'results_on_new_tab': SettingsValue(bool, False),
-        'advanced_search': SettingsValue(bool, False),
         'query_in_title': SettingsValue(bool, False),
         'infinite_scroll': SettingsValue(bool, False),
         'cache_url': SettingsValue(str, 'https://web.archive.org/web/'),
         'search_on_category_select': SettingsValue(bool, True),
         'hotkeys': SettingsValue(('default', 'vim'), 'default'),
-        'url_formatting': SettingsValue(('pretty', 'full', 'host'), 'pretty'),
+        'url_formatting': SettingsValue(URL_FORMATTING_CATALOG, 'pretty'),
     },
     'preferences': {
         'lock': SettingsValue(list, []),
@@ -239,3 +248,24 @@ SCHEMA = {
     'engines': SettingsValue(list, []),
     'doi_resolvers': {},
 }
+
+
+def get_typedef(fqn: str, default=_UNDEFINED):
+    """Returns type definition in the :py:obj:`SCHEMA` to which ``fqn`` points.
+    If there is no such name in the settings and the ``default`` is unset, a
+    :py:obj:`KeyError` is raised."""
+
+    value = SCHEMA
+    for a in fqn.split('.'):
+        if isinstance(value, dict):
+            value = value.get(a, _UNDEFINED)
+        else:
+            value = _UNDEFINED
+
+        if value is _UNDEFINED:
+            if default is _UNDEFINED:
+                raise KeyError(a)
+            value = default
+            break
+
+    return value.type_definition

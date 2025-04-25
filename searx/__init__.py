@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# pylint: disable=missing-module-docstring, cyclic-import
+# pylint: disable=missing-module-docstring
 
 import sys
 import os
 from os.path import dirname, abspath
 
 import logging
+import typing
 
 import searx.unixthreadname
 import searx.settings_loader
@@ -26,6 +27,17 @@ sxng_debug = False
 logger = logging.getLogger('searx')
 
 _unset = object()
+
+LOG_LEVEL_MAP = {
+    "NOTSET": logging.NOTSET,
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARN": logging.WARN,
+    "WARNING": logging.WARN,
+    "ERROR": logging.ERROR,
+    "FATAL": logging.FATAL,
+    "CRITICAL": logging.CRITICAL,
+}
 
 
 def init_settings():
@@ -66,7 +78,7 @@ def init_settings():
         )
 
 
-def get_setting(name, default=_unset):
+def get_setting(name, default=_unset) -> typing.Any:
     """Returns the value to which ``name`` point.  If there is no such name in the
     settings and the ``default`` is unset, a :py:obj:`KeyError` is raised.
 
@@ -100,6 +112,8 @@ def _logging_config_debug():
         coloredlogs = None
 
     log_level = os.environ.get('SEARXNG_DEBUG_LOG_LEVEL', 'DEBUG')
+    log_level = LOG_LEVEL_MAP.get(log_level, LOG_LEVEL_MAP["DEBUG"])
+
     if coloredlogs and _is_color_terminal():
         level_styles = {
             'spam': {'color': 'green', 'faint': True},
@@ -121,7 +135,7 @@ def _logging_config_debug():
         }
         coloredlogs.install(level=log_level, level_styles=level_styles, field_styles=field_styles, fmt=LOG_FORMAT_DEBUG)
     else:
-        logging.basicConfig(level=logging.getLevelName(log_level), format=LOG_FORMAT_DEBUG)
+        logging.basicConfig(level=log_level, format=LOG_FORMAT_DEBUG)
 
 
 init_settings()

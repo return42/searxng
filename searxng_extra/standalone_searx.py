@@ -43,6 +43,7 @@ from json import dumps
 from typing import Any, Dict, List, Optional
 
 import searx
+import searx.engines
 import searx.preferences
 import searx.query
 import searx.search
@@ -68,8 +69,7 @@ def get_search_query(
         "language": args.lang,
         "time_range": args.timerange,
     }
-    preferences = searx.preferences.Preferences(['simple'], engine_categories, searx.engines.engines, [])
-    preferences.key_value_settings['safesearch'].parse(args.safesearch)
+    preferences = searx.preferences.Preferences()
 
     search_query = searx.webadapter.get_search_query_from_webapp(preferences, form)[0]
     return search_query

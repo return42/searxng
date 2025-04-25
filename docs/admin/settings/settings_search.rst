@@ -57,8 +57,8 @@
   favicons before reading the :ref:`Favicons documentation <favicons>`.
 
 ``default_lang``:
-  Default search language - leave blank to detect from browser information or
-  use codes from :origin:`searx/sxng_locales.py`.
+  Default search language - leave blank to detect from browser information
+  (``auto``) or use codes from :origin:`searx/sxng_locales.py`.
 
 ``languages``:
   List of available languages - leave unset to use all codes from
