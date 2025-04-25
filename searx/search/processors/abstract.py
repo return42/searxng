@@ -107,7 +107,7 @@ class EngineProcessor(ABC):
 
     def _extend_container_basic(self, result_container, start_time, search_results):
         # update result_container
-        result_container.extend(self.engine_name, search_results)
+        result_container.extend_results(self.engine_name, search_results)
         engine_time = default_timer() - start_time
         page_load_time = get_time_for_thread()
         result_container.add_timing(self.engine_name, engine_time, page_load_time)
@@ -135,7 +135,7 @@ class EngineProcessor(ABC):
             return True
         return False
 
-    def get_params(self, search_query, engine_category):
+    def get_params(self, search_query):
         """Returns a set of (see :ref:`request params <engine request arguments>`) or
         ``None`` if request is not supported.
 
@@ -159,7 +159,6 @@ class EngineProcessor(ABC):
 
         params = {}
         params["query"] = search_query.query
-        params['category'] = engine_category
         params['pageno'] = search_query.pageno
         params['safesearch'] = search_query.safesearch
         params['time_range'] = search_query.time_range

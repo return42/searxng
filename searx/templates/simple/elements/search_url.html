@@ -3,7 +3,7 @@
     <summary class="title" id="search_url-title">{{ _('Search URL') }}</summary>
     <button id="copy_url" type="submit" data-copied-text="{{ _('Copied') }}">{{ _('Copy') }}</button>
     <div class="selectable_url">
-      <pre>{{ url_for('search', _external=True) }}?q={{ q|urlencode }}&amp;language={{ current_language }}&amp;time_range={{ time_range }}&amp;safesearch={{ safesearch }}
+      <pre>{{ url_for('search', _external=True) }}?q={{ q|urlencode }}&amp;language={{ active_search_locale }}&amp;time_range={{ time_range }}&amp;safesearch={{ safesearch }}
         {%- if pageno > 1 -%}
           &amp;pageno={{ pageno }}
         {%- endif -%}

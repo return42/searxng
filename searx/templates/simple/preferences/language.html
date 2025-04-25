@@ -3,16 +3,16 @@
   <div class="value">{{- '' -}}
     <select name='language' aria-labelledby="pref_language" aria-describedby="desc_language">{{- '' -}}
       <option value="all"
-              {%- if current_language == 'all' %} selected="selected" {%- endif -%}>
+              {%- if active_search_locale == 'all' %} selected="selected" {%- endif -%}>
               {{- _('Default language') }} [all] {{- '' -}}
       </option>{{- '' -}}
       <option value="auto"
-              {%- if current_language == 'auto' %} selected="selected" {%- endif -%}>
+              {%- if active_search_locale == 'auto' %} selected="selected" {%- endif -%}>
               {{- _('Auto-detect') }} [auto] {{- '' -}}
       </option>{{- '' -}}
       {% for sxng_tag,lang_name,country_name,english_name,flag in sxng_locales | sort(attribute=1) -%}
         <option value="{{ sxng_tag }}"
-                {%- if sxng_tag == current_language %} selected="selected" {%- endif -%}>
+                {%- if sxng_tag == active_search_locale %} selected="selected" {%- endif -%}>
                 {{ lang_name }}{%- if country_name -%}-{{ country_name }}{%- endif -%}
                 {{- ' ' -}}[{{sxng_tag}}]{{- ' ' -}}
                 {%- if flag -%}{{ flag }}{%- endif -%}

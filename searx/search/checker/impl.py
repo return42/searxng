@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # pylint: disable=missing-module-docstring, invalid-name
+from __future__ import annotations
 
 import gc
 import typing
@@ -16,8 +17,8 @@ import httpx
 from searx import network, logger
 from searx.utils import gen_useragent, detect_language
 from searx.results import ResultContainer
-from searx.search.models import SearchQuery, EngineRef
 from searx.search.processors import EngineProcessor
+from searx.search import SearchQuery
 from searx.metrics import counter_inc
 
 
@@ -124,19 +125,17 @@ def _is_url_image(image_url) -> bool:
     return _download_and_check_if_image(image_url)
 
 
-def _search_query_to_dict(search_query: SearchQuery) -> typing.Dict[str, typing.Any]:
+def _search_query_to_dict(search_query: SearchQuery) -> dict[str, typing.Any]:
     return {
         'query': search_query.query,
-        'lang': search_query.lang,
+        'search_locale_tag': search_query.search_locale_tag,
         'pageno': search_query.pageno,
         'safesearch': search_query.safesearch,
         'time_range': search_query.time_range,
     }
 
 
-def _search_query_diff(
-    sq1: SearchQuery, sq2: SearchQuery
-) -> typing.Tuple[typing.Dict[str, typing.Any], typing.Dict[str, typing.Any]]:
+def _search_query_diff(sq1: SearchQuery, sq2: SearchQuery) -> tuple[dict[str, typing.Any], dict[str, typing.Any]]:
     param1 = _search_query_to_dict(sq1)
     param2 = _search_query_to_dict(sq2)
     common = {}
@@ -155,9 +154,9 @@ class TestResults:  # pylint: disable=missing-class-docstring
     __slots__ = 'errors', 'logs', 'languages'
 
     def __init__(self):
-        self.errors: typing.Dict[str, typing.List[str]] = {}
-        self.logs: typing.Dict[str, typing.List[typing.Any]] = {}
-        self.languages: typing.Set[str] = set()
+        self.errors: dict[str, list[str]] = {}
+        self.logs: dict[str, list[typing.Any]] = {}
+        self.languages: set[str] = set()
 
     def add_error(self, test, message, *args):
         # message to self.errors
@@ -192,7 +191,7 @@ class ResultContainerTests:  # pylint: disable=missing-class-docstring
         self.test_name = test_name
         self.search_query = search_query
         self.result_container = result_container
-        self.languages: typing.Set[str] = set()
+        self.languages: set[str] = set()
         self.test_results = test_results
         self.stop_test = False
 
@@ -206,7 +205,7 @@ class ResultContainerTests:  # pylint: disable=missing-class-docstring
         sqstr = ' '.join(['{}={!r}'.format(k, v) for k, v in sq.items()])
         self.test_results.add_error(self.test_name, message, *args, '(' + sqstr + ')')
 
-    def _add_language(self, text: str) -> typing.Optional[str]:
+    def _add_language(self, text: str) -> str|None:
         langStr = detect_language(text)
         if langStr:
             self.languages.add(langStr)
@@ -324,7 +323,7 @@ class CheckerTests:  # pylint: disable=missing-class-docstring, too-few-public-m
     __slots__ = 'test_results', 'test_name', 'result_container_tests_list'
 
     def __init__(
-        self, test_results: TestResults, test_name: str, result_container_tests_list: typing.List[ResultContainerTests]
+        self, test_results: TestResults, test_name: str, result_container_tests_list: list[ResultContainerTests]
     ):
         self.test_results = test_results
         self.test_name = test_name
@@ -360,14 +359,8 @@ class Checker:  # pylint: disable=missing-class-docstring
         self.tests = self.processor.get_tests()
         self.test_results = TestResults()
 
-    @property
-    def engineref_list(self):
-        engine_name = self.processor.engine_name
-        engine_category = self.processor.engine.categories[0]
-        return [EngineRef(engine_name, engine_category)]
-
     @staticmethod
-    def search_query_matrix_iterator(engineref_list, matrix):
+    def search_query_matrix_iterator(matrix):
         p = []
         for name, values in matrix.items():
             if isinstance(values, (tuple, list)):
@@ -381,7 +374,7 @@ class Checker:  # pylint: disable=missing-class-docstring
             query = kwargs['query']
             params = dict(kwargs)
             del params['query']
-            yield SearchQuery(query, engineref_list, **params)
+            yield SearchQuery(query, **params)
 
     def call_test(self, obj, test_description):
         if isinstance(test_description, (tuple, list)):
@@ -405,10 +398,9 @@ class Checker:  # pylint: disable=missing-class-docstring
 
     def search(self, search_query: SearchQuery) -> ResultContainer:
         result_container = ResultContainer()
-        engineref_category = search_query.engineref_list[0].category
-        params = self.processor.get_params(search_query, engineref_category)
+        params = self.processor.get_params(search_query)
         if params is not None:
-            counter_inc('engine', search_query.engineref_list[0].name, 'search', 'count', 'sent')
+            counter_inc('engine', self.processor.engine_name, 'search', 'count', 'sent')  # FIXME
             self.processor.search(search_query.query, params, result_container, default_timer(), 5)
         return result_container
 
@@ -420,7 +412,7 @@ class Checker:  # pylint: disable=missing-class-docstring
 
     def run_test(self, test_name):
         test_parameters = self.tests[test_name]
-        search_query_list = list(Checker.search_query_matrix_iterator(self.engineref_list, test_parameters['matrix']))
+        search_query_list = list(Checker.search_query_matrix_iterator(test_parameters['matrix']))   # FIXME
         rct_list = [self.get_result_container_tests(test_name, search_query) for search_query in search_query_list]
         stop_test = False
         if 'result_container' in test_parameters:

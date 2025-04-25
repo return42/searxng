@@ -26,7 +26,7 @@ class PluginIPSelfInfo(SearxTestCase):
         self.storage = searx.plugins.PluginStorage()
         self.storage.load_settings({"searx.plugins.self_info.SXNGPlugin": {"active": True}})
         self.storage.init(self.app)
-        self.pref = searx.preferences.Preferences(["simple"], ["general"], engines, self.storage)
+        self.pref = searx.preferences.Preferences()
         self.pref.parse_dict({"locale": "en"})
 
         cfg = searx.limiter.get_cfg()

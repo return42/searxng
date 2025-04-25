@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # pylint: disable=missing-module-docstring, missing-class-docstring
 from __future__ import annotations
+import typing
 
 import warnings
 from collections import defaultdict
 from threading import RLock
-from typing import List, NamedTuple, Set
 
 from searx import logger as log
 import searx.engines
@@ -35,13 +35,13 @@ def calculate_score(result, priority) -> float:
     return score
 
 
-class Timing(NamedTuple):
+class Timing(typing.NamedTuple):
     engine: str
     total: float
     load: float
 
 
-class UnresponsiveEngine(NamedTuple):
+class UnresponsiveEngine(typing.NamedTuple):
     engine: str
     error_type: str
     suspended: bool
@@ -70,14 +70,14 @@ class ResultContainer:
         self.engine_data: dict[str, dict[str, str]] = defaultdict(dict)
         self._closed: bool = False
         self.paging: bool = False
-        self.unresponsive_engines: Set[UnresponsiveEngine] = set()
-        self.timings: List[Timing] = []
-        self.redirect_url: str | None = None
-        self.on_result = lambda _: True
+        self.unresponsive_engines: set[UnresponsiveEngine] = set()
+        self.timings: list[Timing] = []
+        self.redirect_url: str|None = None
+        self.on_result: typing.Callable = lambda _: True
         self._lock = RLock()
         self._main_results_sorted: list[MainResult | LegacyResult] = None  # type: ignore
 
-    def extend(self, engine_name: str | None, results):  # pylint: disable=too-many-branches
+    def extend_results(self, engine_name: str, results):  # pylint: disable=too-many-branches
         if self._closed:
             log.debug("container is closed, ignoring results: %s", results)
             return

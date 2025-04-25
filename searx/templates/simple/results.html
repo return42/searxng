@@ -8,7 +8,7 @@
     {% endfor %}
 {%- endmacro %}
 {% block title %}{% if query_in_title %}{{- q|e }} - {% endif %}{% endblock %}
-{% block meta %}<link rel="alternate" type="application/rss+xml" title="Searx search: {{ q|e }}" href="{{ url_for('search', _external=True) }}?q={{ q|urlencode }}&amp;categories={{ selected_categories|join(",") | replace(' ','+') }}&amp;pageno={{ pageno }}&amp;time_range={{ time_range }}&amp;language={{ current_language }}&amp;safesearch={{ safesearch }}&amp;format=rss">{% endblock %}
+{% block meta %}<link rel="alternate" type="application/rss+xml" title="Searx search: {{ q|e }}" href="{{ url_for('search', _external=True) }}?q={{ q|urlencode }}&amp;categories={{ selected_categories|join(",") | replace(' ','+') }}&amp;pageno={{ pageno }}&amp;time_range={{ time_range }}&amp;language={{ active_search_locale }}&amp;safesearch={{ safesearch }}&amp;format=rss">{% endblock %}
 {% block content %}
 {% include 'simple/search.html' %}
 
@@ -86,7 +86,7 @@
                   <input type="hidden" name="category_{{ category }}" value="1" >
                   {% endfor %}
                   <input type="hidden" name="pageno" value="{{ pageno-1 }}" >
-                  <input type="hidden" name="language" value="{{ current_language }}" >
+                  <input type="hidden" name="language" value="{{ active_search_locale }}" >
                   <input type="hidden" name="time_range" value="{{ time_range }}" >
                   <input type="hidden" name="safesearch" value="{{ safesearch }}" >
                   <input type="hidden" name="theme" value="{{ theme }}" >
@@ -104,7 +104,7 @@
                 <input type="hidden" name="category_{{ category }}" value="1" >
                 {% endfor %}
                 <input type="hidden" name="pageno" value="{{ pageno+1 }}" >
-                <input type="hidden" name="language" value="{{ current_language }}" >
+                <input type="hidden" name="language" value="{{ active_search_locale }}" >
                 <input type="hidden" name="time_range" value="{{ time_range }}" >
                 <input type="hidden" name="safesearch" value="{{ safesearch }}" >
                 <input type="hidden" name="theme" value="{{ theme }}" >
@@ -129,7 +129,7 @@
                 <input type="hidden" name="category_{{ category }}" value="1" >
                 {% endfor %}
                 <input type="hidden" name="pageno" value="{{ x }}" >
-                <input type="hidden" name="language" value="{{ current_language }}" >
+                <input type="hidden" name="language" value="{{ active_search_locale }}" >
                 <input type="hidden" name="time_range" value="{{ time_range }}" >
                 <input type="hidden" name="safesearch" value="{{ safesearch }}" >
                 <input type="hidden" name="theme" value="{{ theme }}" >

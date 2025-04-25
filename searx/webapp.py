@@ -52,13 +52,15 @@ from flask_babel import (
 )
 
 import searx
-from searx.extended_types import sxng_request
+from searx.extended_types import sxng_request, SXNG_Request
 from searx import (
     logger,
     get_setting,
     settings,
 )
 
+import searx.preferences
+import searx.client
 from searx import infopage
 from searx import limiter
 from searx.botdetection import link_token
@@ -86,20 +88,17 @@ from searx.webutils import (
     is_hmac_of,
     group_engines_in_tab,
 )
-from searx.webadapter import (
-    get_search_query_from_webapp,
-    get_selected_categories,
-    parse_lang,
-)
+# FIXME .. searx.webadapter gibt es nicht mehr
+# from searx.webadapter import (
+#     get_search_query_from_webapp,
+#     get_selected_categories,
+#     parse_lang,
+# )
 from searx.utils import gen_useragent, dict_subset
 from searx.version import VERSION_STRING, GIT_URL, GIT_BRANCH
 from searx.query import RawTextQuery
 from searx.plugins.oa_doi_rewrite import get_doi_resolver
-from searx.preferences import (
-    Preferences,
-    ClientPref,
-    ValidationException,
-)
+
 import searx.answerers
 import searx.plugins
 
@@ -110,7 +109,7 @@ from searx.flaskfix import patch_application
 from searx.locales import (
     LOCALE_NAMES,
     RTL_LOCALES,
-    localeselector,
+    babel_locale_selector,
     locales_initialize,
     match_locale,
 )
@@ -158,21 +157,7 @@ app.jinja_env.add_extension('jinja2.ext.loopcontrols')  # pylint: disable=no-mem
 app.jinja_env.filters['group_engines_in_tab'] = group_engines_in_tab  # pylint: disable=no-member
 app.secret_key = settings['server']['secret_key']
 
-
-def get_locale():
-    locale = localeselector()
-    logger.debug("%s uses locale `%s`", urllib.parse.quote(sxng_request.url), locale)
-    return locale
-
-
-babel = Babel(app, locale_selector=get_locale)
-
-
-def _get_browser_language(req, lang_list):
-    client = ClientPref.from_http_request(req)
-    locale = match_locale(client.locale_tag, lang_list, fallback='en')
-    return locale
-
+_ = Babel(app, locale_selector=babel_locale_selector)
 
 def _get_locale_rfc5646(locale):
     """Get locale name for <html lang="...">
@@ -359,7 +344,6 @@ def get_client_settings():
         'theme_static_path': custom_url_for('static', filename='themes/simple'),
         'results_on_new_tab': req_pref.get_value('results_on_new_tab'),
         'favicon_resolver': req_pref.get_value('favicon_resolver'),
-        'advanced_search': req_pref.get_value('advanced_search'),
         'query_in_title': req_pref.get_value('query_in_title'),
         'safesearch': str(req_pref.get_value('safesearch')),
         'theme': req_pref.get_value('theme'),
@@ -402,8 +386,9 @@ def render(template_name: str, **kwargs):
     if locale in RTL_LOCALES and 'rtl' not in kwargs:
         kwargs['rtl'] = True
 
-    if 'current_language' not in kwargs:
-        kwargs['current_language'] = parse_lang(sxng_request.preferences, {}, RawTextQuery('', []))
+    if "active_search_locale" not in kwargs:
+        # FIXME ...
+        kwargs["active_search_locale"] = parse_lang(sxng_request.preferences, {}, RawTextQuery('', []))
 
     # values from settings
     kwargs['search_formats'] = [x for x in settings['search']['formats'] if x != 'html']
@@ -449,64 +434,10 @@ def render(template_name: str, **kwargs):
 
 @app.before_request
 def pre_request():
-    sxng_request.start_time = default_timer()  # pylint: disable=assigning-non-slot
-    sxng_request.render_time = 0  # pylint: disable=assigning-non-slot
-    sxng_request.timings = []  # pylint: disable=assigning-non-slot
-    sxng_request.errors = []  # pylint: disable=assigning-non-slot
-
-    client_pref = ClientPref.from_http_request(sxng_request)
-    # pylint: disable=redefined-outer-name
-    preferences = Preferences(themes, list(categories.keys()), engines, searx.plugins.STORAGE, client_pref)
-
-    user_agent = sxng_request.headers.get('User-Agent', '').lower()
-    if 'webkit' in user_agent and 'android' in user_agent:
-        preferences.key_value_settings['method'].value = 'GET'
-    sxng_request.preferences = preferences  # pylint: disable=assigning-non-slot
-
-    try:
-        preferences.parse_dict(sxng_request.cookies)
-
-    except Exception as e:  # pylint: disable=broad-except
-        logger.exception(e, exc_info=True)
-        sxng_request.errors.append(gettext('Invalid settings, please edit your preferences'))
-
-    # merge GET, POST vars
-    # HINT request.form is of type werkzeug.datastructures.ImmutableMultiDict
-    sxng_request.form = dict(sxng_request.form.items())  # type: ignore
-    for k, v in sxng_request.args.items():
-        if k not in sxng_request.form:
-            sxng_request.form[k] = v
-
-    if sxng_request.form.get('preferences'):
-        preferences.parse_encoded_data(sxng_request.form['preferences'])
-    else:
-        try:
-            preferences.parse_dict(sxng_request.form)
-        except Exception as e:  # pylint: disable=broad-except
-            logger.exception(e, exc_info=True)
-            sxng_request.errors.append(gettext('Invalid settings'))
-
-    # language is defined neither in settings nor in preferences
-    # use browser headers
-    if not preferences.get_value("language"):
-        language = _get_browser_language(sxng_request, settings['search']['languages'])
-        preferences.parse_dict({"language": language})
-        logger.debug('set language %s (from browser)', preferences.get_value("language"))
-
-    # UI locale is defined neither in settings nor in preferences
-    # use browser headers
-    if not preferences.get_value("locale"):
-        locale = _get_browser_language(sxng_request, LOCALE_NAMES.keys())
-        preferences.parse_dict({"locale": locale})
-        logger.debug('set locale %s (from browser)', preferences.get_value("locale"))
-
-    # request.user_plugins
-    sxng_request.user_plugins = []  # pylint: disable=assigning-non-slot
-    allowed_plugins = preferences.plugins.get_enabled()
-    disabled_plugins = preferences.plugins.get_disabled()
-    for plugin in searx.plugins.STORAGE:
-        if (plugin.id not in disabled_plugins) or plugin.id in allowed_plugins:
-            sxng_request.user_plugins.append(plugin.id)
+    client = searx.client.HTTPClient.from_http_request()
+    prefs = searx.preferences.Preferences()
+    prefs.process_request(client)
+    SXNG_Request.init(prefs, client)
 
 
 @app.after_request
@@ -639,11 +570,10 @@ def search():
     search_query = None
     raw_text_query = None
     result_container = None
+
     try:
-        search_query, raw_text_query, _, _, selected_locale = get_search_query_from_webapp(
-            sxng_request.preferences, sxng_request.form
-        )
-        search_obj = searx.search.SearchWithPlugins(search_query, sxng_request, sxng_request.user_plugins)
+        search_query, raw_text_query = sxng_request.client.get_search_query()
+        search_obj = searx.search.SearchWithPlugins(search_query, sxng_request)
         result_container = search_obj.search()
 
     except SearxParameterException as e:
@@ -763,11 +693,11 @@ def search():
             result_container.unresponsive_engines
         ),
         current_locale = sxng_request.preferences.get_value("locale"),
-        current_language = selected_locale,
+        active_search_locale = search_query.search_locale_tag,
         search_language = match_locale(
-            search_obj.search_query.lang,
+            search_query.search_locale_tag,
             settings['search']['languages'],
-            fallback=sxng_request.preferences.get_value("language")
+            fallback=sxng_request.preferences.components["search_locale_tag"].value
         ),
         timeout_limit = sxng_request.form.get('timeout_limit', None),
         timings = engine_timings_pairs,
@@ -865,7 +795,7 @@ def preferences():
         resp = make_response(redirect(url_for('index', _external=True)))
         try:
             sxng_request.preferences.parse_form(sxng_request.form)
-        except ValidationException:
+        except ValueError:
             sxng_request.errors.append(gettext('Invalid settings, please edit your preferences'))
             return resp
         return sxng_request.preferences.save(resp)
@@ -873,8 +803,6 @@ def preferences():
     # render preferences
     image_proxy = sxng_request.preferences.get_value('image_proxy')  # pylint: disable=redefined-outer-name
     disabled_engines = sxng_request.preferences.engines.get_disabled()
-    allowed_plugins = sxng_request.preferences.plugins.get_enabled()
-
     # stats for preferences page
     filtered_engines = dict(filter(lambda kv: sxng_request.preferences.validate_token(kv[1]), engines.items()))
 
@@ -998,7 +926,8 @@ def preferences():
         themes = themes,
         plugins_storage = searx.plugins.STORAGE.info,
         current_doi_resolver = get_doi_resolver(),
-        allowed_plugins = allowed_plugins,
+        enabled_plugins = sxng_request.preferences.plugins.get_enabled(),
+        pref_url_params = sxng_request.preferences.pref_url_params,
         preferences_url_params = sxng_request.preferences.get_as_url_params(),
         locked_preferences = get_setting("preferences.lock", []),
         doi_resolvers = get_setting("doi_resolvers", {}),
@@ -1284,10 +1213,7 @@ def config():
             }
         )
 
-    _plugins = []
-    for _ in searx.plugins.STORAGE:
-        _plugins.append({'name': _.id, 'enabled': _.active})
-
+    _plugins = [plg.info.__dict__ for plg in searx.plugins.STORAGE]
     _limiter_cfg = limiter.get_cfg()
 
     return jsonify(

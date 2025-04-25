@@ -52,7 +52,7 @@ DEFAULT_CATEGORY = 'other'
 
 # Defaults for the namespace of an engine module, see :py:func:`load_engine`
 
-categories = {'general': []}
+categories: dict[str,list[Engine]] = {'general': []}
 engines: Dict[str, Engine | types.ModuleType] = {}
 engine_shortcuts = {}
 """Simple map of registered *shortcuts* to name of the engine (or ``None``).
