@@ -2,6 +2,7 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring
 from __future__ import annotations
 
+import typing
 import warnings
 from collections import defaultdict
 from threading import RLock
@@ -73,11 +74,11 @@ class ResultContainer:
         self.unresponsive_engines: Set[UnresponsiveEngine] = set()
         self.timings: List[Timing] = []
         self.redirect_url: str | None = None
-        self.on_result = lambda _: True
+        self.on_result: typing.Callable = lambda _: True
         self._lock = RLock()
         self._main_results_sorted: list[MainResult | LegacyResult] = None  # type: ignore
 
-    def extend(self, engine_name: str | None, results):  # pylint: disable=too-many-branches
+    def extend_results(self, engine_name: str | None, results):  # pylint: disable=too-many-branches
         if self._closed:
             log.debug("container is closed, ignoring results: %s", results)
             return

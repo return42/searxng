@@ -215,7 +215,7 @@ def response(resp):
 # These Wikipedias use language codes that do not conform to the ISO 639
 # standard (which is how wiki subdomains are chosen nowadays).
 
-lang_map = locales.LOCALE_BEST_MATCH.copy()
+lang_map = locales.TRANSLATION_BEST_MATCH.copy()
 lang_map.update(
     {
         'be-tarask': 'bel',

@@ -20,7 +20,7 @@
     <div class="urls">
       <ul>
         {%- for url in infobox.urls -%}
-          <li class="url"><bdi><a href="{{ url.url }}" {%- if results_on_new_tab -%}target="_blank" rel="noopener noreferrer"{%- else -%}rel="noreferrer"{%- endif -%}>{{ url.title }}</a></bdi></li>
+          <li class="url"><bdi><a href="{{ url.url }}" {%- if PREF["results_on_new_tab"].value -%}target="_blank" rel="noopener noreferrer"{%- else -%}rel="noreferrer"{%- endif -%}>{{ url.title }}</a></bdi></li>
         {%- endfor -%}
       </ul>
     </div>
@@ -31,12 +31,12 @@
         <div>
           <h3><bdi>{{ topic.name }}</bdi></h3>
           {%- for suggestion in topic.suggestions -%}
-            <form method="{{ method or 'POST' }}" action="{{ url_for('search') }}">
+            <form method="{{ PREF["method"].str }}" action="{{ url_for('search') }}">
               <input type="hidden" name="q" value="{{ suggestion }}">
               <input type="hidden" name="time_range" value="{{ time_range }}">
-              <input type="hidden" name="language" value="{{ current_language }}">
-              <input type="hidden" name="safesearch" value="{{ safesearch }}">
-              <input type="hidden" name="theme" value="{{ theme }}">
+              <input type="hidden" name="language" value="{{ CLIENT.search_locale_tag }}">
+              <input type="hidden" name="safesearch" value="{{ PREF["safesearch"].str }}">
+              <input type="hidden" name="theme" value="{{ PREF["theme"].str }}">
               {%- if timeout_limit -%}<input type="hidden" name="timeout_limit" value="{{ timeout_limit|e }}" >{%- endif -%}
               <input type="submit" value="{{ suggestion }}">
             </form>

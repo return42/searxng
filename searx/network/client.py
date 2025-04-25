@@ -20,7 +20,7 @@ uvloop.install()
 
 
 logger = logger.getChild('searx.network.client')
-LOOP = None
+LOOP: asyncio.AbstractEventLoop = None  # type: ignore
 SSLCONTEXTS: Dict[Any, SSLContext] = {}
 
 

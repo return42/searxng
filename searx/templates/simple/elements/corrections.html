@@ -2,15 +2,15 @@
       <h4 id="corrections-title">{{ _('Try searching for:') }}</h4>
       {% for correction in corrections %}
       <div class="left">
-	      <form method="{{ method or 'POST' }}" action="{{ url_for('search') }}" role="navigation">
-          {% for category in selected_categories %}
-          <input type="hidden" name="category_{{ category }}" value="1">
+	      <form method="{{ PREF["method"].str }}" action="{{ url_for('search') }}" role="navigation">
+          {% for category in PREF["categories"].value %}
+            <input type="hidden" name="category_{{ category }}" value="1">
           {% endfor %}
           <input type="hidden" name="q" value="{{ correction.url }}">
-          <input type="hidden" name="language" value="{{ current_language }}">
+          <input type="hidden" name="language" value="{{ CLIENT.search_locale_tag }}">
           <input type="hidden" name="time_range" value="{{ time_range }}">
-          <input type="hidden" name="safesearch" value="{{ safesearch }}">
-          <input type="hidden" name="theme" value="{{ theme }}">
+          <input type="hidden" name="safesearch" value="{{ PREF["safesearch"].str }}">
+          <input type="hidden" name="theme" value="{{ PREF["theme"].str }}">
           {% if timeout_limit %}<input type="hidden" name="timeout_limit" value="{{ timeout_limit }}" >{% endif %}
           <input type="submit" role="link" value="{{ correction.title }}">
 	      </form>

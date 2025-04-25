@@ -17,10 +17,13 @@ from typing import Iterable, List, Tuple, Dict, TYPE_CHECKING
 from io import StringIO
 from codecs import getincrementalencoder
 
+from flask import url_for
 from flask_babel import gettext, format_date  # type: ignore
 
-from searx import logger, settings
+from searx import infopage
+from searx import logger, get_setting
 from searx.engines import DEFAULT_CATEGORY
+from searx.extended_types import sxng_request
 
 if TYPE_CHECKING:
     from searx.enginelib import Engine
@@ -28,7 +31,6 @@ if TYPE_CHECKING:
     from searx.search import SearchQuery
     from searx.results import UnresponsiveEngine
 
-VALID_LANGUAGE_CODE = re.compile(r'^[a-z]{2,3}(-[a-zA-Z]{2})?$')
 
 logger = logger.getChild('webutils')
 
@@ -331,7 +333,7 @@ def group_engines_in_tab(engines: Iterable[Engine]) -> List[Tuple[str, Iterable[
     def engine_sort_key(engine):
         return (engine.about.get('language', ''), engine.name)
 
-    tabs = list(settings['categories_as_tabs'].keys())
+    tabs = list(get_setting("categories_as_tabs").keys())
     subgroups = itertools.groupby(sorted(engines, key=get_subgroup), get_subgroup)
     sorted_groups = sorted(((name, list(engines)) for name, engines in subgroups), key=group_sort_key)
 
@@ -341,3 +343,29 @@ def group_engines_in_tab(engines: Iterable[Engine]) -> List[Tuple[str, Iterable[
         ret_val.append((groupname, group_bang, sorted(_engines, key=engine_sort_key)))
 
     return ret_val
+
+
+# about static
+logger.debug('static directory is %s', get_setting("ui.static_path"))
+
+
+def custom_url_for(endpoint: str, **values):
+    static_files = get_static_files(get_setting("ui.static_path"))
+    suffix = ""
+    if endpoint == 'static' and values.get('filename'):
+        file_hash = static_files.get(values['filename'])
+        if not file_hash:
+            # try file in the current theme
+            theme_name = sxng_request.preferences.fields.theme.value
+            filename_with_theme = "themes/{}/{}".format(theme_name, values['filename'])
+            file_hash = static_files.get(filename_with_theme)
+            if file_hash:
+                values['filename'] = filename_with_theme
+        if get_setting('ui.static_use_hash') and file_hash:
+            suffix = "?" + file_hash
+    if endpoint == 'info' and 'locale' not in values:
+        locale = sxng_request.preferences.fields.ui_locale_tag.value
+        if infopage.INFO_PAGES.get_page(values['pagename'], locale) is None:
+            locale = infopage.INFO_PAGES.locale_default
+        values['locale'] = locale
+    return url_for(endpoint, **values) + suffix

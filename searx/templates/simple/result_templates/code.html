@@ -12,14 +12,14 @@
   <p class="content">{{- '' -}}
     {{ _('repo') }}: {{- ' ' -}}
     <a href="{{ result.repository|safe }}"{{- ' ' -}}
-       {% if results_on_new_tab %}
-         target="_blank" {{- ' ' -}}
-         rel="noopener noreferrer"
-       {%- else -%}
-         rel="noreferrer"
-       {%- endif -%}
-       >
-       {{- result.repository -}}
+      {% if PREF["results_on_new_tab"].value %}
+      target="_blank" {{- ' ' -}}
+      rel="noopener noreferrer"
+      {%- else -%}
+      rel="noreferrer"
+      {%- endif -%}
+    >
+      {{- result.repository -}}
     </a>{{- '' -}}
   </p>
 {%- endif -%}

@@ -4,16 +4,16 @@
 import flask
 from mock import Mock
 
+from searx.components import form
 from searx import favicons
 from searx.locales import locales_initialize
 from searx.preferences import (
-    Setting,
+    Preferences,
     EnumStringSetting,
     MapSetting,
     SearchLanguageSetting,
     MultipleChoiceSetting,
     PluginsSetting,
-    ValidationException,
 )
 import searx.plugins
 from searx.preferences import Preferences
@@ -28,15 +28,15 @@ favicons.init()
 
 class TestSettings(SearxTestCase):
 
-    # map settings
+    # FIXME ...
 
     def test_map_setting_invalid_default_value(self):
-        with self.assertRaises(ValidationException):
-            MapSetting(3, map={'dog': 1, 'bat': 2})
+        with self.assertRaises(ValueError):
+            form.SingleChoice("test", 3, map={'dog': 1, 'bat': 2})
 
     def test_map_setting_invalid_choice(self):
         setting = MapSetting(2, map={'dog': 1, 'bat': 2})
-        with self.assertRaises(ValidationException):
+        with self.assertRaises(ValueError):
             setting.parse('cat')
 
     def test_map_setting_valid_default(self):
@@ -52,12 +52,12 @@ class TestSettings(SearxTestCase):
     # enum settings
 
     def test_enum_setting_invalid_default_value(self):
-        with self.assertRaises(ValidationException):
+        with self.assertRaises(ValueError):
             EnumStringSetting('3', choices=['0', '1', '2'])
 
     def test_enum_setting_invalid_choice(self):
         setting = EnumStringSetting('0', choices=['0', '1', '2'])
-        with self.assertRaises(ValidationException):
+        with self.assertRaises(ValueError):
             setting.parse('3')
 
     def test_enum_setting_valid_default(self):
@@ -73,12 +73,12 @@ class TestSettings(SearxTestCase):
     # multiple choice settings
 
     def test_multiple_setting_invalid_default_value(self):
-        with self.assertRaises(ValidationException):
+        with self.assertRaises(ValueError):
             MultipleChoiceSetting(['3', '4'], choices=['0', '1', '2'])
 
     def test_multiple_setting_invalid_choice(self):
         setting = MultipleChoiceSetting(['1', '2'], choices=['0', '1', '2'])
-        with self.assertRaises(ValidationException):
+        with self.assertRaises(ValueError):
             setting.parse('4, 3')
 
     def test_multiple_setting_valid_default(self):
@@ -136,8 +136,7 @@ class TestPreferences(SearxTestCase):
     def setUp(self):
         super().setUp()
 
-        storage = searx.plugins.PluginStorage()
-        self.preferences = Preferences(['simple'], ['general'], {}, storage)
+        self.preferences = Preferences()
 
     def test_encode(self):
         url_params = (

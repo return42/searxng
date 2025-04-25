@@ -13,7 +13,7 @@ Usage in a Flask app route:
   @app.route('/info/<pagename>', methods=['GET'])
   def info(pagename):
 
-      locale = sxng_request.preferences.get_value('locale')
+      locale = sxng_request.preferences.value("ui_locale_tag")
       page = _INFO_PAGES.get_page(pagename, locale)
 
 """

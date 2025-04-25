@@ -6,7 +6,7 @@
 {%- endmacro %}
 
 {% macro result_open_link(url, classes='') -%}
-    <a href="{{ url }}" {% if classes %}class="{{ classes }}" {% endif %}{% if results_on_new_tab %}target="_blank" rel="noopener noreferrer"{% else %}rel="noreferrer"{% endif %}>
+  <a href="{{ url }}" {% if classes %}class="{{ classes }}" {% endif %}{% if PREF["results_on_new_tab"].value %}target="_blank" rel="noopener noreferrer"{% else %}rel="noreferrer"{% endif %}>
 {%- endmacro %}
 
 {%- macro result_close_link() -%}
@@ -21,7 +21,7 @@
 {% macro result_header(result, favicons, image_proxify) -%}
 <article class="result {% if result['template'] %}result-{{ result.template|replace('.html', '') }}{% else %}result-default{% endif %} {% if result['category'] %}category-{{ result['category'] }}{% endif %}">
   {{- result_open_link(result.url, "url_header") -}}
-  {%- if favicon_resolver != "" %}
+  {%- if PREF["favicon_resolver"].value != "" %}
   <div class="favicon"><img loading="lazy" src="{{ favicon_url(result.parsed_url.netloc) }}"></div>
   {%- endif -%}
   <div class="url_wrapper">
@@ -58,11 +58,10 @@
 {%- endmacro -%}
 
 <!-- input checkbox, on/off slider user can tap-->
-{%- macro checkbox_onoff(name, checked) -%}
-  <input type="checkbox" {{- ' ' -}}
-         name="{{ name }}" {{- ' ' -}}
-         id="{{ name }}" {{- ' ' -}}
-         aria-labelledby="pref_{{ name }}"{{- ' ' -}}
-         class="checkbox-onoff"{{- ' ' -}}
-         {%- if checked -%} checked{%- endif -%}/>
+{%- macro checkbox_onoff(name, checked, labelledby) -%}
+  <input type="checkbox" name="{{ name }}" id="{{ name }}" class="checkbox-onoff" {{- ' ' -}}
+	 {%- if labelledby -%}aria-labelledby="{{ labelledby }}"
+	 {%- else -%}aria-labelledby="pref_{{ name }}"
+	 {%- endif %}{{- ' ' -}}
+         {%- if checked -%}checked{%- endif -%}/>
 {%- endmacro -%}

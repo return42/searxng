@@ -94,10 +94,10 @@ class EngineProcessor(ABC):
         result_container.add_unresponsive_engine(self.engine_name, error_message)
         # metrics
         counter_inc('engine', self.engine_name, 'search', 'count', 'error')
-        if isinstance(exception_or_message, BaseException):
+        if isinstance(exception_or_message, Exception):
             count_exception(self.engine_name, exception_or_message)
         else:
-            count_error(self.engine_name, exception_or_message)
+            count_error(self.engine_name, str(exception_or_message))
         # suspend the engine ?
         if suspend:
             suspended_time = None
@@ -107,7 +107,7 @@ class EngineProcessor(ABC):
 
     def _extend_container_basic(self, result_container, start_time, search_results):
         # update result_container
-        result_container.extend(self.engine_name, search_results)
+        result_container.extend_results(self.engine_name, search_results)
         engine_time = default_timer() - start_time
         page_load_time = get_time_for_thread()
         result_container.add_timing(self.engine_name, engine_time, page_load_time)
@@ -120,7 +120,7 @@ class EngineProcessor(ABC):
     def extend_container(self, result_container, start_time, search_results):
         if getattr(threading.current_thread(), '_timeout', False):
             # the main thread is not waiting anymore
-            self.handle_exception(result_container, 'timeout', None)
+            self.handle_exception(result_container, 'timeout', False)
         else:
             # check if the engine accepted the request
             if search_results is not None:
@@ -135,7 +135,7 @@ class EngineProcessor(ABC):
             return True
         return False
 
-    def get_params(self, search_query, engine_category):
+    def get_params(self, search_query):
         """Returns a set of (see :ref:`request params <engine request arguments>`) or
         ``None`` if request is not supported.
 
@@ -159,7 +159,6 @@ class EngineProcessor(ABC):
 
         params = {}
         params["query"] = search_query.query
-        params['category'] = engine_category
         params['pageno'] = search_query.pageno
         params['safesearch'] = search_query.safesearch
         params['time_range'] = search_query.time_range

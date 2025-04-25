@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# pylint: disable=missing-module-docstring, global-statement
+# pylint: disable=missing-module-docstring
 
 import asyncio
 import threading
@@ -14,12 +14,22 @@ import httpx
 import anyio
 
 from searx.extended_types import SXNG_Response
-from .network import get_network, initialize, check_network_configuration  # pylint:disable=cyclic-import
-from .client import get_loop
+from .network import get_network, Network, initialize, check_network_configuration
 from .raise_for_httperror import raise_for_httperror
+from .client import get_loop
 
 
-THREADLOCAL = threading.local()
+class _ThreadLocalType:
+    """Dummy class to define type of the THREADLOCAL variable"""
+
+    # pylint: disable=too-few-public-methods
+    total_time: float
+    timeout: float
+    start_time: float | None
+    network: Network
+
+
+THREADLOCAL: _ThreadLocalType = threading.local()  # type: ignore
 """Thread-local data is data for thread specific values."""
 
 
