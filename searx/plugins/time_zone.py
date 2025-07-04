@@ -1,13 +1,22 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # pylint: disable=missing-module-docstring, missing-class-docstring
+
+from __future__ import annotations
+import typing
+
 import zoneinfo
 import datetime
 
 from flask_babel import gettext
 from searx.result_types import EngineResults
-from searx.data import TIMEZONES
+from searx.data import TIME_ZONES
 
 from . import Plugin, PluginInfo
+
+if typing.TYPE_CHECKING:
+    from searx.search import SearchWithPlugins
+    from searx.extended_types import SXNG_Request
+    from searx.plugins import PluginCfg
 
 
 datetime_format = "%H:%M - %A, %d/%m/%y"
@@ -32,30 +41,27 @@ class SXNGPlugin(Plugin):
     def post_search(self, request: "SXNG_Request", search: "SearchWithPlugins") -> EngineResults:
         results = EngineResults()
 
+        if search.search_query.pageno > 1:
+            return results
+
         # remove keywords from the query
         query = search.search_query.query
         query_parts = filter(lambda part: part.lower() not in self.keywords, query.split(" "))
-        location = "_".join(query_parts)
+        location = " ".join(query_parts)
 
         if not location:
             results.add(results.types.Answer(answer=f"{datetime.datetime.now().strftime(datetime_format)}"))
             return results
 
-        # location is too short for proper matching
-        if len(location) <= 3:
-            return results
+        tz_name = TIME_ZONES.get(location)
+        if tz_name:
+            zone = zoneinfo.ZoneInfo(tz_name)
+            now = datetime.datetime.now(tz=zone)
 
-        zones = TIMEZONES["cities"].copy()
-        zones.update(TIMEZONES["countries"])
-        for key, tz_name in zones.items():
-            if location in key.lower():
-                zone = zoneinfo.ZoneInfo(tz_name)
-                now = datetime.datetime.now(tz=zone)
-
-                results.add(
-                    results.types.Answer(
-                        answer=f"{now.strftime(datetime_format)} at {tz_name.replace('_', ' ')} ({now.strftime('%Z')})"
-                    )
+            results.add(
+                results.types.Answer(
+                    answer=f"{now.strftime(datetime_format)} at {tz_name.replace('_', ' ')} ({now.strftime('%Z')})"
                 )
+            )
 
         return results
