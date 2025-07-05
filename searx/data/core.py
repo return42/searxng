@@ -22,6 +22,7 @@ def get_cache():
         _DATA_CACHE = ExpireCacheSQLite.build_cache(
             ExpireCacheCfg(
                 name="DATA_CACHE",
+                MAINTENANCE_MODE = "off",
                 # MAX_VALUE_LEN=1024 * 200,  # max. 200kB length for a *serialized* value.
                 # MAXHOLD_TIME=60 * 60 * 24 * 7 * 4,  # 4 weeks
             )
