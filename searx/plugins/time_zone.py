@@ -14,6 +14,7 @@ from searx.data import TIME_ZONES
 from . import Plugin, PluginInfo
 
 if typing.TYPE_CHECKING:
+    import flask
     from searx.search import SearchWithPlugins
     from searx.extended_types import SXNG_Request
     from searx.plugins import PluginCfg
@@ -38,6 +39,10 @@ class SXNGPlugin(Plugin):
             examples=["time Berlin", "clock Los Angeles"],
         )
 
+    def init(self, app: "flask.Flask") -> bool:  # pylint: disable=unused-argument
+        TIME_ZONES.init()
+        return True
+
     def post_search(self, request: "SXNG_Request", search: "SearchWithPlugins") -> EngineResults:
         results = EngineResults()
 
@@ -53,8 +58,10 @@ class SXNGPlugin(Plugin):
             results.add(results.types.Answer(answer=f"{datetime.datetime.now().strftime(datetime_format)}"))
             return results
 
-        tz_name = TIME_ZONES.get(location)
+        tz_name = TIME_ZONES.tz_info(location)
         if tz_name:
+            import pdb
+            pdb.set_trace()
             zone = zoneinfo.ZoneInfo(tz_name)
             now = datetime.datetime.now(tz=zone)
 
