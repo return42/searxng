@@ -130,7 +130,7 @@ LIMITER_CFG_SCHEMA = Path(__file__).parent / "limiter.toml"
 """Base configuration (schema) of the botdetection."""
 
 CFG_DEPRECATED = {
-    # "dummy.old.foo": "config 'dummy.old.foo' exists only for tests.  Don't use it in your real project config."
+    "real_ip.x_for": "limiter: config option 'real_ip.x_for' has been replaced by trusted_proxies"
 }
 
 
