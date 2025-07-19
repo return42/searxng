@@ -10,12 +10,10 @@ from ipaddress import (
     ip_network,
     ip_address,
 )
-
 import flask
 import werkzeug
 
 from searx import logger
-from searx.extended_types import SXNG_Request
 
 from . import config
 from .ip_lists import trusted_proxies  # pylint: disable=cyclic-import
@@ -23,7 +21,7 @@ from .ip_lists import trusted_proxies  # pylint: disable=cyclic-import
 logger = logger.getChild('botdetection')
 
 
-def dump_request(request: SXNG_Request):
+def dump_request(request: flask.Request):
     return (
         request.path
         + " || X-Forwarded-For: %s" % request.headers.get('X-Forwarded-For')
@@ -53,10 +51,8 @@ def too_many_requests(network: IPv4Network | IPv6Network, log_msg: str) -> werkz
     return flask.make_response(('Too Many Requests', 429))
 
 
-def get_network(real_ip: IPv4Address | IPv6Address) -> IPv4Network | IPv6Network:
+def get_network(real_ip: IPv4Address | IPv6Address, cfg: config.Config) -> IPv4Network | IPv6Network:
     """Returns the (client) network of whether the real_ip is part of."""
-
-    cfg = config.get_cfg()
 
     if real_ip.version == 6:
         prefix = cfg['real_ip.ipv6_prefix']
@@ -76,7 +72,7 @@ def _log_error_only_once(err_msg):
         _logged_errors.append(err_msg)
 
 
-def get_real_ip(request: SXNG_Request) -> IPv4Address | IPv6Address:
+def get_real_ip(request: flask.Request, cfg: config.Config) -> IPv4Address | IPv6Address:
     """Returns real IP of the request.
 
     This function tries to get the remote IP in the order listed below,
@@ -95,7 +91,6 @@ def get_real_ip(request: SXNG_Request) -> IPv4Address | IPv6Address:
       https://github.com/searxng/searxng/issues/1237#issuecomment-1147564516
     """
 
-    cfg = config.get_cfg()
     remote_addr = ip_address(request.remote_addr or "0.0.0.0")
     request_ip = remote_addr
 

@@ -24,14 +24,15 @@ import logging
 import warnings
 
 import valkey
+import valkey.exceptions
 from searx import get_setting
 
-
-_CLIENT = None
+_CLIENT: valkey.Valkey = None  # type ignore
 logger = logging.getLogger(__name__)
 
 
 def client() -> valkey.Valkey:
+    """Returns SearXNG's global Valkey DB connector (Valkey client object)."""
     return _CLIENT
 
 
@@ -59,7 +60,7 @@ def initialize():
         logger.info("connected to Valkey")
         return True
     except valkey.exceptions.ValkeyError:
-        _CLIENT = None
+        _CLIENT = None  # type: ignore
         _pw = pwd.getpwuid(os.getuid())
         logger.exception("[%s (%s)] can't connect valkey DB ...", _pw.pw_name, _pw.pw_uid)
     return False

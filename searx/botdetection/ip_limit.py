@@ -45,7 +45,6 @@ from ipaddress import (
 import flask
 import werkzeug
 
-from searx.extended_types import SXNG_Request
 from searx import valkeydb
 from searx.valkeylib import incr_sliding_window, drop_counter
 
@@ -92,7 +91,7 @@ SUSPICIOUS_IP_MAX = 3
 
 def filter_request(
     network: IPv4Network | IPv6Network,
-    request: SXNG_Request,
+    request: flask.Request,
     cfg: config.Config,
 ) -> werkzeug.Response | None:
 
