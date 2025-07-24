@@ -8,26 +8,14 @@ vite.help(){
     cat <<EOF
 vite.:  .. to be done ..
   simple.:
-    build: build static files of the simple theme
-    fix:   run prettiers on simple theme
-    lint:  run linters on simple theme
-    dev:   start development server
+    build   : static files of the simple theme
+    analyze : static files of the simple theme
+    fix     : run prettiers on simple theme
+    lint    : run linters on simple theme
 EOF
 }
 
 VITE_SIMPLE_THEME="${REPO_ROOT}/client/simple"
-
-# ToDo: vite server is not implemented yet / will be done in a follow up PR
-#
-# vite.simple.dev() {
-#     (   set -e
-#         build_msg SIMPLE "start server for FE development of: ${VITE_SIMPLE_THEME}"
-#         pushd "${VITE_SIMPLE_THEME}"
-#         npm install
-#         npm exec -- vite
-#         popd &> /dev/null
-#     )
-# }
 
 vite.simple.build() {
     (   set -e

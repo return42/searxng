@@ -145,12 +145,6 @@ export default {
 
   // FIXME: missing CCS sourcemaps!!
   // see: https://github.com/vitejs/vite/discussions/13845#discussioncomment-11992084
-  //
-  // what I have tried so far (see config below):
-  //
-  // - build.sourcemap
-  // - esbuild.sourcemap
-  // - css.preprocessorOptions.less.sourceMap
   css: {
     transformer: "lightningcss",
     lightningcss: {
