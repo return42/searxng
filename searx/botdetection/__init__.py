@@ -14,8 +14,10 @@ from ._helpers import get_network
 from ._helpers import too_many_requests
 from . import config
 from . import valkeydb
+from .trusted_proxies import ProxyFix
 
-__all__ = ['init', 'dump_request', 'get_network', 'get_real_ip', 'too_many_requests']
+
+__all__ = ['init', 'dump_request', 'get_network', 'get_real_ip', 'too_many_requests', "ProxyFix"]
 
 
 def init(cfg, valkey_client: valkey.Valkey | None):
