@@ -57,10 +57,9 @@ from searx import (
 
 from searx import infopage
 from searx import limiter
-from searx.botdetection import link_token
+from searx.botdetection import link_token, ProxyFix
 
 from searx.data import ENGINE_DESCRIPTIONS
-from searx.normalize_addr import NormalizeAddr
 from searx.result_types import Answer
 from searx.settings_defaults import OUTPUT_FORMATS
 from searx.settings_loader import DEFAULT_SETTINGS_FILE
@@ -1391,7 +1390,7 @@ def static_headers(headers: Headers, _path: str, _url: str) -> None:
         headers[header] = value
 
 
-app.wsgi_app = NormalizeAddr(app.wsgi_app)
+app.wsgi_app = ProxyFix(app.wsgi_app)
 app.wsgi_app = WhiteNoise(
     app.wsgi_app,
     root=settings['ui']['static_path'],

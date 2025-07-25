@@ -5,8 +5,7 @@ Method ``ip_lists``
 -------------------
 
 The ``ip_lists`` method implements :py:obj:`block-list <block_ip>` and
-:py:obj:`pass-list <pass_ip>`.  The real IP is determined by
-:py:obj:`searx.botdetection.get_real_ip`.
+:py:obj:`pass-list <pass_ip>`.
 
 .. code:: toml
 

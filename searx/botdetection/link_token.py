@@ -38,6 +38,7 @@ from __future__ import annotations
 from ipaddress import (
     IPv4Network,
     IPv6Network,
+    ip_address,
 )
 
 import string
@@ -48,7 +49,6 @@ from searx.valkeylib import secret_hash
 
 from ._helpers import (
     get_network,
-    get_real_ip,
     logger,
 )
 
@@ -102,7 +102,7 @@ def ping(request: flask.Request, token: str):
     if not token_is_valid(token):
         return
 
-    real_ip = get_real_ip(request, cfg)
+    real_ip = ip_address(request.remote_addr)  # type: ignore
     network = get_network(real_ip, cfg)
 
     ping_key = get_ping_key(network, request)

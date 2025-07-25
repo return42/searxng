@@ -5,17 +5,16 @@ user searches for ``tor-check``.  It fetches the tor exit node list from
 user's IP address is in it.
 """
 from __future__ import annotations
+from ipaddress import ip_address
 import typing
 
 import re
 from flask_babel import gettext
 from httpx import HTTPError
 
-import searx.limiter
 from searx.network import get
 from searx.plugins import Plugin, PluginInfo
 from searx.result_types import EngineResults
-from searx.botdetection import get_real_ip
 
 if typing.TYPE_CHECKING:
     from searx.search import SearchWithPlugins
@@ -67,8 +66,7 @@ class SXNGPlugin(Plugin):
                 results.add(results.types.Answer(answer=f"{msg} {url_exit_list}"))
                 return results
 
-            cfg = searx.limiter.get_cfg()
-            real_ip = get_real_ip(request, cfg).compressed
+            real_ip = ip_address(address=str(request.remote_addr)).compressed
 
             if real_ip in node_list:
                 msg = gettext("You are using Tor and it looks like you have the external IP address")
