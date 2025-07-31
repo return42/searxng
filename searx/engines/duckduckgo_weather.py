@@ -4,7 +4,7 @@ DuckDuckGo Weather
 ~~~~~~~~~~~~~~~~~~
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from json import loads
 from urllib.parse import quote
 
@@ -41,13 +41,13 @@ categories = ["weather"]
 base_url = "https://duckduckgo.com/js/spice/forecast/{query}/{lang}"
 
 # adapted from https://gist.github.com/mikesprague/048a93b832e2862050356ca233ef4dc1
-WEATHERKIT_TO_CONDITION = {
+WEATHERKIT_TO_CONDITION: dict[str,weather.WeatherConditionType] = {
     "BlowingDust": "fog",
-    "Clear": "clear",
+    "Clear": "clear sky",
     "Cloudy": "cloudy",
     "Foggy": "fog",
     "Haze": "fog",
-    "MostlyClear": "clear",
+    "MostlyClear": "clear sky",
     "MostlyCloudy": "partly cloudy",
     "PartlyCloudy": "partly cloudy",
     "Smoky": "fog",
@@ -79,7 +79,7 @@ WEATHERKIT_TO_CONDITION = {
 }
 
 
-def _weather_data(location, data):
+def _weather_data(location: weather.GeoLocation, data: dict[str, Any]):
     return WeatherAnswer.Item(
         location=location,
         temperature=weather.Temperature(unit="°C", value=data['temperature']),
