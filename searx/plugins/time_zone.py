@@ -1,22 +1,30 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # pylint: disable=missing-module-docstring, missing-class-docstring
-import zoneinfo
+
+from __future__ import annotations
+import typing as t
+
 import datetime
 
-from flask_babel import gettext
+from flask_babel import gettext  # type: ignore
 from searx.result_types import EngineResults
-from searx.data import TIMEZONES
+from searx.data import TIME_ZONES
+from searx.weather import DateTime
 
 from . import Plugin, PluginInfo
 
+if t.TYPE_CHECKING:
+    import flask
+    from searx.search import SearchWithPlugins
+    from searx.extended_types import SXNG_Request
+    from searx.plugins import PluginCfg
 
-datetime_format = "%H:%M - %A, %d/%m/%y"
 
-
+@t.final
 class SXNGPlugin(Plugin):
 
-    id = "time_zone"
-    keywords = ["time", "timezone", "now", "clock", "timezones"]
+    id: str = "time_zone"
+    keywords: list[str] = ["time", "timezone", "now", "clock", "timezones"]
 
     def __init__(self, plg_cfg: "PluginCfg"):
         super().__init__(plg_cfg)
@@ -29,33 +37,35 @@ class SXNGPlugin(Plugin):
             examples=["time Berlin", "clock Los Angeles"],
         )
 
+    def init(self, app: "flask.Flask") -> bool:  # pylint: disable=unused-argument
+        TIME_ZONES.init()
+        return True
+
     def post_search(self, request: "SXNG_Request", search: "SearchWithPlugins") -> EngineResults:
         results = EngineResults()
+
+        if search.search_query.pageno > 1:
+            return results
 
         # remove keywords from the query
         query = search.search_query.query
         query_parts = filter(lambda part: part.lower() not in self.keywords, query.split(" "))
-        location = "_".join(query_parts)
+        area_name_l10n = " ".join(query_parts)
 
-        if not location:
-            results.add(results.types.Answer(answer=f"{datetime.datetime.now().strftime(datetime_format)}"))
+        if not area_name_l10n:
+            date_time = DateTime(time=datetime.datetime.now())
+            results.add(results.types.Answer(answer=date_time.l10n()))
             return results
 
-        # location is too short for proper matching
-        if len(location) <= 3:
-            return results
-
-        zones = TIMEZONES["cities"].copy()
-        zones.update(TIMEZONES["countries"])
-        for key, tz_name in zones.items():
-            if location in key.lower():
-                zone = zoneinfo.ZoneInfo(tz_name)
-                now = datetime.datetime.now(tz=zone)
-
-                results.add(
-                    results.types.Answer(
-                        answer=f"{now.strftime(datetime_format)} at {tz_name.replace('_', ' ')} ({now.strftime('%Z')})"
+        for tz_item in TIME_ZONES.get_tz_items(area_name_l10n):
+            date_time = DateTime(time=datetime.datetime.now(tz=tz_item.zoneinfo))
+            results.add(
+                results.types.Answer(
+                    answer=(
+                        f"{tz_item.tz_name.replace('_', ' ')}:"
+                        f" {date_time.l10n()} ({date_time.datetime.strftime('%Z')})"
                     )
                 )
+            )
 
         return results

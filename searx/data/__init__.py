@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """This module holds the *data* created by::
 
-make data.all
+  make data.all
 
 """
 from __future__ import annotations
@@ -14,6 +14,7 @@ import typing
 from .core import log, data_dir
 from .currencies import CurrenciesDB
 from .tracker_patterns import TrackerPatternsDB
+from .time_zones import TimeZonesDB
 
 CURRENCIES: CurrenciesDB
 USER_AGENTS: dict[str, typing.Any]
@@ -25,7 +26,7 @@ ENGINE_DESCRIPTIONS: dict[str, typing.Any]
 ENGINE_TRAITS: dict[str, typing.Any]
 LOCALES: dict[str, typing.Any]
 TRACKER_PATTERNS: TrackerPatternsDB
-TIMEZONES: dict[str, typing.Any]
+TIME_ZONES: TimeZonesDB
 
 lazy_globals = {
     "CURRENCIES": CurrenciesDB(),
@@ -38,7 +39,7 @@ lazy_globals = {
     "ENGINE_TRAITS": None,
     "LOCALES": None,
     "TRACKER_PATTERNS": TrackerPatternsDB(),
-    "TIMEZONES": None,
+    "TIME_ZONES": TimeZonesDB(),
 }
 
 data_json_files = {
@@ -50,7 +51,6 @@ data_json_files = {
     "ENGINE_DESCRIPTIONS": "engine_descriptions.json",
     "ENGINE_TRAITS": "engine_traits.json",
     "LOCALES": "locales.json",
-    "TIMEZONES": "timezones.json",
 }
 
 
