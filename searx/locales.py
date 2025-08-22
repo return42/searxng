@@ -50,7 +50,7 @@ logger = logger.getChild('locales')
 # safe before monkey patching flask_babel.get_translations
 _flask_babel_get_translations = flask_babel.get_translations
 
-LOCALE_NAMES = {}
+LOCALE_NAMES: dict[str, str] = {}
 """Mapping of locales and their description.  Locales e.g. 'fr' or 'pt-BR' (see
 :py:obj:`locales_initialize`).
 

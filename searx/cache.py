@@ -374,7 +374,7 @@ class ExpireCacheSQLite(sqlitedb.SQLiteAppl, ExpireCache):
 
         return True
 
-    def get(self, key: str, default=None, ctx: str | None = None) -> typing.Any:
+    def get(self, key: str, default: typing.Any = None, ctx: str | None = None) -> typing.Any:
         """Get value of ``key`` from table given by argument ``ctx``.  If
         ``ctx`` argument is ``None`` (the default), a table name is generated
         from the :py:obj:`ExpireCacheCfg.name`.  If ``key`` not exists (in
