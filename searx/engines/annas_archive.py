@@ -59,7 +59,7 @@ about: dict[str, t.Any] = {
 }
 
 # engine dependent config
-categories: list[str] = ["files"]
+categories = ["science", "scientific publications"]
 paging: bool = True
 
 # search-url
@@ -134,13 +134,12 @@ def response(resp: "SXNG_Response") -> EngineResults:
             kwargs: dict[str, t.Any] = _get_result(item)
         except SearxEngineXPathException:
             continue
-        res.add(res.types.LegacyResult(**kwargs))
+        res.add(res.types.Paper(**kwargs))
     return res
 
 
 def _get_result(item: ElementBase) -> dict[str, t.Any]:
     return {
-        'template': 'paper.html',
         'url': base_url + eval_xpath_getindex(item, './a/@href', 0),
         'title': extract_text(eval_xpath(item, './div//a[starts-with(@href, "/md5")]')),
         'authors': [extract_text(eval_xpath_getindex(item, './/a[starts-with(@href, "/search")]', 0))],
@@ -172,7 +171,7 @@ def fetch_traits(engine_traits: EngineTraits):
 
     # supported language codes
 
-    lang_map = {}
+    lang_map: dict[str,str] = {}
     for x in eval_xpath_list(dom, "//form//input[@name='lang']"):
         eng_lang = x.get("value")
         if eng_lang in ('', '_empty', 'nl-BE', 'und') or eng_lang.startswith('anti__'):

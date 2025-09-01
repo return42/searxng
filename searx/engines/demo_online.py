@@ -17,7 +17,6 @@ list in ``settings.yml``:
 
 import typing as t
 
-from json import loads
 from urllib.parse import urlencode
 from searx.result_types import EngineResults
 
@@ -51,11 +50,12 @@ about = {
 _my_online_engine = None
 
 
-def init(engine_settings: dict[str, t.Any]) -> None:
+def init(engine_settings: dict[str, t.Any]) -> bool:
     """Initialization of the (online) engine.  If no initialization is needed, drop
     this init function."""
     global _my_online_engine  # pylint: disable=global-statement
     _my_online_engine = engine_settings.get("name")
+    return True
 
 
 def request(query: str, params: dict[str, t.Any]) -> None:
@@ -81,7 +81,7 @@ def response(resp: "SXNG_Response") -> EngineResults:
 
     """
     res = EngineResults()
-    json_data = loads(resp.text)
+    json_data = resp.json()
 
     res.add(
         res.types.Answer(
