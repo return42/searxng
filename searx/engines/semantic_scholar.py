@@ -1,5 +1,29 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Semantic Scholar (Science)"""
+"""`Semantic Scholar`_ provides free, AI-driven search and discovery tools, and
+open resources for the global research community.  `Semantic Scholar`_ index
+over 200 million academic papers sourced from publisher partnerships, data
+providers, and web crawls.
+
+.. _Semantic Scholar:https://www.semanticscholar.org/about
+
+Configuration
+=============
+
+To get in use of this engine add the following entry to your engines list in
+``settings.yml``:
+
+.. code:: yaml
+
+   - name: semantic scholar
+     engine: semantic_scholar
+     shortcut: se
+
+Implementations
+===============
+
+"""
+
+import typing as t
 
 from json import dumps
 from datetime import datetime
@@ -8,6 +32,11 @@ from lxml import html
 from flask_babel import gettext
 from searx.network import get
 from searx.utils import eval_xpath_getindex, html_to_text
+
+from searx.result_types import EngineResults
+
+if t.TYPE_CHECKING:
+    from searx.extended_types import SXNG_Response
 
 
 about = {
@@ -25,16 +54,18 @@ search_url = 'https://www.semanticscholar.org/api/1/search'
 base_url = 'https://www.semanticscholar.org'
 
 
-def _get_ui_version():
+def get_ui_version() -> str:
     resp = get(base_url)
     if not resp.ok:
         raise RuntimeError("Can't determine Semantic Scholar UI version")
 
     doc = html.fromstring(resp.text)
-    ui_version = eval_xpath_getindex(doc, "//meta[@name='s2-ui-version']/@content", 0)
+    ui_version: str = eval_xpath_getindex(doc, "//meta[@name='s2-ui-version']/@content", 0)
     if not ui_version:
         raise RuntimeError("Can't determine Semantic Scholar UI version")
 
+    # FIXME: we can store this value in the cache for the next 60min / days?
+    logger.debug("X-S2-UI-Version: %s XXXXXXXXXXXXXXXXXXXXXXXXXXXXX" , ui_version)
     return ui_version
 
 
@@ -44,7 +75,7 @@ def request(query, params):
     params['headers'].update(
         {
             'Content-Type': 'application/json',
-            'X-S2-UI-Version': _get_ui_version(),
+            'X-S2-UI-Version': get_ui_version(),
             'X-S2-Client': "webapp-browser",
         }
     )

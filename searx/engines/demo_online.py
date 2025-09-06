@@ -3,6 +3,9 @@
 close to the implementation, its just a simple example which queries `The Art
 Institute of Chicago <https://www.artic.edu>`_
 
+Configuration
+=============
+
 To get in use of this *demo* engine add the following entry to your engines
 list in ``settings.yml``:
 
@@ -12,6 +15,9 @@ list in ``settings.yml``:
     engine: demo_online
     shortcut: demo
     disabled: false
+
+Implementations
+===============
 
 """
 

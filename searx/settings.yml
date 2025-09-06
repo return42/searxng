@@ -662,8 +662,8 @@ engines:
     engine: core
     shortcut: cor
     # read https://docs.searxng.org/dev/engines/online/core.html
-    api_key: ""
-    inactive: true
+    api_key: "MVBozuTX8QF9I1D0GviL5bCn2Ueat6NS"
+    inactive: false
 
   - name: cppreference
     engine: cppreference
@@ -1966,7 +1966,6 @@ engines:
 
   - name: semantic scholar
     engine: semantic_scholar
-    disabled: true
     shortcut: se
 
   # Spotify needs API credentials
@@ -1992,8 +1991,8 @@ engines:
     shortcut: springer
     timeout: 5
     # read https://docs.searxng.org/dev/engines/online/springer.html
-    api_key: ""
-    inactive: true
+    api_key: "ca7ac01b7babaabd35b86cd324e79679"
+    inactive: false
 
   - name: startpage
     engine: startpage
