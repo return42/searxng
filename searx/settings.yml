@@ -1967,7 +1967,6 @@ engines:
 
   - name: semantic scholar
     engine: semantic_scholar
-    disabled: true
     shortcut: se
 
   # Spotify needs API credentials
