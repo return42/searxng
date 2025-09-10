@@ -11,6 +11,8 @@ engines:
 
 """
 
+import typing as t
+
 import re
 import random
 import string
@@ -89,7 +91,7 @@ def ui_async(start: int) -> str:
     return ",".join([arc_id, use_ac, _fmt])
 
 
-def get_google_info(params, eng_traits):
+def get_google_info(params: dict[str, t.Any], eng_traits: EngineTraits) -> dict[str, t.Any]:
     """Composing various (language) properties for the google engines (:ref:`google
     API`).
 
@@ -144,7 +146,7 @@ def get_google_info(params, eng_traits):
 
     """
 
-    ret_val = {
+    ret_val: dict[str, t.Any] = {
         'language': None,
         'country': None,
         'subdomain': None,
