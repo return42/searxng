@@ -1518,7 +1518,7 @@ engines:
   - name: openlibrary
     engine: openlibrary
     shortcut: ol
-    timeout: 5
+    timeout: 10
     disabled: true
 
   - name: openmeteo
