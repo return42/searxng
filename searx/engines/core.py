@@ -60,9 +60,10 @@ base_url = "https://api.core.ac.uk/v3/search/works/"
 
 
 def init(engine_settings: dict[str, t.Any]) -> bool:
-    """Initialization of the CORE engine, checks whether the
-    :py:obj:`api_key` is set, otherwise the engine is inactive.
+    """Initialization of the CORE_ engine, checks whether the :py:obj:`api_key`
+    is set, otherwise the engine is inactive.
     """
+
     key: str = engine_settings.get("api_key", "")
     if key and key not in ("unset", "unknown", "..."):
         return True

@@ -407,13 +407,11 @@ engines:
       require_api_key: false
       results: JSON
 
-  # - name: astrophysics data system
-  #   engine: astrophysics_data_system
-  #   sort: asc
-  #   weight: 5
-  #   categories: [science]
-  #   api_key: your-new-key
-  #   shortcut: ads
+  - name: astrophysics data system
+    engine: astrophysics_data_system
+    shortcut: ads
+    api_key: "unset"
+    inactive: true
 
   - name: alpine linux packages
     engine: alpinelinux
@@ -1235,8 +1233,12 @@ engines:
 
   - name: library genesis
     engine: xpath
-    # search_url: https://libgen.is/search.php?req={query}
-    search_url: https://libgen.rs/search.php?req={query}
+    # search_url: https://libgen.vg/index.php?req={query}
+    # search_url: https://libgen.la/index.php?req={query}
+    # search_url: https://libgen.bz/index.php?req={query}
+    # search_url: https://libgen.gl/index.php?req={query}
+    search_url: https://libgen.li/index.php?req={query}
+    # FIXME ..
     url_xpath: //a[contains(@href,"book/index.php?md5")]/@href
     title_xpath: //a[contains(@href,"book/")]/text()[1]
     content_xpath: //td/a[1][contains(@href,"=author")]/text()
