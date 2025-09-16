@@ -3,6 +3,8 @@
 
 """
 
+import typing as t
+
 import datetime
 
 from urllib.parse import urlencode

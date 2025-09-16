@@ -47,6 +47,8 @@ Implementations
 
 """
 
+import typing as t
+
 from datetime import date, timedelta
 from json import loads
 from urllib.parse import urlencode, quote
