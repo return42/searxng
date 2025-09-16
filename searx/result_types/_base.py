@@ -23,7 +23,6 @@ import typing as t
 import re
 import urllib.parse
 import warnings
-import time
 import datetime
 
 from collections.abc import Callable
@@ -232,13 +231,6 @@ class Result(msgspec.Struct, kw_only=True):
     url: str | None = None
     """A link related to this *result*"""
 
-    template: str = "default.html"
-    """Name of the template used to render the result.
-
-    By default :origin:`result_templates/default.html
-    <searx/templates/simple/result_templates/default.html>` is used.
-    """
-
     engine: str | None = ""
     """Name of the engine *this* result comes from.  In case of *plugins* a
     prefix ``plugin:`` is set, in case of *answerer* prefix ``answerer:`` is
@@ -346,6 +338,13 @@ class Result(msgspec.Struct, kw_only=True):
 class MainResult(Result):  # pylint: disable=missing-class-docstring
     """Base class of all result types displayed in :ref:`area main results`."""
 
+    template: str = "default.html"
+    """Name of the template used to render the result.
+
+    By default :origin:`result_templates/default.html
+    <searx/templates/simple/result_templates/default.html>` is used.
+    """
+
     title: str = ""
     """Link title of the result item."""
 
@@ -354,6 +353,12 @@ class MainResult(Result):  # pylint: disable=missing-class-docstring
 
     img_src: str = ""
     """URL of a image that is displayed in the result item."""
+
+    iframe_src: str = ""
+    """URL of an embedded ``<iframe>`` / the frame is collapsible."""
+
+    audio_src: str = ""
+    """URL of an embedded ``<audio controls>``."""
 
     thumbnail: str = ""
     """URL of a thumbnail that is displayed in the result item."""
@@ -364,7 +369,7 @@ class MainResult(Result):  # pylint: disable=missing-class-docstring
     pubdate: str = ""
     """String representation of :py:obj:`MainResult.publishedDate`"""
 
-    length: time.struct_time | None = None
+    length: datetime.timedelta | None = None
     """Playing duration in seconds."""
 
     views: str = ""

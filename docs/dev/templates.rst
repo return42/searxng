@@ -60,7 +60,7 @@ Fields used in the template :origin:`macro result_sub_header
 publishedDate : :py:obj:`datetime.datetime`
   The date on which the object was published.
 
-length: :py:obj:`time.struct_time`
+length: :py:obj:`datetime.timedelta`
   Playing duration in seconds.
 
 views: :py:class:`str`
