@@ -74,18 +74,19 @@ SEARCH_TYPES: dict[str, str] = {
     "audio": "audio",
     "file": "multimedia|office|archive|3d",
 }
-#FileType = t.Literal["bitmap", "drawing", "video", "audio", "multimedia", "office", "archive", "3d"]
-#FILE_TYPES = list(t.get_args(FileType))
+# FileType = t.Literal["bitmap", "drawing", "video", "audio", "multimedia", "office", "archive", "3d"]
+# FILE_TYPES = list(t.get_args(FileType))
+
 
 def setup(engine_settings: dict[str, t.Any]) -> bool:
     """Initialization of the Wikimedia engine, checks if the value configured in
     :py:obj:`wc_search_type` is valid."""
 
-    if engine_settings.get("wc_file_types") not in SEARCH_TYPES.keys():
+    if engine_settings.get("wc_file_types") not in SEARCH_TYPES:
         logger.error(
             "wc_file_types: %s isn't a valid file type (%s)",
             engine_settings.get("wc_file_types"),
-            ",".join(SEARCH_TYPES.keys())
+            ",".join(SEARCH_TYPES.keys()),
         )
         return False
     return True
@@ -114,14 +115,14 @@ def request(query: str, params: "OnlineParams") -> None:
         "iiprop": "url|size|mime",
         "iiurlheight": "180",  # needed for the thumb url
     }
-    params["url"] = f"{wc_api_url}?{urlencode(args, safe=":|")}"
+    params["url"] = f"{wc_api_url}?{urlencode(args, safe=':|')}"
 
 
 def response(resp: "SXNG_Response") -> EngineResults:
 
     res = EngineResults()
     json_data = resp.json()
-    pages = json_data.get("queryx", {}).get("pages",{}).values()
+    pages = json_data.get("queryx", {}).get("pages", {}).values()
 
     def _str(k: str) -> str:
         return item.get(k, "")
@@ -167,9 +168,9 @@ def response(resp: "SXNG_Response") -> EngineResults:
                     title=title,
                     url=url,
                     content=content,
-                    img_src = _str("url"),
-                    thumbnail_src = thumbnail,
-                    resolution=f"{_str("width")} x {_str("height")}",
+                    img_src=_str("url"),
+                    thumbnail_src=thumbnail,
+                    resolution=_str("width") + " x " + _str("height"),
                     img_format=_str("mime"),
                     filesize=size,
                 )
@@ -183,7 +184,7 @@ def response(resp: "SXNG_Response") -> EngineResults:
                     title=title,
                     url=url,
                     content=content,
-                    iframe_src = _str("url"),
+                    iframe_src=_str("url"),
                     length=duration,
                 )
             )

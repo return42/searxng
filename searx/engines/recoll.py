@@ -40,7 +40,7 @@ Scenario:
    base_url: https://recoll.example.org/
    mount_prefix: /export/documents
    dl_prefix: https://download.example.org
-   search_dir: ''
+   search_dir: ""
 
 Implementations
 ===============
@@ -49,18 +49,22 @@ Implementations
 
 import typing as t
 
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from json import loads
 from urllib.parse import urlencode, quote
 
-# about
+if t.TYPE_CHECKING:
+    from searx.extended_types import SXNG_Response
+    from searx.search.processors import OnlineParams
+
+
 about = {
     "website": None,
-    "wikidata_id": 'Q15735774',
-    "official_api_documentation": 'https://www.lesbonscomptes.com/recoll/',
+    "wikidata_id": "Q15735774",
+    "official_api_documentation": "https://www.lesbonscomptes.com/recoll/",
     "use_official_api": True,
     "require_api_key": False,
-    "results": 'JSON',
+    "results": "JSON",
 }
 
 # engine dependent config
@@ -69,34 +73,55 @@ time_range_support = True
 
 # parameters from settings.yml
 base_url = None
-search_dir = ''
 mount_prefix = None
 dl_prefix = None
+search_dir = ''
 
-# embedded
 embedded_url = '<{ttype} controls height="166px" ' + 'src="{url}" type="{mtype}"></{ttype}>'
 
+_sw = {'day': 1, 'week': 7, 'month': 30, 'year': 365, None: ""}
 
-# helper functions
-def get_time_range(time_range):
-    sw = {'day': 1, 'week': 7, 'month': 30, 'year': 365}  # pylint: disable=invalid-name
+def setup(engine_settings: dict[str, t.Any]) -> bool:
+    """Initialization of the Recioll engine, checks if the mandatory values are
+    configured."""
 
-    offset = sw.get(time_range, 0)
+    missing: list[str] = []
+    for cfg_name in ["base_url", "mount_prefix", "dl_prefix", "search_dir"]:
+        if engine_settings.get(cfg_name) is None:
+            missing.append(cfg_name)
+    if missing:
+        logger.error("missing recoll configuration: %s", missing)
+        return False
+    return True
+
+
+def get_time_range(time_range: str|None) -> str:
+
+    offset = _sw.get(time_range)
     if not offset:
-        return ''
+        return ""
 
     return (date.today() - timedelta(days=offset)).isoformat()
 
+def request(query: str, params: "OnlineParams") -> None:
 
-# do search-request
-def request(query, params):
-    search_after = get_time_range(params['time_range'])
+    search_after = get_time_range(params["time_range"])
+
+    args = {
+        'query': query,
+        'page': params['pageno'],
+        'after': search_after,
+        'dir': search_dir,
+        "highlight": 0,
+    }
+
+
+
     search_url = base_url + 'json?{query}&highlight=0'
     params['url'] = search_url.format(
         query=urlencode({'query': query, 'page': params['pageno'], 'after': search_after, 'dir': search_dir})
     )
 
-    return params
 
 
 # get response from search-request

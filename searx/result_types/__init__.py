@@ -46,7 +46,7 @@ class ResultList(list[Result | LegacyResult], abc.ABC):
         Answer = Answer
         KeyValue = KeyValue
         Code = Code
-        File=File
+        File = File
         MainResult = MainResult
         Result = Result
         Translations = Translations
