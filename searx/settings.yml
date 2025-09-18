@@ -2298,27 +2298,27 @@ engines:
 
   - name: wikicommons.images
     engine: wikicommons
-    shortcut: wc
+    shortcut: wci
     categories: images
-    wc_file_types: ["bitmap", "drawing"]
+    wc_search_type: image
 
   - name: wikicommons.videos
     engine: wikicommons
     shortcut: wcv
     categories: videos
-    wc_file_types: ["video"]
+    wc_search_type: video
 
   - name: wikicommons.audio
     engine: wikicommons
     shortcut: wca
     categories: music
-    wc_file_types: ["audio"]
+    wc_search_type: audio
 
   - name: wikicommons.files
     engine: wikicommons
     shortcut: wcf
     categories: files
-    wc_file_types: ["multimedia", "office", "archive", "3d"]
+    wc_search_type: file
 
   - name: wolframalpha
     shortcut: wa

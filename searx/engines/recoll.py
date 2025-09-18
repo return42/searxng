@@ -13,23 +13,12 @@ Configuration
 
 You must configure the following settings:
 
-``base_url``:
-  Location where recoll-webui can be reached.
+- :py:obj:`base_url`
+- :py:obj:`mount_prefix`
+- :py:obj:`dl_prefix`
+- :py:obj:`search_dir`
 
-``mount_prefix``:
-  Location where the file hierarchy is mounted on your *local* filesystem.
-
-``dl_prefix``:
-  Location where the file hierarchy as indexed by recoll can be reached.
-
-``search_dir``:
-  Part of the indexed file hierarchy to be search, if empty the full domain is
-  searched.
-
-Example
-=======
-
-Scenario:
+Example scenario:
 
 #. Recoll indexes a local filesystem mounted in ``/export/documents/reference``,
 #. the Recoll search interface can be reached at https://recoll.example.org/ and
@@ -37,7 +26,7 @@ Scenario:
 
 .. code:: yaml
 
-   base_url: https://recoll.example.org/
+   base_url: https://recoll.example.org
    mount_prefix: /export/documents
    dl_prefix: https://download.example.org
    search_dir: ""
@@ -46,12 +35,13 @@ Implementations
 ===============
 
 """
-
 import typing as t
 
 from datetime import date, timedelta, datetime
-from json import loads
 from urllib.parse import urlencode, quote
+
+from searx.result_types import EngineResults
+from searx.utils import html_to_text, humanize_bytes
 
 if t.TYPE_CHECKING:
     from searx.extended_types import SXNG_Response
@@ -67,71 +57,106 @@ about = {
     "results": "JSON",
 }
 
-# engine dependent config
 paging = True
 time_range_support = True
 
-# parameters from settings.yml
-base_url = None
-mount_prefix = None
-dl_prefix = None
-search_dir = ''
+base_url: str = ""
+"""Location where recoll-webui can be reached."""
 
-embedded_url = '<{ttype} controls height="166px" ' + 'src="{url}" type="{mtype}"></{ttype}>'
+mount_prefix: str = ""
+"""Location where the file hierarchy is mounted on your *local* filesystem."""
 
-_sw = {'day': 1, 'week': 7, 'month': 30, 'year': 365, None: ""}
+dl_prefix: str = ""
+"""Location where the file hierarchy as indexed by recoll can be reached."""
+
+search_dir: str = ""
+"""Part of the indexed file hierarchy to be search, if empty the full domain is
+searched."""
+
+_s2i: dict[str | None, int] = {"day": 1, "week": 7, "month": 30, "year": 365}
 
 def setup(engine_settings: dict[str, t.Any]) -> bool:
-    """Initialization of the Recioll engine, checks if the mandatory values are
-    configured."""
-
+    """Initialization of the Recoll engine, checks if the mandatory values are
+    configured.
+    """
     missing: list[str] = []
-    for cfg_name in ["base_url", "mount_prefix", "dl_prefix", "search_dir"]:
-        if engine_settings.get(cfg_name) is None:
+    for cfg_name in ["base_url", "mount_prefix", "dl_prefix"]:
+        if not engine_settings.get(cfg_name):
             missing.append(cfg_name)
     if missing:
         logger.error("missing recoll configuration: %s", missing)
         return False
+
+    if engine_settings["base_url"].endswith("/"):
+        engine_settings["base_url"] = engine_settings["base_url"][:-1]
     return True
 
 
-def get_time_range(time_range: str|None) -> str:
-
-    offset = _sw.get(time_range)
+def search_after(time_range: str|None) -> str:
+    offset = _s2i.get(time_range, 0)
     if not offset:
         return ""
-
     return (date.today() - timedelta(days=offset)).isoformat()
 
+
 def request(query: str, params: "OnlineParams") -> None:
-
-    search_after = get_time_range(params["time_range"])
-
     args = {
-        'query': query,
-        'page': params['pageno'],
-        'after': search_after,
-        'dir': search_dir,
+        "query": query,
+        "page": params["pageno"],
+        "after": search_after(params["time_range"]),
+        "dir": search_dir,
         "highlight": 0,
     }
+    params["url"] = f"{base_url}/json?{urlencode(args)}"
 
 
 
-    search_url = base_url + 'json?{query}&highlight=0'
-    params['url'] = search_url.format(
-        query=urlencode({'query': query, 'page': params['pageno'], 'after': search_after, 'dir': search_dir})
-    )
+
+embedded_url = '<{ttype} controls height="166px" ' + 'src="{url}" type="{mtype}"></{ttype}>'
 
 
 
-# get response from search-request
-def response(resp):
-    results = []
 
-    response_json = loads(resp.text)
+def response(resp: "SXNG_Response") -> EngineResults:
+    res = EngineResults()
+    json_data = resp.json()
 
-    if not response_json:
-        return []
+    if not json_data:
+        return res
+
+    def _str(k: str) -> str:
+        return result.get(k, "")
+
+    for result in json_data.get("results", []):
+
+        url = _str("url").replace('file://' + mount_prefix, dl_prefix),
+        mtype = subtype = _str("mime")
+        if mtype:
+            mtype, subtype = (mtype.split("/", 1) + [""])[:2]
+        embedded = ""
+        if mtype in ["audio", "video"]:
+            embedded = embedded_url.format(
+                ttype=mtype, url=quote(url.encode('utf8'), '/:'), mtype=result['mtype']
+                )
+
+        res.add(
+            res.types.File(
+                title = _str("label"),
+                url =url,
+                content = _str("snippet"),
+                size=_str("size"),
+                filename=_str("filename"),
+                abstract=_str("abstract"),
+                author=_str("author"),
+                mtype=mtype,
+                subtype=subtype,
+                time=_str("time"),
+
+            )
+        )
+
+
+        XXXXXXXXXXXXXXXX
 
     for result in response_json.get('results', []):
         title = result['label']

@@ -36,11 +36,9 @@ The engine has the following additional settings:
 Implementations
 ===============
 
-en.
-
-
 """
 
+import mimetypes
 import typing as t
 import datetime
 from urllib.parse import urlencode
@@ -63,7 +61,7 @@ about = {
 
 categories: list[str] = []
 paging = True
-number_of_results = 10
+number_of_results = 5  # FIXME
 
 wc_api_url = "https://commons.wikimedia.org/w/api.php"
 wc_search_type: str = ""
@@ -82,7 +80,7 @@ def setup(engine_settings: dict[str, t.Any]) -> bool:
     """Initialization of the Wikimedia engine, checks if the value configured in
     :py:obj:`wc_search_type` is valid."""
 
-    if engine_settings.get("wc_file_types") not in SEARCH_TYPES:
+    if engine_settings.get("wc_search_type") not in SEARCH_TYPES:
         logger.error(
             "wc_file_types: %s isn't a valid file type (%s)",
             engine_settings.get("wc_file_types"),
@@ -122,30 +120,32 @@ def response(resp: "SXNG_Response") -> EngineResults:
 
     res = EngineResults()
     json_data = resp.json()
-    pages = json_data.get("queryx", {}).get("pages", {}).values()
-
-    def _str(k: str) -> str:
-        return item.get(k, "")
+    pages = json_data.get("query", {}).get("pages", {}).values()
 
     for item in pages:
 
+        if not len(item.get("imageinfo", [])):
+            continue
         imageinfo = item["imageinfo"][0]
 
-        title = _str("title").replace("File:", "").rsplit(".", 1)[0]
-        url = _str("descriptionurl")
-        content = html_to_text(_str("snippet"))
-        thumbnail = _str("thumburl")
+        title: str = item["title"].replace("File:", "").rsplit(".", 1)[0]
+        content = html_to_text(item["snippet"])
 
+        url: str = imageinfo["descriptionurl"]
+        media_url: str = imageinfo["url"]
+        mimetype: str = imageinfo["mime"]
+        thumbnail: str = imageinfo["thumburl"]
         size = imageinfo.get("size")
         if size:
             size = humanize_bytes(size)
-        duration = imageinfo.get("duration")
-        if duration:
-            duration = datetime.timedelta(seconds=int(duration))
 
-        mtype = subtype = _str("mime")
-        if mtype:
-            mtype, subtype = mtype.split("/", 1)[0]
+        duration = None
+        seconds: str = imageinfo.get("duration")
+        if seconds:
+            try:
+                duration = datetime.timedelta(seconds=int(seconds))
+            except OverflowError:
+                pass
 
         if wc_search_type == "file":
             res.add(
@@ -154,9 +154,9 @@ def response(resp: "SXNG_Response") -> EngineResults:
                     url=url,
                     content=content,
                     size=size,
-                    mtype=mtype,
-                    subtype=subtype,
-                    embedded=_str("url"),
+                    mimetype=mimetype,
+                    embedded=media_url,
+                    thumbnail=thumbnail,
                 )
             )
             continue
@@ -168,10 +168,10 @@ def response(resp: "SXNG_Response") -> EngineResults:
                     title=title,
                     url=url,
                     content=content,
-                    img_src=_str("url"),
+                    img_src=imageinfo["url"],
                     thumbnail_src=thumbnail,
-                    resolution=_str("width") + " x " + _str("height"),
-                    img_format=_str("mime"),
+                    resolution=f"{imageinfo['width']} x {imageinfo['height']}",
+                    img_format=imageinfo["mime"],
                     filesize=size,
                 )
             )
@@ -184,7 +184,7 @@ def response(resp: "SXNG_Response") -> EngineResults:
                     title=title,
                     url=url,
                     content=content,
-                    iframe_src=_str("url"),
+                    iframe_src=media_url,
                     length=duration,
                 )
             )
@@ -193,11 +193,11 @@ def response(resp: "SXNG_Response") -> EngineResults:
         if wc_search_type == "audio":
             res.add(
                 res.types.MainResult(
-                    template="audio.html",
+                    template="default.html",
                     title=title,
                     url=url,
                     content=content,
-                    audio_src=_str("url"),
+                    audio_src=media_url,
                     length=duration,
                 )
             )

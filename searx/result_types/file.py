@@ -16,11 +16,11 @@ template.
 
 __all__ = ["File"]
 
-import typing
+import typing as t
 
 from ._base import MainResult
 
-
+@t.final
 class File(MainResult, kw_only=True):
     """Class for results of type *file*"""
 
@@ -38,13 +38,10 @@ class File(MainResult, kw_only=True):
     date of creation. This is a simple string, the *date* of which can be freely
     chosen according to the context."""
 
-    mtype: str = ""
-    """Mimetype type of the file.  For the Mimetypes ``audio`` and ``video``, a
-    value can be specified in the :py:obj:`File.embedded` field to embed the
-    media type directly in the result."""
-
-    subtype: str = ""
-    """Mimetype / subtype of the file."""
+    mimetype: str = ""
+    """Mimetype/Subtype of the file.  For ``audio`` and ``video``, a URL can be
+    passed in the :py:obj:`File.embedded` field to embed the referenced media in
+    the result."""
 
     abstract: str = ""
     """Abstract of the file."""
@@ -54,3 +51,35 @@ class File(MainResult, kw_only=True):
 
     embedded: str = ""
     """URL of an embedded media type (audio or video) / is collapsible."""
+
+    mtype: str = ""
+    """Used for displaying :py:obj:`File.embedded`, it value automatically
+    populated from the base type of :py:obj:`File.mimetype`, and can be
+    explicitly set to enforce e.g. ``audio`` or ``video`` when mimetype is
+    something like "application/ogg" but its know the content is for example a
+    video."""
+
+    subtype: str = ""
+    """Used for displaying :py:obj:`File.embedded`, it value automatically
+    populated from the subtype of :py:obj:`File.mimetype`, and can be explicitly
+    set to enforce a subtype for the :py:obj:`File.embedded` element.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        if not self.mtype or not self.subtype:
+            mtype, subtype = (self.mimetype.split("/", 1) + [""])[:2]
+
+            if not self.mtype:
+                # I don't know why, but the ogg video stream is not displayed,
+                # may https://github.com/videojs/video.js can help?
+                if self.embedded.endswith(".ogv"):
+                    self.mtype = "video"
+                elif self.embedded.endswith(".oga"):
+                    self.mtype = "audio"
+                else:
+                    self.mtype = mtype
+
+            if not self.subtype:
+                self.subtype = subtype

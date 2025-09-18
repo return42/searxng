@@ -469,38 +469,6 @@ links : :py:class:`dict`
   Additional links in the form of ``{'link_name': 'http://example.com'}``
 
 
-.. _template files:
-
-``files.html``
---------------
-
-Displays result fields from:
-
-- :ref:`macro result_header` and
-- :ref:`macro result_sub_header`
-
-Additional fields used in the :origin:`code.html
-<searx/templates/simple/result_templates/files.html>`:
-
-filename, size, time: :py:class:`str`
-  Filename, Filesize and Date of the file.
-
-mtype : ``audio`` | ``video`` | :py:class:`str`
-  Mimetype type of the file.
-
-subtype : :py:class:`str`
-  Mimetype / subtype of the file.
-
-abstract : :py:class:`str`
-  Abstract of the file.
-
-author : :py:class:`str`
-  Name of the author of the file
-
-embedded : :py:class:`str`
-  URL of an embedded media type (``audio`` or ``video``) / is collapsible.
-
-
 .. _template products:
 
 ``products.html``
