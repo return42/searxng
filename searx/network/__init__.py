@@ -103,7 +103,7 @@ def request(method: str, url: str, **kwargs: t.Any) -> SXNG_Response:
             get_loop(),
         )
         try:
-            return future.result(timeout)
+            return future.result(timeout)  # pyright: ignore[reportReturnType]
         except concurrent.futures.TimeoutError as e:
             raise httpx.TimeoutException('Timeout', request=None) from e
 
@@ -201,7 +201,13 @@ def delete(url: str, **kwargs: t.Any) -> SXNG_Response:
     return request('delete', url, **kwargs)
 
 
-async def stream_chunk_to_queue(network, queue, method: str, url: str, **kwargs: t.Any):
+async def stream_chunk_to_queue(
+    network: "Network",
+    queue: SimpleQueue[httpx.Response|bytes|Exception|None],
+    method: str,
+    url: str,
+    **kwargs: t.Any,
+):
     try:
         async with await network.stream(method, url, **kwargs) as response:
             queue.put(response)
@@ -228,9 +234,18 @@ async def stream_chunk_to_queue(network, queue, method: str, url: str, **kwargs:
 
 
 def _stream_generator(method: str, url: str, **kwargs: t.Any):
-    queue = SimpleQueue()
+    queue: SimpleQueue[httpx.Response|bytes|Exception|None] = SimpleQueue()
     network = get_context_network()
-    future = asyncio.run_coroutine_threadsafe(stream_chunk_to_queue(network, queue, method, url, **kwargs), get_loop())
+    future = asyncio.run_coroutine_threadsafe(
+        stream_chunk_to_queue(
+            network,
+            queue,
+            method,
+            url,
+            **kwargs,
+        ),
+        get_loop(),
+    )
 
     # yield chunks
     obj_or_exception = queue.get()
@@ -242,17 +257,17 @@ def _stream_generator(method: str, url: str, **kwargs: t.Any):
     future.result()
 
 
-def _close_response_method(self):
-    asyncio.run_coroutine_threadsafe(self.aclose(), get_loop())
+def _close_response_method(resp: httpx.Response) -> None:
+    asyncio.run_coroutine_threadsafe(resp.aclose(), get_loop())
     # reach the end of _self.generator ( _stream_generator ) to an avoid memory leak.
     # it makes sure that :
     # * the httpx response is closed (see the stream_chunk_to_queue function)
     # * to call future.result() in _stream_generator
-    for _ in self._generator:  # pylint: disable=protected-access
+    for _ in resp._generator:  # pylint: disable=protected-access
         continue
 
 
-def stream(method: str, url: str, **kwargs: t.Any) -> tuple[SXNG_Response, Iterable[bytes]]:
+def stream(method: str, url: str, **kwargs: t.Any) -> tuple[httpx.Response, Iterable[bytes]]:
     """Replace httpx.stream.
 
     Usage:
@@ -265,8 +280,11 @@ def stream(method: str, url: str, **kwargs: t.Any) -> tuple[SXNG_Response, Itera
     """
     generator = _stream_generator(method, url, **kwargs)
 
+    import pdb
+    pdb.set_trace()
+
     # yield response
-    response = next(generator)  # pylint: disable=stop-iteration-return
+    response: httpx.Response = next(generator)  # pylint: disable=stop-iteration-return
     if isinstance(response, Exception):
         raise response
 

@@ -1047,9 +1047,10 @@ def image_proxy():
                 return '', resp.status_code
             return '', 400
 
-        if not resp.headers.get('Content-Type', '').startswith('image/') and not resp.headers.get(
-            'Content-Type', ''
-        ).startswith('binary/octet-stream'):
+        if (
+                not resp.headers.get('Content-Type', '').startswith('image/')
+                and not resp.headers.get('Content-Type', '').startswith('binary/octet-stream')
+        ):
             logger.debug('image-proxy: wrong content-type: %s', resp.headers.get('Content-Type', ''))
             return '', 400
 

@@ -70,32 +70,38 @@ class TestNetwork(SearxTestCase):
         with self.assertRaises(ValueError):
             Network(proxies=1)
 
-    def test_get_kwargs_clients(self):
+    def test_get_kwargs(self):
+        network = Network()
         kwargs = {
-            'verify': True,
-            'max_redirects': 5,
-            'timeout': 2,
-            'allow_redirects': True,
+            "verify": True,
+            "max_redirects": 5,
+            "timeout": 2,
+            "allow_redirects": True,
+            "raise_for_httperror": [400, 401]
         }
-        kwargs_client = Network.extract_kwargs_clients(kwargs)
 
-        self.assertEqual(len(kwargs_client), 2)
-        self.assertEqual(len(kwargs), 2)
+        client_args, req_args = network.get_kwargs(**kwargs)
+        self.assertEqual(len(client_args), 2)
+        self.assertEqual(len(req_args), 2)
 
-        self.assertEqual(kwargs['timeout'], 2)
-        self.assertEqual(kwargs['follow_redirects'], True)
+        self.assertEqual(req_args["timeout"], 2)
+        self.assertEqual(req_args["follow_redirects"], True)
 
-        self.assertTrue(kwargs_client['verify'])
-        self.assertEqual(kwargs_client['max_redirects'], 5)
+        self.assertTrue(client_args["verify"])
+        self.assertEqual(client_args["max_redirects"], 5)
 
     async def test_get_client(self):
         network = Network(verify=True)
-        client1 = await network.get_client()
-        client2 = await network.get_client(verify=True)
-        client3 = await network.get_client(max_redirects=10)
-        client4 = await network.get_client(verify=True)
-        client5 = await network.get_client(verify=False)
-        client6 = await network.get_client(max_redirects=10)
+
+        def _args(**kwargs):
+            return network.get_kwargs()[0]
+
+        client1 = await network.get_client(_args())
+        client2 = await network.get_client(_args(verify=True))
+        client3 = await network.get_client(_args(max_redirects=10))
+        client4 = await network.get_client(_args(verify=True))
+        client5 = await network.get_client(_args(verify=False))
+        client6 = await network.get_client(_args(max_redirects=10))
 
         self.assertEqual(client1, client2)
         self.assertEqual(client1, client4)
@@ -107,7 +113,7 @@ class TestNetwork(SearxTestCase):
 
     async def test_aclose(self):
         network = Network(verify=True)
-        await network.get_client()
+        await network.get_client(network.get_kwargs()[0])
         await network.aclose()
 
     async def test_request(self):

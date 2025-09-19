@@ -166,13 +166,13 @@ def new_client(
     enable_http: bool,
     verify: bool,
     enable_http2: bool,
-    max_connections: int,
-    max_keepalive_connections: int,
-    keepalive_expiry: float,
+    max_connections: int | None,
+    max_keepalive_connections: int | None,
+    keepalive_expiry: float | None,
     proxies: dict[str, str],
     local_address: str,
     retries: int,
-    max_redirects: int,
+    max_redirects: int | None,
     hook_log_response: t.Callable[..., t.Any] | None,
 ) -> httpx.AsyncClient:
     limit = httpx.Limits(

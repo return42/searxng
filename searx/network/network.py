@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# pylint: disable=global-statement
+# pylint: disable=global-statement, too-many-arguments
 # pylint: disable=missing-module-docstring, missing-class-docstring
 
 __all__ = ["get_network"]
@@ -14,6 +14,7 @@ import ipaddress
 from itertools import cycle
 
 import httpx
+import httpx._types
 
 from searx import logger, sxng_debug
 from searx.extended_types import SXNG_Response
@@ -41,46 +42,32 @@ PROXY_PATTERN_MAPPING = {
 ADDRESS_MAPPING = {'ipv4': '0.0.0.0', 'ipv6': '::'}
 
 
+class ClientArgs(t.TypedDict):
+    verify: bool
+    max_redirects: int
+    cookies: httpx._types.CookieTypes | None
+
+
 @t.final
 class Network:
-
-    __slots__ = (
-        'enable_http',
-        'verify',
-        'enable_http2',
-        'max_connections',
-        'max_keepalive_connections',
-        'keepalive_expiry',
-        'local_addresses',
-        'proxies',
-        'using_tor_proxy',
-        'max_redirects',
-        'retries',
-        'retry_on_http_error',
-        '_local_addresses_cycle',
-        '_proxies_cycle',
-        '_clients',
-        '_logger',
-    )
 
     _TOR_CHECK_RESULT = {}
 
     def __init__(
-        # pylint: disable=too-many-arguments
         self,
         enable_http: bool = True,
         verify: bool = True,
         enable_http2: bool = False,
-        max_connections: int = None,  # pyright: ignore[reportArgumentType]
-        max_keepalive_connections: int = None,  # pyright: ignore[reportArgumentType]
-        keepalive_expiry: float = None,  # pyright: ignore[reportArgumentType]
+        max_connections: int | None = None,
+        max_keepalive_connections: int | None = None,
+        keepalive_expiry: float | None = None,
         proxies: str | dict[str, str] | None = None,
         using_tor_proxy: bool = False,
         local_addresses: str | list[str] | None = None,
         retries: int = 0,
-        retry_on_http_error: bool = False,
+        retry_on_http_error: bool | list[int] | int = False,
         max_redirects: int = 30,
-        logger_name: str = None,  # pyright: ignore[reportArgumentType]
+        logger_name: str | None = None,
     ):
 
         self.enable_http = enable_http
@@ -187,9 +174,9 @@ class Network:
         Network._TOR_CHECK_RESULT[proxies] = result
         return result
 
-    async def get_client(self, verify: bool | None = None, max_redirects: int | None = None) -> httpx.AsyncClient:
-        verify = self.verify if verify is None else verify
-        max_redirects = self.max_redirects if max_redirects is None else max_redirects
+    async def get_client(self, kwargs: ClientArgs) -> httpx.AsyncClient:
+        verify = kwargs.get("verify", self.verify)
+        max_redirects = kwargs.get("max_redirects", self.max_redirects)
         local_address = next(self._local_addresses_cycle)
         proxies = next(self._proxies_cycle)  # is a tuple so it can be part of the key
         key = (verify, max_redirects, local_address, proxies)
@@ -223,35 +210,16 @@ class Network:
 
         await asyncio.gather(*[close_client(client) for client in self._clients.values()], return_exceptions=False)
 
-    @staticmethod
-    def extract_kwargs_clients(kwargs: dict[str, t.Any]) -> dict[str, t.Any]:
-        kwargs_clients: dict[str, t.Any] = {}
-        if 'verify' in kwargs:
-            kwargs_clients['verify'] = kwargs.pop('verify')
-        if 'max_redirects' in kwargs:
-            kwargs_clients['max_redirects'] = kwargs.pop('max_redirects')
-        if 'allow_redirects' in kwargs:
-            # see https://github.com/encode/httpx/pull/1808
-            kwargs['follow_redirects'] = kwargs.pop('allow_redirects')
-        return kwargs_clients
 
-    @staticmethod
-    def extract_do_raise_for_httperror(kwargs: dict[str, t.Any]):
-        do_raise_for_httperror = True
-        if 'raise_for_httperror' in kwargs:
-            do_raise_for_httperror = kwargs['raise_for_httperror']
-            del kwargs['raise_for_httperror']
-        return do_raise_for_httperror
+    def patch_response(self, response: httpx.Response, kwargs: dict[str,t.Any]) -> SXNG_Response:
 
-    def patch_response(self, response: httpx.Response, do_raise_for_httperror: bool) -> SXNG_Response:
         if isinstance(response, httpx.Response):
             response = t.cast(SXNG_Response, response)
             # requests compatibility (response is not streamed)
             # see also https://www.python-httpx.org/compatibility/#checking-for-4xx5xx-responses
             response.ok = not response.is_error
 
-            # raise an exception
-            if do_raise_for_httperror:
+            if kwargs.get("raise_for_httperror"):
                 try:
                     raise_for_httperror(response)
                 except:
@@ -269,42 +237,104 @@ class Network:
             return False
         return True
 
-    async def call_client(self, stream: bool, method: str, url: str, **kwargs: t.Any) -> SXNG_Response:
-        retries = self.retries
-        was_disconnected = False
-        do_raise_for_httperror = Network.extract_do_raise_for_httperror(kwargs)
-        kwargs_clients = Network.extract_kwargs_clients(kwargs)
-        while retries >= 0:  # pragma: no cover
-            client = await self.get_client(**kwargs_clients)
-            cookies = kwargs.pop("cookies", None)
-            client.cookies = httpx.Cookies(cookies)
-            try:
-                if stream:
-                    return client.stream(method, url, **kwargs)
+    def get_kwargs(self, **req_args: t.Any) -> tuple[ClientArgs, dict[str,t.Any]]:
+        """Generates a tuple with two dictionaries from the ``**args``, the
+        first dictionary contains the arguments needed to build a client
+        :py:obj:`Network.get_client()`, the second dictionary contains the
+        remaining arguments (which are passed to the client's request).
+        """
 
-                response = await client.request(method, url, **kwargs)
-                if self.is_valid_response(response) or retries <= 0:
-                    return self.patch_response(response, do_raise_for_httperror)
-            except httpx.RemoteProtocolError as e:
+        client_args: ClientArgs = {
+            "verify": req_args.pop("verify", self.verify),
+            "max_redirects": req_args.pop("max_redirects", self.max_redirects),
+            "cookies": req_args.pop("cookies", None),
+        }
+
+        req_args.pop("raise_for_httperror", None)
+        # see https://github.com/encode/httpx/pull/1808
+        req_args["follow_redirects"] = req_args.pop("allow_redirects", False)
+
+        return client_args, req_args
+
+    async def request(self, method: str, url: str, **kwargs: t.Any) -> SXNG_Response | None:
+        client_args, req_args = self.get_kwargs(**kwargs)
+        c = self.retries + 1
+        was_disconnected = False  # IDK if this is any longer needed
+
+        response = None
+        while c >= 0:
+            c =- 1
+            client = await self.get_client(client_args)
+            try:
+                response = await client.request(method, url, **req_args)
+                if self.is_valid_response(response) or c <= 0:
+                    return self.patch_response(response, kwargs)
+
+            except httpx.RemoteProtocolError as exc:
                 if not was_disconnected:
-                    # the server has closed the connection:
-                    # try again without decreasing the retries variable & with a new HTTP client
+                    # IDK if this is any longer true: the server has closed the
+                    # connection.
+
+                    # Try again without decreasing the retries variable & with a
+                    # new HTTP client
                     was_disconnected = True
                     await client.aclose()
-                    self._logger.warning('httpx.RemoteProtocolError: the server has disconnected, retrying')
+                    self._logger.warning("httpx.RemoteProtocolError: the server has disconnected, retrying")
                     continue
-                if retries <= 0:
-                    raise e
-            except (httpx.RequestError, httpx.HTTPStatusError) as e:
-                if retries <= 0:
-                    raise e
-            retries -= 1
+                if c <= 0:
+                    raise exc
 
-    async def request(self, method: str, url: str, **kwargs: t.Any) -> SXNG_Response:
-        return await self.call_client(False, method, url, **kwargs)
+            except (httpx.RequestError, httpx.HTTPStatusError) as exc:
+                if c <= 0:
+                    raise exc
 
-    async def stream(self, method: str, url: str, **kwargs):
-        return await self.call_client(True, method, url, **kwargs)
+    async def stream(self, method: str, url: str, **kwargs: t.Any):
+        client_args, req_args = self.get_kwargs(**kwargs)
+        client = await self.get_client(client_args)
+        response = client.stream(method, url, **req_args)
+        return response
+
+
+
+    # async def call_client(self, stream: bool, method: str, url: str, **kwargs: t.Any) -> SXNG_Response:
+    #     retries = self.retries
+    #     was_disconnected = False
+    #     do_raise_for_httperror = Network.extract_do_raise_for_httperror(kwargs)
+    #     kwargs_clients = Network.extract_kwargs_clients(kwargs)
+    #     while retries >= 0:
+    #         client = await self.get_client(**kwargs_clients)
+    #         cookies = kwargs.pop("cookies", None)
+    #         client.cookies = httpx.Cookies(cookies)
+    #         try:
+    #             if stream:
+    #                 response = client.stream(method, url, **kwargs)
+    #             else:
+    #                 response = await client.request(method, url, **kwargs)
+    #             if self.is_valid_response(response) or retries <= 0:
+    #                 return self.patch_response(response, do_raise_for_httperror)
+    #         except httpx.RemoteProtocolError as e:
+    #             if not was_disconnected:
+    #                 # the server has closed the connection:
+    #                 # try again without decreasing the retries variable & with a new HTTP client
+    #                 was_disconnected = True
+    #                 await client.aclose()
+    #                 self._logger.warning('httpx.RemoteProtocolError: the server has disconnected, retrying')
+    #                 continue
+    #             if retries <= 0:
+    #                 raise e
+    #         except (httpx.RequestError, httpx.HTTPStatusError) as e:
+    #             if retries <= 0:
+    #                 raise e
+    #         retries -= 1
+
+
+
+
+
+
+
+
+
 
     @classmethod
     async def aclose_all(cls):
@@ -319,9 +349,10 @@ def check_network_configuration():
     async def check():
         exception_count = 0
         for network in NETWORKS.values():
+            client_args, req_args = network.get_kwargs()
             if network.using_tor_proxy:
                 try:
-                    await network.get_client()
+                    await network.get_client(client_args)
                 except Exception:  # pylint: disable=broad-except
                     network._logger.exception('Error')  # pylint: disable=protected-access
                     exception_count += 1
