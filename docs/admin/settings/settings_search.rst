@@ -14,6 +14,8 @@
      ban_time_on_fail: 5
      max_page: 0
      max_ban_time_on_fail: 120
+     formats:
+       - html
      suspended_times:
        SearxEngineAccessDenied: 86400
        SearxEngineCaptcha: 86400
@@ -21,8 +23,6 @@
        cf_SearxEngineCaptcha: 1296000
        cf_SearxEngineAccessDenied: 86400
        recaptcha_SearxEngineCaptcha: 604800
-     formats:
-       - html
 
 ``safe_search``:
   Filter results.
@@ -90,30 +90,52 @@
 ``max_ban_time_on_fail``:
   Max ban time in seconds after engine errors.
 
-``suspended_times``:
-  Engine suspension time after error (in seconds; set to 0 to disable)
+``formats``
+===========
 
-  ``SearxEngineAccessDenied``: 86400
-    For error "Access denied" and "HTTP error [402, 403]"
+Result formats available from web, remove format to deny access (use lower
+case).
 
-  ``SearxEngineCaptcha``: 86400
-    For error "CAPTCHA"
+- ``html``
+- ``csv``
+- ``json``
+- ``rss``
 
-  ``SearxEngineTooManyRequests``: 3600
-    For error "Too many request" and "HTTP error 429"
+.. _settings search.suspended_times:
 
-  Cloudflare CAPTCHA:
-     - ``cf_SearxEngineCaptcha``: 1296000
-     - ``cf_SearxEngineAccessDenied``: 86400
+``suspended_times``
+===================
 
-  Google CAPTCHA:
-    - ``recaptcha_SearxEngineCaptcha``: 604800
+.. _HTTP 402 Payment Required:
+    https://developer.mozilla.org/de/docs/Web/HTTP/Reference/Status/402
+.. _HTTP 403 Forbidden:
+    https://developer.mozilla.org/de/docs/Web/HTTP/Reference/Status/403
+.. _HTTP 429 Too many request:
+    https://developer.mozilla.org/de/docs/Web/HTTP/Reference/Status/429
 
-``formats``:
-  Result formats available from web, remove format to deny access (use lower
-  case).
+Engine suspension time after error (in seconds; set to 0 to disable)
 
-  - ``html``
-  - ``csv``
-  - ``json``
-  - ``rss``
+``SearxEngineAccessDenied``: 86400
+  The website has returned a *access denied* / `HTTP 402 Payment Required`_,
+  `HTTP 403 Forbidden`_, *cloudflare firewall*, ... / see
+  :py:obj:`searx.exceptions.SearxEngineAccessDeniedException`.
+
+``SearxEngineCaptcha``: 86400
+  The website has returned a *CAPTCHA* / see
+  :py:obj:`searx.exceptions.SearxEngineCaptchaException`.
+
+``SearxEngineTooManyRequests``: 3600
+  The website has returned a `HTTP 429 Too many request`_ / see
+  :py:obj:`searx.exceptions.SearxEngineTooManyRequestsException`.
+
+``recaptcha_SearxEngineCaptcha``: 604800
+  The website has returned a Google CAPTCHA, aka *ReCAPTCHA* / see
+  :py:obj:`searx.exceptions.SearxEngineCaptchaException`:
+
+``cf_SearxEngineCaptcha``: 1296000
+  The website has returned a *Cloudflare CAPTCHA* / see
+  :py:obj:`searx.exceptions.SearxEngineCaptchaException`.
+
+``cf_SearxEngineAccessDenied``: 86400
+  The website has returned a *Cloudflare Firewall* / see
+  :py:obj:`searx.exceptions.SearxEngineAccessDeniedException`.

@@ -14,6 +14,7 @@ import httpx
 from httpx_socks import AsyncProxyTransport
 from python_socks import parse_proxy_url, ProxyConnectionError, ProxyTimeoutError, ProxyError
 
+
 from searx import logger
 
 CertTypes = str | tuple[str, str] | tuple[str, str, str]
@@ -162,9 +163,9 @@ def new_client(
     enable_http: bool,
     verify: bool,
     enable_http2: bool,
-    max_connections: int,
-    max_keepalive_connections: int,
-    keepalive_expiry: float,
+    max_connections: int | None,
+    max_keepalive_connections: int | None,
+    keepalive_expiry: float | None,
     proxies: dict[str, str],
     local_address: str,
     retries: int,

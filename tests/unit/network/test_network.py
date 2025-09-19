@@ -1,11 +1,18 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # pylint: disable=missing-module-docstring,disable=missing-class-docstring,invalid-name
 
+import typing as t
 import httpx
 from mock import patch
 
 from searx.network.network import Network, NETWORKS
 from tests import SearxTestCase
+
+EXAMPLE_GET_ARGS = {
+    "method": "GET",
+    "url": "https://example.com/",
+    "raise_for_httperror": False,
+}
 
 
 class TestNetwork(SearxTestCase):
@@ -14,88 +21,127 @@ class TestNetwork(SearxTestCase):
     def test_simple(self):
         network = Network()
 
-        self.assertEqual(next(network._local_addresses_cycle), None)
-        self.assertEqual(next(network._proxies_cycle), ())
+        self.assertEqual(next(network.local_addresses_cycle), None)
+        self.assertEqual(next(network.proxies_cycle), ())
 
     def test_ipaddress_cycle(self):
-        network = NETWORKS['ipv6']
-        self.assertEqual(next(network._local_addresses_cycle), '::')
-        self.assertEqual(next(network._local_addresses_cycle), '::')
+        network = NETWORKS["ipv6"]
+        self.assertEqual(next(network.local_addresses_cycle), "::")
+        self.assertEqual(next(network.local_addresses_cycle), "::")
 
-        network = NETWORKS['ipv4']
-        self.assertEqual(next(network._local_addresses_cycle), '0.0.0.0')
-        self.assertEqual(next(network._local_addresses_cycle), '0.0.0.0')
+        network = NETWORKS["ipv4"]
+        self.assertEqual(next(network.local_addresses_cycle), "0.0.0.0")
+        self.assertEqual(next(network.local_addresses_cycle), "0.0.0.0")
 
-        network = Network(local_addresses=['192.168.0.1', '192.168.0.2'])
-        self.assertEqual(next(network._local_addresses_cycle), '192.168.0.1')
-        self.assertEqual(next(network._local_addresses_cycle), '192.168.0.2')
-        self.assertEqual(next(network._local_addresses_cycle), '192.168.0.1')
+        network = Network(local_addresses=["192.168.0.1", "192.168.0.2"])
+        self.assertEqual(next(network.local_addresses_cycle), "192.168.0.1")
+        self.assertEqual(next(network.local_addresses_cycle), "192.168.0.2")
+        self.assertEqual(next(network.local_addresses_cycle), "192.168.0.1")
 
-        network = Network(local_addresses=['192.168.0.0/30'])
-        self.assertEqual(next(network._local_addresses_cycle), '192.168.0.1')
-        self.assertEqual(next(network._local_addresses_cycle), '192.168.0.2')
-        self.assertEqual(next(network._local_addresses_cycle), '192.168.0.1')
-        self.assertEqual(next(network._local_addresses_cycle), '192.168.0.2')
+        network = Network(local_addresses=["192.168.0.0/30"])
+        self.assertEqual(next(network.local_addresses_cycle), "192.168.0.1")
+        self.assertEqual(next(network.local_addresses_cycle), "192.168.0.2")
+        self.assertEqual(next(network.local_addresses_cycle), "192.168.0.1")
+        self.assertEqual(next(network.local_addresses_cycle), "192.168.0.2")
 
-        network = Network(local_addresses=['fe80::/10'])
-        self.assertEqual(next(network._local_addresses_cycle), 'fe80::1')
-        self.assertEqual(next(network._local_addresses_cycle), 'fe80::2')
-        self.assertEqual(next(network._local_addresses_cycle), 'fe80::3')
+        network = Network(local_addresses=["fe80::/10"])
+        self.assertEqual(next(network.local_addresses_cycle), "fe80::1")
+        self.assertEqual(next(network.local_addresses_cycle), "fe80::2")
+        self.assertEqual(next(network.local_addresses_cycle), "fe80::3")
 
         with self.assertRaises(ValueError):
-            Network(local_addresses=['not_an_ip_address'])
+            Network(local_addresses=["not_an_ip_address"])
 
     def test_proxy_cycles(self):
-        network = Network(proxies='http://localhost:1337')
-        self.assertEqual(next(network._proxies_cycle), (('all://', 'http://localhost:1337'),))
+        kwargs: dict[str, t.Any] = {}
 
-        network = Network(proxies={'https': 'http://localhost:1337', 'http': 'http://localhost:1338'})
+        kwargs["proxies"] = ("http://localhost:1337",)
+        network = Network(**kwargs)
         self.assertEqual(
-            next(network._proxies_cycle), (('https://', 'http://localhost:1337'), ('http://', 'http://localhost:1338'))
-        )
-        self.assertEqual(
-            next(network._proxies_cycle), (('https://', 'http://localhost:1337'), ('http://', 'http://localhost:1338'))
+            next(network.proxies_cycle),
+            (("all://", "http://localhost:1337"),),
         )
 
-        network = Network(
-            proxies={'https': ['http://localhost:1337', 'http://localhost:1339'], 'http': 'http://localhost:1338'}
+        kwargs["proxies"] = {
+            "https": "http://localhost:1337",
+            "http": "http://localhost:1338",
+        }
+        network = Network(**kwargs)
+        self.assertEqual(
+            next(network.proxies_cycle),
+            (
+                ("https://", "http://localhost:1337"),
+                ("http://", "http://localhost:1338"),
+            ),
         )
         self.assertEqual(
-            next(network._proxies_cycle), (('https://', 'http://localhost:1337'), ('http://', 'http://localhost:1338'))
+            next(network.proxies_cycle),
+            (
+                ("https://", "http://localhost:1337"),
+                ("http://", "http://localhost:1338"),
+            ),
+        )
+
+        kwargs["proxies"] = {
+            "https": [
+                "http://localhost:1337",
+                "http://localhost:1339",
+            ],
+            "http": "http://localhost:1338",
+        }
+        network = Network(**kwargs)
+        self.assertEqual(
+            next(network.proxies_cycle),
+            (
+                ("https://", "http://localhost:1337"),
+                ("http://", "http://localhost:1338"),
+            ),
         )
         self.assertEqual(
-            next(network._proxies_cycle), (('https://', 'http://localhost:1339'), ('http://', 'http://localhost:1338'))
+            next(network.proxies_cycle),
+            (
+                ("https://", "http://localhost:1339"),
+                ("http://", "http://localhost:1338"),
+            ),
         )
 
         with self.assertRaises(ValueError):
-            Network(proxies=1)
+            Network(proxies=["x", "y"])  # pyright: ignore[reportArgumentType]
 
-    def test_get_kwargs_clients(self):
-        kwargs = {
-            'verify': True,
-            'max_redirects': 5,
-            'timeout': 2,
-            'allow_redirects': True,
+    def test_get_kwargs(self):
+        network = Network()
+        kwargs: dict[str, t.Any] = {
+            "verify": True,  # client_args
+            "max_redirects": 5,  # client_args
+            "timeout": 2,  # req_args
+            "allow_redirects": True,  # follow_redirects: req_args, send_args
+            "raise_for_httperror": [400, 401],
+            "auth": "foo bar",  # send_args
         }
-        kwargs_client = Network.extract_kwargs_clients(kwargs)
 
-        self.assertEqual(len(kwargs_client), 2)
-        self.assertEqual(len(kwargs), 2)
+        client_args, req_args, send_args = network.get_kwargs(kwargs)
+        self.assertEqual(len(client_args), 2)
+        self.assertEqual(len(req_args), 2)
+        self.assertEqual(len(send_args), 2)
 
-        self.assertEqual(kwargs['timeout'], 2)
-        self.assertEqual(kwargs['follow_redirects'], True)
+        self.assertEqual(req_args["timeout"], 2)
+        self.assertEqual(req_args["follow_redirects"], True)
 
-        self.assertTrue(kwargs_client['verify'])
-        self.assertEqual(kwargs_client['max_redirects'], 5)
+        self.assertTrue(client_args["verify"])
+        self.assertEqual(client_args["max_redirects"], 5)
 
     async def test_get_client(self):
         network = Network(verify=True)
-        client1 = await network.get_client()
-        client2 = await network.get_client(verify=True)
-        client3 = await network.get_client(max_redirects=10)
-        client4 = await network.get_client(verify=True)
-        client5 = await network.get_client(verify=False)
-        client6 = await network.get_client(max_redirects=10)
+
+        def _args(**kwargs):
+            return network.get_kwargs(kwargs)[0]
+
+        client1 = await network.get_client(_args())
+        client2 = await network.get_client(_args(verify=True))
+        client3 = await network.get_client(_args(max_redirects=10))
+        client4 = await network.get_client(_args(verify=True))
+        client5 = await network.get_client(_args(verify=False))
+        client6 = await network.get_client(_args(max_redirects=10))
 
         self.assertEqual(client1, client2)
         self.assertEqual(client1, client4)
@@ -107,22 +153,22 @@ class TestNetwork(SearxTestCase):
 
     async def test_aclose(self):
         network = Network(verify=True)
-        await network.get_client()
+        await network.get_client(network.get_kwargs({})[0])
         await network.aclose()
 
     async def test_request(self):
-        a_text = 'Lorem Ipsum'
+        a_text = "Lorem Ipsum"
         response = httpx.Response(status_code=200, text=a_text)
-        with patch.object(httpx.AsyncClient, 'request', return_value=response):
+        with patch.object(httpx.AsyncClient, "request", return_value=response):
             network = Network(enable_http=True)
-            response = await network.request('GET', 'https://example.com/')
+            response = await network.request(method="GET", url="https://example.com/")
             self.assertEqual(response.text, a_text)
             await network.aclose()
 
 
 class TestNetworkRequestRetries(SearxTestCase):
 
-    TEXT = 'Lorem Ipsum'
+    TEXT = "Lorem Ipsum"
 
     def setUp(self):
         self.init_test_settings()
@@ -135,36 +181,52 @@ class TestNetworkRequestRetries(SearxTestCase):
             nonlocal first
             if first:
                 first = False
-                return httpx.Response(status_code=403, text=TestNetworkRequestRetries.TEXT)
-            return httpx.Response(status_code=200, text=TestNetworkRequestRetries.TEXT)
+                return httpx.Response(status_code=403, text=cls.TEXT)
+            return httpx.Response(status_code=200, text=cls.TEXT)
 
         return get_response
 
     async def test_retries_ok(self):
-        with patch.object(httpx.AsyncClient, 'request', new=TestNetworkRequestRetries.get_response_404_then_200()):
+        with patch.object(
+            httpx.AsyncClient,
+            "request",
+            new=self.get_response_404_then_200(),
+        ):
             network = Network(enable_http=True, retries=1, retry_on_http_error=403)
-            response = await network.request('GET', 'https://example.com/', raise_for_httperror=False)
-            self.assertEqual(response.text, TestNetworkRequestRetries.TEXT)
+            response = await network.request(**EXAMPLE_GET_ARGS)
+            self.assertEqual(response.text, self.TEXT)
             await network.aclose()
 
     async def test_retries_fail_int(self):
-        with patch.object(httpx.AsyncClient, 'request', new=TestNetworkRequestRetries.get_response_404_then_200()):
+        with patch.object(
+            httpx.AsyncClient,
+            "request",
+            new=self.get_response_404_then_200(),
+        ):
             network = Network(enable_http=True, retries=0, retry_on_http_error=403)
-            response = await network.request('GET', 'https://example.com/', raise_for_httperror=False)
+            response = await network.request(**EXAMPLE_GET_ARGS)
             self.assertEqual(response.status_code, 403)
             await network.aclose()
 
     async def test_retries_fail_list(self):
-        with patch.object(httpx.AsyncClient, 'request', new=TestNetworkRequestRetries.get_response_404_then_200()):
+        with patch.object(
+            httpx.AsyncClient,
+            "request",
+            new=self.get_response_404_then_200(),
+        ):
             network = Network(enable_http=True, retries=0, retry_on_http_error=[403, 429])
-            response = await network.request('GET', 'https://example.com/', raise_for_httperror=False)
+            response = await network.request(**EXAMPLE_GET_ARGS)
             self.assertEqual(response.status_code, 403)
             await network.aclose()
 
     async def test_retries_fail_bool(self):
-        with patch.object(httpx.AsyncClient, 'request', new=TestNetworkRequestRetries.get_response_404_then_200()):
+        with patch.object(
+            httpx.AsyncClient,
+            "request",
+            new=self.get_response_404_then_200(),
+        ):
             network = Network(enable_http=True, retries=0, retry_on_http_error=True)
-            response = await network.request('GET', 'https://example.com/', raise_for_httperror=False)
+            response = await network.request(**EXAMPLE_GET_ARGS)
             self.assertEqual(response.status_code, 403)
             await network.aclose()
 
@@ -175,30 +237,30 @@ class TestNetworkRequestRetries(SearxTestCase):
             nonlocal request_count
             request_count += 1
             if request_count < 3:
-                raise httpx.RequestError('fake exception', request=None)
-            return httpx.Response(status_code=200, text=TestNetworkRequestRetries.TEXT)
+                raise httpx.RequestError("fake exception", request=None)
+            return httpx.Response(status_code=200, text=self.TEXT)
 
-        with patch.object(httpx.AsyncClient, 'request', new=get_response):
+        with patch.object(httpx.AsyncClient, "request", new=get_response):
             network = Network(enable_http=True, retries=2)
-            response = await network.request('GET', 'https://example.com/', raise_for_httperror=False)
+            response = await network.request(**EXAMPLE_GET_ARGS)
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.text, TestNetworkRequestRetries.TEXT)
+            self.assertEqual(response.text, self.TEXT)
             await network.aclose()
 
     async def test_retries_exception(self):
         async def get_response(*args, **kwargs):
-            raise httpx.RequestError('fake exception', request=None)
+            raise httpx.RequestError("fake exception", request=None)
 
-        with patch.object(httpx.AsyncClient, 'request', new=get_response):
+        with patch.object(httpx.AsyncClient, "request", new=get_response):
             network = Network(enable_http=True, retries=0)
             with self.assertRaises(httpx.RequestError):
-                await network.request('GET', 'https://example.com/', raise_for_httperror=False)
+                await network.request(**EXAMPLE_GET_ARGS)
             await network.aclose()
 
 
 class TestNetworkStreamRetries(SearxTestCase):
 
-    TEXT = 'Lorem Ipsum'
+    TEXT = "Lorem Ipsum"
 
     def setUp(self):
         self.init_test_settings()
@@ -211,23 +273,33 @@ class TestNetworkStreamRetries(SearxTestCase):
             nonlocal first
             if first:
                 first = False
-                raise httpx.RequestError('fake exception', request=None)
+                raise httpx.RequestError("fake exception", request=None)
             return httpx.Response(status_code=200, text=TestNetworkStreamRetries.TEXT)
 
         return stream
 
     async def test_retries_ok(self):
-        with patch.object(httpx.AsyncClient, 'stream', new=TestNetworkStreamRetries.get_response_exception_then_200()):
+        with patch.object(
+            httpx.AsyncClient,
+            "stream",
+            new=self.get_response_exception_then_200(),
+        ):
             network = Network(enable_http=True, retries=1, retry_on_http_error=403)
-            response = await network.stream('GET', 'https://example.com/')
+            # FIXME ..
+            response = await network.stream("GET", "https://example.com/")
             self.assertEqual(response.text, TestNetworkStreamRetries.TEXT)
             await network.aclose()
 
     async def test_retries_fail(self):
-        with patch.object(httpx.AsyncClient, 'stream', new=TestNetworkStreamRetries.get_response_exception_then_200()):
+        with patch.object(
+            httpx.AsyncClient,
+            "stream",
+            new=self.get_response_exception_then_200(),
+        ):
             network = Network(enable_http=True, retries=0, retry_on_http_error=403)
             with self.assertRaises(httpx.RequestError):
-                await network.stream('GET', 'https://example.com/')
+                # FIXME ..
+                await network.stream("GET", "https://example.com/")
             await network.aclose()
 
     async def test_retries_exception(self):
@@ -237,11 +309,12 @@ class TestNetworkStreamRetries(SearxTestCase):
             nonlocal first
             if first:
                 first = False
-                return httpx.Response(status_code=403, text=TestNetworkRequestRetries.TEXT)
-            return httpx.Response(status_code=200, text=TestNetworkRequestRetries.TEXT)
+                return httpx.Response(status_code=403, text=self.TEXT)
+            return httpx.Response(status_code=200, text=self.TEXT)
 
-        with patch.object(httpx.AsyncClient, 'stream', new=stream):
+        with patch.object(httpx.AsyncClient, "stream", new=stream):
             network = Network(enable_http=True, retries=0, retry_on_http_error=403)
-            response = await network.stream('GET', 'https://example.com/', raise_for_httperror=False)
+            # FIXME ..
+            response = await network.stream("GET", "https://example.com/", raise_for_httperror=False)
             self.assertEqual(response.status_code, 403)
             await network.aclose()

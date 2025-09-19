@@ -48,35 +48,38 @@ engine is shown.  Most of the options have a default value or even are optional.
      tokens: [ 'my-secret-token' ]
      weight: 1
      display_error_messages: true
+
      about:
-        website: https://example.com
-        wikidata_id: Q306656
-        official_api_documentation: https://example.com/api-doc
-        use_official_api: true
-        require_api_key: true
-        results: HTML
+         website: https://example.com
+         wikidata_id: Q306656
+         official_api_documentation: https://example.com/api-doc
+         use_official_api: true
+         require_api_key: true
+         results: HTML
 
-     # overwrite values from section 'outgoing:'
-     enable_http2: false
-     retries: 1
-     max_connections: 100
-     max_keepalive_connections: 10
-     keepalive_expiry: 5.0
-     using_tor_proxy: false
-     proxies:
-       http:
-         - http://proxy1:8080
-         - http://proxy2:8080
-       https:
-         - http://proxy1:8080
-         - http://proxy2:8080
-         - socks5://user:password@proxy3:1080
-         - socks5h://user:password@proxy4:1080
+     network:
+         # overwrite values from section 'outgoing:'
+         enable_http2: false
+         keepalive_expiry: 5.0
+         max_connections: 100
+         max_keepalive_connections: 10
+         proxies:
+             http:
+                 - http://proxy1:8080
+                 - http://proxy2:8080
+             https:
+                 - http://proxy1:8080
+                 - http://proxy2:8080
+                 - socks5://user:password@proxy3:1080
+                 - socks5h://user:password@proxy4:1080
+         retries: 1
+         using_tor_proxy: false
 
-     # other network settings
-     enable_http: false
-     retry_on_http_error: true # or 403 or [404, 429]
+         # other network settings
+         enable_http: false
+         retry_on_http_error: true # or 403 or [404, 429]
 
+.. _engine name:
 
 ``name`` :
   Name that will be used across SearXNG to define this engine.  In settings, on
@@ -150,45 +153,55 @@ engine is shown.  Most of the options have a default value or even are optional.
 
 .. _engine network:
 
-``network`` : optional
-  Use the network configuration from another engine.
-  In addition, there are two default networks:
+engine ``network:``
+====================
+
+.. _Pool limit configuration: https://www.python-httpx.org/advanced/#pool-limit-configuration
+
+The ``network`` setting is optional and the value of this setting can be a
+string or a detailed network configuration (``dict``).
+
+``network`` : ``str``
+  Use the network configuration from another engine.  In addition, there are
+  two default networks:
 
   - ``ipv4`` set ``local_addresses`` to ``0.0.0.0`` (use only IPv4 local addresses)
   - ``ipv6`` set ``local_addresses`` to ``::`` (use only IPv6 local addresses)
 
-``enable_http`` : optional
+
+``network`` : ``dict``
+  Overwrite config values from section :ref:`settings outgoing`
+
+``network:keepalive_expiry`` :
+  `Pool limit configuration`_, overwrites value ``keepalive_expiry`` from
+  :ref:`settings outgoing` for this engine.
+
+``network.max_connections`` :
+  `Pool limit configuration`_, overwrites value ``pool_connections`` from
+  :ref:`settings outgoing` for this engine.
+
+``network.max_keepalive_connection#s`` :
+  `Pool limit configuration`_, overwrites value ``pool_maxsize`` from
+   :ref:`settings outgoing` for this engine.
+
+``network:enable_http`` : optional
   Enable HTTP for this engine (by default only HTTPS is enabled).
 
-``retry_on_http_error`` : optional
+``network.retry_on_http_error`` : optional
   Retry request on some HTTP status code.
 
   Example:
 
-  * ``true`` : on HTTP status code between 400 and 599.
-  * ``403`` : on HTTP status code 403.
-  * ``[403, 429]``: on HTTP status code 403 and 429.
+  - ``true`` : on HTTP status code between 400 and 599.
+  - ``403`` : on HTTP status code 403.
+  -  ``[403, 429]``: on HTTP status code 403 and 429.
 
-``proxies`` :
+``network.proxies`` :
   Overwrites proxy settings from :ref:`settings outgoing`.
 
-``using_tor_proxy`` :
+``network.using_tor_proxy`` :
   Using tor proxy (``true``) or not (``false``) for this engine.  The default is
   taken from ``using_tor_proxy`` of the :ref:`settings outgoing`.
-
-.. _Pool limit configuration: https://www.python-httpx.org/advanced/#pool-limit-configuration
-
-``max_keepalive_connection#s`` :
-  `Pool limit configuration`_, overwrites value ``pool_maxsize`` from
-   :ref:`settings outgoing` for this engine.
-
-``max_connections`` :
-  `Pool limit configuration`_, overwrites value ``pool_connections`` from
-  :ref:`settings outgoing` for this engine.
-
-``keepalive_expiry`` :
-  `Pool limit configuration`_, overwrites value ``keepalive_expiry`` from
-  :ref:`settings outgoing` for this engine.
 
 
 .. _private engines:

@@ -204,7 +204,7 @@ class EngineProcessor(ABC):
         # metrics
         counter_inc('engine', self.engine.name, 'search', 'count', 'successful')
         histogram_observe(engine_time, 'engine', self.engine.name, 'time', 'total')
-        if page_load_time is not None:
+        if not page_load_time:
             histogram_observe(page_load_time, 'engine', self.engine.name, 'time', 'http')
 
     def extend_container(

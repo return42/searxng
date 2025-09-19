@@ -18,7 +18,7 @@ import searx.plugins
 from searx.engines import load_engines
 from searx.external_bang import get_bang_url
 from searx.metrics import initialize as initialize_metrics, counter_inc
-from searx.network import initialize as initialize_network, check_network_configuration
+from searx.network import initialize as initialize_network, verify_tor_proxy_works
 from searx.results import ResultContainer
 from searx.search.checker import initialize as initialize_checker
 from searx.search.processors import PROCESSORS
@@ -41,7 +41,7 @@ def initialize(
     load_engines(settings_engines)
     initialize_network(settings_engines, settings['outgoing'])
     if check_network:
-        check_network_configuration()
+        verify_tor_proxy_works()
     initialize_metrics([engine['name'] for engine in settings_engines], enable_metrics)
     PROCESSORS.init(settings_engines)
     if enable_checker:
