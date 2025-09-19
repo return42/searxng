@@ -1,7 +1,46 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# pylint: disable=missing-module-docstring, global-statement
+# pylint: disable=missing-module-docstring, global-statement, too-few-public-methods
+"""
+A network stack for SearXNG's engines
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-__all__ = ["get_network", "initialize", "check_network_configuration", "raise_for_httperror"]
+In httpx_ and similar libraries, a client (also named session) contains a pool
+of HTTP connections.  The client reuses these HTTP connections and automatically
+recreates them when the server at the other end closes the connections.
+
+Whatever the library, each HTTP client uses only one proxy (eventually none) and
+only one local IP address.
+
+.. _httpx: https://www.python-httpx.org/
+
+The primary use case of SearXNG is an engine that sends one or more outgoing
+HTTP requests.  The :ref:`outgoing <settings outgoing>` HTTP requests are
+largely determined by the following variables:
+
+outgoing IPs (:py:obj:`Network.local_addresses`) and proxies (:py:obj:`Network.proxies`):
+  The admin can configure an engine to use multiple proxies or IP addresses:
+  SearXNG sends the outgoing HTTP requests through these different proxies and
+  IP-addresses on a rotational basis. Its important to note here: one HTTP
+  client can still use only one proxy or IP.
+
+engine timeout (:ref:`request_timeout <outgoing.request_timeout>`):
+  When SearXNG executes an engine request, there is also a hard timeout: The
+  total runtime of the engine must not exceed a certain value.  Its important to
+  note here: the total runtime is largely determined by the HTTP requests.
+
+:ref:`retries <outgoing.retries>` of a HTTP request:
+  In addition, an engine can ask the SearXNG network to repeat a failed HTTP
+  request one or more times. Its important to note here: the first request and
+  all retries run in the same total runtime timeout.
+"""
+
+__all__ = [
+    "Network",
+    "get_network",
+    "initialize",
+    "verify_tor_proxy_works",
+    "raise_for_httperror",
+]
 
 import typing as t
 
@@ -17,116 +56,171 @@ from contextlib import contextmanager
 import httpx
 import anyio
 
+from searx import logger
 from searx.extended_types import SXNG_Response
-from .network import get_network, initialize, check_network_configuration  # pylint:disable=cyclic-import
+
+from .network import get_network, initialize, verify_tor_proxy_works
 from .client import get_loop
 from .raise_for_httperror import raise_for_httperror
+from .network import Network
 
-if t.TYPE_CHECKING:
-    from searx.network.network import Network
+logger = logger.getChild("network")
 
-THREADLOCAL = threading.local()
-"""Thread-local data is data for thread specific values."""
+
+class RequestDescr(dict[str, t.Any]):
+    """Request description for the multi_requests function
+
+    .. code:: python
+
+       url_list = [
+           "https://example.org?q=foo",
+           "https://example.org?q=bar",
+       ]
+       kwargs = {
+           "allow_redirects": False,
+           "headers": resp.search_params[""headers"],
+       }
+       request_list = [ RequestDescr("GET", u, **kwargs) for u in url_list ]
+       response_list = multi_requests(request_list)
+
+       for i, resp in enumerate(response_list):
+           if not isinstance(redirect_response, Exception):
+               print(f"{i} HTTP status: {resp.status}")
+    """
+
+    def __init__(self, method: str, url: str, kwargs: dict[str, t.Any]):
+        super().__init__(kwargs)
+        self["method"] = method
+        self["url"] = url
+
+
+@t.final
+class NetworkLocals(threading.local):
+    """`Thread local data`_
+
+    FIXME: document for what purpose we use these thread local data!
+
+    .. _Thread local data:
+       https://docs.python.org/3/library/threading.html#thread-local-data
+    """
+
+    def __init__(
+        self,
+        timeout: float = 0,
+        total_time: float = 0,
+        start_time: float = 0,
+        network: Network | None = None,
+    ):
+        self.timeout = timeout
+        self.total_time = total_time
+        self.start_time = start_time
+        self.network = network
+
+
+THREADLOCALS = NetworkLocals()
 
 
 def reset_time_for_thread():
-    THREADLOCAL.total_time = 0
+    """Sets thread's total time to 0."""
+    logger.debug("[%s] reset THREADLOCALS.total_time=0", threading.current_thread().name)
+    THREADLOCALS.total_time = 0
 
 
-def get_time_for_thread() -> float | None:
-    """returns thread's total time or None"""
-    return THREADLOCAL.__dict__.get('total_time')
+def get_time_for_thread() -> float:
+    """Returns thread's total time."""
+    return THREADLOCALS.total_time
 
 
-def set_timeout_for_thread(timeout: float, start_time: float | None = None):
-    THREADLOCAL.timeout = timeout
-    THREADLOCAL.start_time = start_time
+def set_timeout_for_thread(timeout: float, start_time: float):
+    logger.debug("[%s] set THREADLOCALS timeout=%s start_time=%s", timeout, start_time, threading.current_thread().name)
+    THREADLOCALS.timeout = timeout
+    THREADLOCALS.start_time = start_time
 
 
 def set_context_network_name(network_name: str):
-    THREADLOCAL.network = get_network(network_name)
+    logger.debug("[%s] set THREADLOCALS network='%s' (context)", threading.current_thread().name, network_name)
+    THREADLOCALS.network = get_network(network_name)
 
 
 def get_context_network() -> "Network":
-    """If set return thread's network.
-
-    If unset, return value from :py:obj:`get_network`.
-    """
-    return THREADLOCAL.__dict__.get('network') or get_network()
+    """Return thread's network object.  If unset, return value from
+    :py:obj:`get_network`."""
+    return THREADLOCALS.network or get_network()
 
 
-@contextmanager
-def _record_http_time():
-    # pylint: disable=too-many-branches
-    time_before_request = default_timer()
-    start_time = getattr(THREADLOCAL, 'start_time', time_before_request)
-    try:
-        yield start_time
-    finally:
-        # update total_time.
-        # See get_time_for_thread() and reset_time_for_thread()
-        if hasattr(THREADLOCAL, 'total_time'):
-            time_after_request = default_timer()
-            THREADLOCAL.total_time += time_after_request - time_before_request
+def _get_timeout(start_time: float, kwargs: RequestDescr) -> float:
 
-
-def _get_timeout(start_time: float, kwargs: t.Any) -> float:
-    # pylint: disable=too-many-branches
-
-    timeout: float | None
-    # timeout (httpx)
-    if 'timeout' in kwargs:
-        timeout = kwargs['timeout']
-    else:
-        timeout = getattr(THREADLOCAL, 'timeout', None)
-        if timeout is not None:
-            kwargs['timeout'] = timeout
-
+    timeout: float = kwargs.get("timeout") or THREADLOCALS.timeout
     # 2 minutes timeout for the requests without timeout
     timeout = timeout or 120
-
     # adjust actual timeout
     timeout += 0.2  # overhead
     if start_time:
         timeout -= default_timer() - start_time
-
     return timeout
 
 
-def request(method: str, url: str, **kwargs: t.Any) -> SXNG_Response:
-    """same as requests/requests/api.py request(...)"""
-    with _record_http_time() as start_time:
-        network = get_context_network()
-        timeout = _get_timeout(start_time, kwargs)
-        future = asyncio.run_coroutine_threadsafe(
-            network.request(method, url, **kwargs),
-            get_loop(),
+@contextmanager
+def _record_http_time():
+
+    ctx_start = default_timer()
+    try:
+        yield THREADLOCALS.start_time or ctx_start
+    finally:
+        # update total_time.
+        # See get_time_for_thread() and reset_time_for_thread()
+        ctx_end = default_timer()
+        THREADLOCALS.total_time += ctx_end - ctx_start
+
+
+def request(request_desc: RequestDescr) -> SXNG_Response:
+    """Sends an HTTP request (httpx.request_).
+
+
+    .. _httpx.request: https://www.python-httpx.org/api/#helper-functions
+    """
+
+    network = get_context_network()
+
+    with _record_http_time() as ctx_start_time:
+        request_desc["timeout"] = request_desc.get("timeout") or THREADLOCALS.timeout
+        ctx_timeout = _get_timeout(ctx_start_time, request_desc)
+        logger.debug(
+            "[%s] send HTTP request in network='%s' (context timeout: %s sec)",
+            threading.current_thread().name,
+            network.name,
+            ctx_timeout,
         )
+
+        future = asyncio.run_coroutine_threadsafe(network.call_client(**request_desc), get_loop())
         try:
-            return future.result(timeout)
+            return future.result(ctx_timeout)
         except concurrent.futures.TimeoutError as e:
             raise httpx.TimeoutException('Timeout', request=None) from e
 
 
-def multi_requests(request_list: list["Request"]) -> list[httpx.Response | Exception]:
-    """send multiple HTTP requests in parallel. Wait for all requests to finish."""
-    with _record_http_time() as start_time:
+def multi_requests(request_list: list["RequestDescr"]) -> list[SXNG_Response | Exception]:
+    """Send multiple HTTP requests in parallel. Wait for all requests to finish."""
+
+    with _record_http_time() as ctx_start_time:
         # send the requests
         network = get_context_network()
         loop = get_loop()
-        future_list = []
+        future_list: list[tuple[concurrent.futures.Future[SXNG_Response], float]] = []
+
         for request_desc in request_list:
-            timeout = _get_timeout(start_time, request_desc.kwargs)
-            future = asyncio.run_coroutine_threadsafe(
-                network.request(request_desc.method, request_desc.url, **request_desc.kwargs), loop
-            )
-            future_list.append((future, timeout))
+            request_desc["timeout"] = request_desc.get("timeout") or THREADLOCALS.timeout
+            ctx_timeout = _get_timeout(ctx_start_time, request_desc)
+            future = asyncio.run_coroutine_threadsafe(network.request(**request_desc), loop)
+            future_list.append((future, ctx_timeout))
 
         # read the responses
-        responses = []
+        responses: list[SXNG_Response | Exception] = []
         for future, timeout in future_list:
             try:
-                responses.append(future.result(timeout))
+                resp = future.result(timeout)
+                if resp:
+                    responses.append(resp)
             except concurrent.futures.TimeoutError:
                 responses.append(httpx.TimeoutException('Timeout', request=None))
             except Exception as e:  # pylint: disable=broad-except
@@ -134,74 +228,51 @@ def multi_requests(request_list: list["Request"]) -> list[httpx.Response | Excep
         return responses
 
 
-class Request(t.NamedTuple):
-    """Request description for the multi_requests function"""
-
-    method: str
-    url: str
-    kwargs: dict[str, str] = {}
-
-    @staticmethod
-    def get(url: str, **kwargs: t.Any):
-        return Request('GET', url, kwargs)
-
-    @staticmethod
-    def options(url: str, **kwargs: t.Any):
-        return Request('OPTIONS', url, kwargs)
-
-    @staticmethod
-    def head(url: str, **kwargs: t.Any):
-        return Request('HEAD', url, kwargs)
-
-    @staticmethod
-    def post(url: str, **kwargs: t.Any):
-        return Request('POST', url, kwargs)
-
-    @staticmethod
-    def put(url: str, **kwargs: t.Any):
-        return Request('PUT', url, kwargs)
-
-    @staticmethod
-    def patch(url: str, **kwargs: t.Any):
-        return Request('PATCH', url, kwargs)
-
-    @staticmethod
-    def delete(url: str, **kwargs: t.Any):
-        return Request('DELETE', url, kwargs)
-
-
 def get(url: str, **kwargs: t.Any) -> SXNG_Response:
-    kwargs.setdefault('allow_redirects', True)
-    return request('get', url, **kwargs)
+    """HTTP GET :py:obj:`request`"""
+    return request(RequestDescr("get", url, kwargs))
 
 
 def options(url: str, **kwargs: t.Any) -> SXNG_Response:
-    kwargs.setdefault('allow_redirects', True)
-    return request('options', url, **kwargs)
+    """HTTP OPTIONS :py:obj:`request`"""
+    return request(RequestDescr("options", url, kwargs))
 
 
 def head(url: str, **kwargs: t.Any) -> SXNG_Response:
-    kwargs.setdefault('allow_redirects', False)
-    return request('head', url, **kwargs)
+    """HTTP HEAD :py:obj:`request`"""
+    return request(RequestDescr("head", url, kwargs))
 
 
-def post(url: str, data: dict[str, t.Any] | None = None, **kwargs: t.Any) -> SXNG_Response:
-    return request('post', url, data=data, **kwargs)
+def post(url: str, **kwargs: t.Any) -> SXNG_Response:
+    """HTTP POST :py:obj:`request`"""
+    return request(RequestDescr("post", url, kwargs))
 
 
-def put(url: str, data: dict[str, t.Any] | None = None, **kwargs: t.Any) -> SXNG_Response:
-    return request('put', url, data=data, **kwargs)
+def put(url: str, **kwargs: t.Any) -> SXNG_Response:
+    """HTTP PUT :py:obj:`request`"""
+    return request(RequestDescr("put", url, kwargs))
 
 
-def patch(url: str, data: dict[str, t.Any] | None = None, **kwargs: t.Any) -> SXNG_Response:
-    return request('patch', url, data=data, **kwargs)
+def patch(url: str, **kwargs: t.Any) -> SXNG_Response:
+    """HTTP PATCH :py:obj:`request`"""
+    return request(RequestDescr("patch", url, kwargs))
 
 
 def delete(url: str, **kwargs: t.Any) -> SXNG_Response:
-    return request('delete', url, **kwargs)
+    """HTTP DELETE :py:obj:`request`"""
+    return request(RequestDescr("delete", url, kwargs))
 
 
-async def stream_chunk_to_queue(network, queue, method: str, url: str, **kwargs: t.Any):
+#  XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+
+async def stream_chunk_to_queue(
+    network: "Network",
+    queue: SimpleQueue[httpx.Response | bytes | Exception | None],
+    method: str,
+    url: str,
+    **kwargs: t.Any,
+):
     try:
         async with await network.stream(method, url, **kwargs) as response:
             queue.put(response)
@@ -228,9 +299,18 @@ async def stream_chunk_to_queue(network, queue, method: str, url: str, **kwargs:
 
 
 def _stream_generator(method: str, url: str, **kwargs: t.Any):
-    queue = SimpleQueue()
+    queue: SimpleQueue[httpx.Response | bytes | Exception | None] = SimpleQueue()
     network = get_context_network()
-    future = asyncio.run_coroutine_threadsafe(stream_chunk_to_queue(network, queue, method, url, **kwargs), get_loop())
+    future = asyncio.run_coroutine_threadsafe(
+        stream_chunk_to_queue(
+            network,
+            queue,
+            method,
+            url,
+            **kwargs,
+        ),
+        get_loop(),
+    )
 
     # yield chunks
     obj_or_exception = queue.get()
@@ -242,17 +322,17 @@ def _stream_generator(method: str, url: str, **kwargs: t.Any):
     future.result()
 
 
-def _close_response_method(self):
-    asyncio.run_coroutine_threadsafe(self.aclose(), get_loop())
+def _close_response_method(resp: httpx.Response) -> None:
+    asyncio.run_coroutine_threadsafe(resp.aclose(), get_loop())
     # reach the end of _self.generator ( _stream_generator ) to an avoid memory leak.
     # it makes sure that :
     # * the httpx response is closed (see the stream_chunk_to_queue function)
     # * to call future.result() in _stream_generator
-    for _ in self._generator:  # pylint: disable=protected-access
+    for _ in resp._generator:  # pylint: disable=protected-access
         continue
 
 
-def stream(method: str, url: str, **kwargs: t.Any) -> tuple[SXNG_Response, Iterable[bytes]]:
+def stream(method: str, url: str, **kwargs: t.Any) -> tuple[httpx.Response, Iterable[bytes]]:
     """Replace httpx.stream.
 
     Usage:
@@ -265,8 +345,13 @@ def stream(method: str, url: str, **kwargs: t.Any) -> tuple[SXNG_Response, Itera
     """
     generator = _stream_generator(method, url, **kwargs)
 
+    # FIXME
+    import pdb
+
+    pdb.set_trace()
+
     # yield response
-    response = next(generator)  # pylint: disable=stop-iteration-return
+    response: httpx.Response = next(generator)  # pylint: disable=stop-iteration-return
     if isinstance(response, Exception):
         raise response
 

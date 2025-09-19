@@ -12,11 +12,13 @@ The script :origin:`searxng_extra/update/update_engine_traits.py` is called in
 the :origin:`CI Update data ... <.github/workflows/data-update.yml>`
 
 """
-
 # pylint: disable=invalid-name
+
 from unicodedata import lookup
 from pathlib import Path
 from pprint import pformat
+from timeit import default_timer
+
 import babel
 
 from searx import settings, searx_dir
@@ -93,9 +95,9 @@ def main():
 
 def fetch_traits_map():
     """Fetches supported languages for each engine and writes json file with those."""
-    network.set_timeout_for_thread(10.0)
+    network.set_timeout_for_thread(10.0, default_timer())
 
-    def log(msg):
+    def log(msg: str):
         print(msg)
 
     traits_map = EngineTraitsMap.fetch_traits(log=log)

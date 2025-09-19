@@ -13,6 +13,7 @@ import json
 from urllib.parse import urlparse
 from os.path import join
 
+from timeit import default_timer
 from lxml.html import fromstring
 
 from searx.engines import wikidata, set_loggers
@@ -207,7 +208,7 @@ def initialize():
 
 def fetch_wikidata_descriptions():
     print('Fetching wikidata descriptions')
-    searx.network.set_timeout_for_thread(60)
+    searx.network.set_timeout_for_thread(60, default_timer())
     result = wikidata.send_wikidata_query(
         SPARQL_DESCRIPTION.replace('%IDS%', IDS).replace('%LANGUAGES_SPARQL%', LANGUAGES_SPARQL)
     )
