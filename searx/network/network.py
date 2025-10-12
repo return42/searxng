@@ -35,6 +35,17 @@ from .raise_for_httperror import raise_for_httperror
 if t.TYPE_CHECKING:
     import ssl
 
+# OutgoingProxiesType is a dict::
+#     proxies:
+#       all://:  # <ProxyPatternType> : <ProxyURLsType>
+#         - http://proxy1:8080
+#         - http://proxy2:8080
+# or a str::
+#     proxies: http://proxy1:8080
+OutgoingProxiesType: t.TypeAlias = str | dict[str, str]
+ProxyPatternType: t.TypeAlias = str
+ProxyURLsType: t.TypeAlias = list[str]
+
 logger = logger.getChild("network")
 
 UNSET = object()
@@ -108,7 +119,7 @@ class Network:
 
     """
 
-    _TOR_CHECK_RESULT = {}
+    _TOR_CHECK_RESULT: dict[tuple[str, str | None] | None, bool] = {}
     _SEND_ARG_NAMES: list[str] = ["stream", "auth"]
     _REQUEST_ARG_NAMES: list[str] = [
         "method",
@@ -134,7 +145,7 @@ class Network:
         "max_connections": "outgoing.pool_connections",
         "max_keepalive_connections": "outgoing.pool_maxsize",
         "max_redirects": "outgoing.max_redirects",
-        "proxies": "outgoing.proxies",
+        "proxies": "outgoing.proxies",  # OutgoingProxiesType
         "retries": "outgoing.retries",
         "using_tor_proxy": "outgoing.using_tor_proxy",
         "verify": "outgoing.verify",
@@ -164,7 +175,7 @@ class Network:
         max_connections: int | None = None,
         max_keepalive_connections: int | None = None,
         keepalive_expiry: float | None = None,
-        proxies: str | dict[str, str] | None = None,
+        proxies: OutgoingProxiesType | None = None,
         using_tor_proxy: bool = False,
         local_addresses: str | list[str] | None = None,
         retries: int = 0,
@@ -257,7 +268,7 @@ class Network:
             else:
                 ipaddress.ip_address(address)
 
-        if self.proxies is not None and not isinstance(self.proxies, (str, dict)):
+        if self.proxies is not None and not isinstance(self.proxies, (str, dict)):  # OutgoingProxiesType
             raise ValueError("proxies type has to be str, dict or None")
 
     def iter_local_addresses(self) -> Generator[str]:
@@ -268,11 +279,9 @@ class Network:
             local_addresses = [local_addresses]
         yield from local_addresses
 
-    def iter_proxies(self) -> Generator[tuple[str, list[str]]]:
+    def iter_proxies(self) -> Generator[tuple[ProxyPatternType, ProxyURLsType]]:
         if not self.proxies:
             return
-        pattern: str
-        proxy_urls: list[str] | str
 
         # https://www.python-httpx.org/compatibility/#proxy-keys
         if isinstance(self.proxies, str):
@@ -304,6 +313,10 @@ class Network:
 
     def _proxies_cycle_generator(self) -> Generator[tuple[str, str | None] | None]:
         proxy_settings: dict[str, itertools.cycle[str]] = {}
+
+        pattern: ProxyPatternType
+        proxy_urls: ProxyURLsType
+
         for pattern, proxy_urls in self.iter_proxies():
             proxy_url_cycle = itertools.cycle(proxy_urls)
             proxy_settings[pattern] = proxy_url_cycle
@@ -323,8 +336,6 @@ class Network:
         content_type = response.headers.get("Content-Type", "")
         content_type = f" ({content_type})" if content_type else ""
         self.log.debug(f"HTTP Request: {request.method} {request.url} '{response_line}'{content_type}")
-
-    XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx
 
     @staticmethod
     async def check_tor_proxy(client: httpx.AsyncClient, proxies: tuple[str, str | None] | None) -> bool:
@@ -351,6 +362,8 @@ class Network:
             result = False
         Network._TOR_CHECK_RESULT[proxies] = result
         return result
+
+    XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx
 
     async def get_client(self, kwargs: ClientArgs) -> httpx.AsyncClient:
         verify = kwargs.get("verify", self.verify)
