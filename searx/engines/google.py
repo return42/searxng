@@ -11,6 +11,58 @@ engines:
 
 """
 
+# https://policies.google.com/technologies/cookies
+
+# _Secure-ENID
+# ------------
+# most people who use Google services have a cookie called ‘NID’ or
+# ‘_Secure-ENID’ in their browsers, depending on their cookie choices. These
+# cookies are used to remember your preferences and other information, such as
+# your preferred language, how many results you prefer to have shown on a search
+# results page (for example, 10 or 20), and whether you want to have Google’s
+# SafeSearch filter turned on.
+#
+# Each ‘NID’ cookie expires 6 months from a user’s last use, while the
+# ‘_Secure-ENID’ cookie lasts for 13 months. Cookies called ‘VISITOR_INFO1_LIVE’
+# and ‘__Secure-YEC’ serve a similar purpose for YouTube and are also used to
+# detect and resolve problems with the service. These cookies last for 6 months
+# and for 13 months, respectively.
+# ..
+# Google services also use ‘NID’ and ‘_Secure-ENID’ cookies on Google Search,
+# and ‘VISITOR_INFO1_LIVE’ and ‘__Secure-YEC’ cookies on YouTube, for
+# analytics. Google mobile apps may also use unique identifiers, such as the
+# ‘Google Usage ID’, for analytics.
+#
+# CGIC
+# ----
+# Cookies and similar technologies may also be used to improve the performance
+# of Google services. For example, the ‘CGIC’ cookie improves the delivery of
+# search results by autocompleting search queries based on a user’s initial
+# input. This cookie lasts for 6 months.
+#
+# SID, HSID
+# ---------
+# For example, cookies called ‘SID’ and ‘HSID’ contain digitally signed and
+# encrypted records of a user’s Google Account ID and most recent sign-in
+# time. The combination of these cookies allows Google to block many types of
+# attack, such as attempts to steal the content of forms submitted in Google
+# services. These cookies last for 2 years.
+#
+# pm_sess, YSC, __Secure-YEC
+# --------------------------
+# Some cookies and similar technologies are used to detect spam, fraud, and
+# abuse. For example, the ‘pm_sess’ and ‘YSC’ cookies ensure that requests
+# within a browsing session are made by the user, and not by other sites. These
+# cookies prevent malicious sites from acting on behalf of a user without that
+# user’s knowledge. The ‘pm_sess’ cookie lasts for 30 minutes, while the ‘YSC’
+# cookie lasts for the duration of a user’s browsing session. The ‘__Secure-YEC’
+# and ‘AEC’ cookies are used to detect spam, fraud, and abuse to help ensure
+# advertisers are not incorrectly charged for fraudulent or otherwise invalid
+# impressions or interactions with ads, and that YouTube creators in the YouTube
+# Partner Program are remunerated fairly. The ‘AEC’ cookie lasts for 6 months
+# and the ‘__Secure-YEC’ cookie lasts for 13 months.
+
+
 import typing as t
 
 import re
@@ -25,7 +77,7 @@ import babel.languages
 
 from searx.utils import extract_text, eval_xpath, eval_xpath_list, eval_xpath_getindex
 from searx.locales import language_tag, region_tag, get_official_locales
-from searx.network import get  # see https://github.com/searxng/searxng/issues/762
+from searx.network import get, post  # see https://github.com/searxng/searxng/issues/762
 from searx.exceptions import SearxEngineCaptchaException
 from searx.enginelib.traits import EngineTraits
 from searx.result_types import EngineResults
@@ -279,6 +331,29 @@ def detect_google_sorry(resp):
 
 def request(query: str, params: "OnlineParams") -> None:
     """Google search request"""
+
+    # /////////////
+    google_base_url = f"https://www.google.com"
+    resp = get(google_base_url)
+
+    send_cookies = {}
+    for name, value in resp.cookies.items():
+        send_cookies[name] = value
+        logger.debug(f"XXXX {google_base_url} cookie: {name} : {value}")
+
+    url2 = "https://consent.google.com/save?continue=https://www.google.com/&gl=DE&m=0&pc=shp&x=5&src=2&hl=&bl=gws_20251015-0_RC1&uxe=none&cm=2&set_eom=true"
+    resp2 = post(url=url2, cookies=send_cookies)
+
+    for name, value in resp2.cookies.items():
+        send_cookies[name] = value
+        logger.debug(f"XXXX https://consent.google.com/save? cookie: {name} : {value}")
+
+    send_cookies["SOCS"] = "CAISAiAD"
+    send_cookies["CONSENT"] = "YES+"
+    params["cookies"] = send_cookies
+    # params['cookies'] = google_info['cookies']
+    # /////////////
+
     # pylint: disable=line-too-long
     start = (params['pageno'] - 1) * 10
     str_async = ui_async(start)
@@ -287,8 +362,7 @@ def request(query: str, params: "OnlineParams") -> None:
 
     # https://www.google.de/search?q=corona&hl=de&lr=lang_de&start=0&tbs=qdr%3Ad&safe=medium
     query_url = (
-        'https://'
-        + google_info['subdomain']
+        google_base_url
         + '/search'
         + "?"
         + urlencode(
@@ -318,9 +392,10 @@ def request(query: str, params: "OnlineParams") -> None:
     if params['safesearch']:
         query_url += '&' + urlencode({'safe': filter_mapping[params['safesearch']]})
     params['url'] = query_url
-
-    params['cookies'] = google_info['cookies']
     params['headers'].update(google_info['headers'])
+
+    for n,v in params.items():
+        logger.debug(f"XXX param {n}: {v}")
 
 
 # =26;[3,"dimg_ZNMiZPCqE4apxc8P3a2tuAQ_137"]a87;data:image/jpeg;base64,/9j/4AAQSkZJRgABA
@@ -346,6 +421,9 @@ def parse_data_images(text: str):
 
 def response(resp: "SXNG_Response"):
     """Get response from google's search request"""
+
+    logger.debug("XXXX search resp.text: %s", resp.text)
+
     # pylint: disable=too-many-branches, too-many-statements
     detect_google_sorry(resp)
     data_image_map = parse_data_images(resp.text)
