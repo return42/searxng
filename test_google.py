@@ -102,6 +102,7 @@ def test_google():
     for name, value in resp_intro.cookies.items():
         send_cookies[name] = value
         print(f"INTRO COOKIE '{name}' : '{value}'")
+
     consent_url = re.search(r'<a href="(https://consent.google.com.*?)"', resp_intro.text)
     if not consent_url:
         print("ERROR: missing CONSENT URL")
@@ -114,8 +115,8 @@ def test_google():
     # for name, value in params.items():
     #     print(f"CONSENT FORM FIELD: '{name}' : '{value}'")
 
-    consent_url = "https://consent.google.com/save" #######  + consent_url[consent_url.index("?"):]
-    print(f"CONSENT URL: {consent_url}")
+    #consent_url = "https://consent.google.com/save" #######  + consent_url[consent_url.index("?"):]
+    #print(f"CONSENT URL: {consent_url}")
 
     resp_consent = httpx.post(consent_url, headers=headers, data=send_cookies, cookies=send_cookies)
     print(f"CONSENT response: {resp_consent}")
