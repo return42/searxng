@@ -23,6 +23,7 @@ import babel
 import babel.core
 import babel.languages
 
+from searx.enginelib.sessions import SIDECAR_URL
 from searx.utils import extract_text, eval_xpath, eval_xpath_list, eval_xpath_getindex
 from searx.locales import language_tag, region_tag, get_official_locales
 from searx.network import get  # see https://github.com/searxng/searxng/issues/762
@@ -269,6 +270,26 @@ def get_google_info(params: "OnlineParams", eng_traits: EngineTraits) -> dict[st
     # - https://github.com/searxng/searxng/issues/1555
     ret_val['cookies']['CONSENT'] = "YES+"
 
+    try:
+        # [POC] session cookies from SideCar [POC]
+        # pylint: disable=line-too-long, import-outside-toplevel
+        from searx.enginelib.sessions import Google, SideCarJob
+
+        job: SideCarJob = Google.from_request(SIDECAR_URL, n=1, timeout=5)
+        for msg in job.messages:
+            logger.error(f"[POC ({job.name})] {msg}")
+        if job.ok:
+            # ret_val["cookies"].update(job.sessions[0].cookies_as_dict)
+            ret_val["cookies"]["__Secure-ENID"] = job.sessions[0].cookies_as_dict["__Secure-ENID"]
+            # ret_val["cookies"]["__Secure-ENID"] = (
+            #     "29.SE=lCLDwZ_akyXJQuWHnN2yBcX-dW4ynnOC5TB6LNPRkn2CdDOAmfpto-zWuoLAXl9E96DmTUKVBQ8yAZxMcCGJRcmUqwsBGFFnsvBoVmmWyLBSBqyUNk3OeZ2WXG8MqL-aKlMSBMy78lnTpPWyNs3RljVEP9EFcLGu6rJ2Zdg4g-BWcg98xn7aM9QwCQrtiJmwPJkAQ8LFrJNJTGbTJqfm2Tk5OapV4BFTCbHbNAzSeQ"
+            #     ""
+            # )
+            logger.debug(f"[POC ({job.name})] used session cookies: {ret_val['cookies']}")
+
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning(f"request Google session data from {SIDECAR_URL} fails: {exc}")
+
     return ret_val
 
 
@@ -321,6 +342,7 @@ def request(query: str, params: "OnlineParams") -> None:
 
     params['cookies'] = google_info['cookies']
     params['headers'].update(google_info['headers'])
+    logger.error(f"params['cookies']: {params['cookies']}")  # FIXME
 
 
 # =26;[3,"dimg_ZNMiZPCqE4apxc8P3a2tuAQ_137"]a87;data:image/jpeg;base64,/9j/4AAQSkZJRgABA

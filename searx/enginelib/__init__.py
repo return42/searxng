@@ -111,8 +111,8 @@ class EngineCache:
     For introspection of the DB, jump into developer environment and run command to
     show cache state::
 
-        $ ./manage pyenv.cmd bash --norc --noprofile
-        (py3) python -m searx.enginelib cache state
+        $ ./manage dev.env
+        (dev.env)$ python -m searx.enginelib cache state
 
         cache tables and key/values
         ===========================
