@@ -5,6 +5,7 @@ import typing as t
 
 if t.TYPE_CHECKING:
     from lxml.etree import XPath
+    from searx.sidecar_pkg.types import SessionType
 
 
 class SearxException(Exception):
@@ -83,6 +84,16 @@ class SearxEngineAccessDeniedException(SearxEngineResponseException):
         from searx import get_setting  # pylint: disable=C0415
 
         return get_setting(self.SUSPEND_TIME_SETTING)
+
+
+class WebSessionRequired(SearxEngineAccessDeniedException):
+    """Exception to raise when an engine requires a WebSession and none for this
+    ``session_type`` exists."""
+
+    def __init__(self, suspended_time: int, session_type: "SessionType"):
+        self.message: str = f"require session_type: {session_type}"
+        self.suspended_time: int = suspended_time
+        super().__init__(suspended_time=suspended_time, message=self.message)
 
 
 class SearxEngineCaptchaException(SearxEngineAccessDeniedException):

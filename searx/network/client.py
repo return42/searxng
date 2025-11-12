@@ -196,10 +196,10 @@ def new_client(
             mounts[pattern] = httpx_curl_cffi.AsyncCurlTransport(
                 impersonate=impersonate,
                 default_headers=True,
-                # required for parallel requests, see curl_cffi issues below
+                # required for parallel requests https://github.com/lexiforest/curl_cffi/issues/302
                 curl_options={httpx_curl_cffi.CurlOpt.FRESH_CONNECT: True},
                 http_version=(
-                    httpx_curl_cffi.CurlHttpVersion.V3 if enable_http2 else httpx_curl_cffi.CurlHttpVersion.V1_1
+                    httpx_curl_cffi.CurlHttpVersion.V2_0 if enable_http2 else httpx_curl_cffi.CurlHttpVersion.V1_1
                 ),
                 proxy=proxy_url,
                 local_address=local_address,
@@ -221,11 +221,14 @@ def new_client(
         transport = httpx_curl_cffi.AsyncCurlTransport(
             impersonate=impersonate,
             default_headers=True,
-            # required for parallel requests, see curl_cffi issues below
+            # required for parallel requests https://github.com/lexiforest/curl_cffi/issues/302
             curl_options={httpx_curl_cffi.CurlOpt.FRESH_CONNECT: True},
-            http_version=httpx_curl_cffi.CurlHttpVersion.V3 if enable_http2 else httpx_curl_cffi.CurlHttpVersion.V1_1,
+            # For http/3 impersonation and http/3 proxy support impersonate.pro is required
+            # https://curl-cffi.readthedocs.io/en/latest/impersonate/fingerprint.html#http-3
+            http_version=httpx_curl_cffi.CurlHttpVersion.V2_0 if enable_http2 else httpx_curl_cffi.CurlHttpVersion.V1_1,
             local_address=local_address,
         )
+
     else:
         logger.debug("transport layer for this client is httpx.AsyncHTTPTransport")
         transport = get_transport(verify, enable_http2, local_address, None, limit, retries)

@@ -60,6 +60,18 @@ TypeDefinition: t.TypeAlias = (  # pylint: disable=invalid-name
 TypeDefinitionArg: t.TypeAlias = type | TypeDefinition  # pylint: disable=invalid-name
 
 
+class SettingsSidecar(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
+    """Options for configuring SideCar's properties.
+
+    .. code:: yaml
+
+       sidecar:
+         auth_tokens: ["lorem42", "ipsum42"]
+    """
+
+    auth_tokens: list[str] = []
+
+
 class SettingsValue:
     """Check and update a setting value"""
 
@@ -187,6 +199,7 @@ SCHEMA: dict[str, t.Any] = {
         'open_metrics': SettingsValue(str, ''),
     },
     'brand': SettingsBrand,
+    "sidecar": SettingsSidecar,
     'search': {
         'safe_search': SettingsValue((0, 1, 2), 0),
         'autocomplete': SettingsValue(str, ''),
