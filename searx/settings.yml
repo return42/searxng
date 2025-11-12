@@ -29,6 +29,9 @@ brand:
   #     Uptime: https://uptime.searxng.org/history/darmarit-org
   #     About: "https://searxng.org"
 
+sidecar:
+  auth_tokens: []
+
 search:
   # Filter results. 0: None, 1: Moderate, 2: Strict
   safe_search: 0
@@ -194,6 +197,8 @@ outgoing:
   #   https://2.python-requests.org/en/latest/user/advanced/#proxies
   # are also supported: see
   #   https://2.python-requests.org/en/latest/user/advanced/#socks
+  #
+  #  proxies: socks5://127.0.0.1:8080
   #
   #  proxies:
   #    all://:

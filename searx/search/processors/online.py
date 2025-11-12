@@ -168,6 +168,31 @@ class OnlineProcessor(EngineProcessor):
 
     def _send_http_request(self, params: OnlineParams):
 
+        # Each HTTP header field consists of a name followed by a colon (":")
+        # and the field value.  Field names are case-insensitive
+        # - https://www.rfc-editor.org/rfc/rfc2616.html#section-4.2
+        #
+        # Convert HTTP headers to lowercase to avoid unwanted duplicates due to
+        # case sensitivity.  Example for a ambiguous User-Agent header::
+        #
+        # >>> params["headers"]
+        # {'User-Agent': 'SearXNG', ..  'user-agent': 'robot'}
+
+        _headers: dict[str, t.Any] = {}
+        for k, v in params["headers"].items():
+            name = k.lower()
+            if name in _headers:
+                # Report ambiguous headers / do we have such issues and need to
+                # fix the engine implementation?
+                self.logger.error(
+                    "engine %s - duplicate HTTP header: %s differs only in its capitalization: %s",
+                    self.engine.name,
+                    k,
+                    params["headers"],
+                )
+            _headers[name] = v
+        params["headers"] = _headers
+
         # create dictionary which contain all information about the request
         request_args: dict[str, t.Any] = {
             "headers": params["headers"],

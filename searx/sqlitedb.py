@@ -241,7 +241,7 @@ class SQLiteAppl(abc.ABC):
         """
         if sys.version_info < (3, 12):
             # Prior Python 3.12 there is no "autocommit" option
-            self.SQLITE_CONNECT_ARGS.pop("autocommit", None)  # pyright: ignore[reportUnreachable]
+            self.SQLITE_CONNECT_ARGS.pop("autocommit", None)
 
         msg = (
             f"[{threading.current_thread().ident}] {self.__class__.__name__}({self.db_url})"
@@ -339,7 +339,9 @@ class SQLiteAppl(abc.ABC):
         else:
             ver = int(ver)
             if ver != self.DB_SCHEMA:
-                raise sqlite3.DatabaseError("Expected DB schema v%s, DB schema is v%s" % (self.DB_SCHEMA, ver))
+                raise sqlite3.DatabaseError(
+                    "Expected DB schema v%s, DB schema is v%s (delete %s)" % (self.DB_SCHEMA, ver, self.db_url)
+                )
             logger.debug("DB_SCHEMA = %s", ver)
 
         return True
