@@ -38,16 +38,17 @@ Implementations
 ===============
 
 """
+import typing as t
 
 from datetime import (
     datetime,
     timedelta,
 )
-from json import loads
 from urllib.parse import urlencode
-from flask_babel import gettext
+from flask_babel import gettext  # type: ignore
 import babel
 import lxml
+import lxml.html
 
 from searx.exceptions import (
     SearxEngineAPIException,
@@ -64,8 +65,14 @@ from searx.utils import (
     extract_text,
     get_embeded_stream_url,
 )
+from searx import sidecar
+from searx.result_types import EngineResults
 
-# about
+if t.TYPE_CHECKING:
+    from searx.extended_types import SXNG_Response
+    from searx.search.processors import OnlineParams
+    from searx.sidecar_pkg.types import SessionType
+
 about = {
     "website": 'https://www.qwant.com/',
     "wikidata_id": 'Q14657870',
@@ -85,7 +92,7 @@ redirect"""
 # Otherwise Qwant will return 403 if not set
 send_accept_language_header = True
 
-qwant_categ = None
+qwant_categ: str = None  # type: ignore
 """One of ``web-lite`` (or ``web``), ``news``, ``images`` or ``videos``"""
 
 safesearch = True
@@ -109,18 +116,35 @@ api_url = 'https://api.qwant.com/v3/search/'
 web_lite_url = 'https://lite.qwant.com/'
 """URL of Qwant-Lite (HTML)"""
 
+session_type: "SessionType" = "qwant.com"
+"""Type of the WEB session / see :py:obj:`searx.sidecar_pkg`."""
 
-def request(query, params):
+
+def request(query: str, params: "OnlineParams") -> None:
     """Qwant search request"""
 
     if not query:
-        return None
+        return
+
+    session = sidecar.CACHE.session_get(session_type=session_type)
+    if session:
+        header_names = ["user-agent"]
+
+        session.upd_headers(params["headers"], names=header_names)
+        logger.debug("headers %s updated from WebSession: %s", header_names, params["headers"])
+        session.upd_cookies(params["cookies"])
+        logger.debug("cookies updated from WebSession: %s", params["cookies"])
+
+    # ToDo: a valid datadome cookie is needed!!!
+    # params["cookies"]["datadome"] = "ybRF20foRgGb ... Vm_Rd3wF"
 
     q_locale = traits.get_region(params["searxng_locale"], default='en_US')
 
     url = api_url + f'{qwant_categ}?'
-    args = {'q': query}
+    args: dict[str, t.Any] = {'q': query}
     params['raise_for_httperror'] = False
+
+    # ToDo do we need some form data from the WebSession?
 
     if qwant_categ == 'web-lite':
 
@@ -151,46 +175,43 @@ def request(query, params):
 
     params['url'] = url + urlencode(args)
 
-    return params
 
-
-def response(resp):
+def response(resp: "SXNG_Response") -> EngineResults:
 
     if qwant_categ == 'web-lite':
         return parse_web_lite(resp)
     return parse_web_api(resp)
 
 
-def parse_web_lite(resp):
+def parse_web_lite(resp: "SXNG_Response") -> EngineResults:
     """Parse results from Qwant-Lite"""
 
-    results = []
+    res = EngineResults()
     dom = lxml.html.fromstring(resp.text)
 
     for item in eval_xpath_list(dom, '//section/article'):
         if eval_xpath(item, "./span[contains(@class, 'tooltip')]"):
             # ignore randomly interspersed advertising adds
             continue
-        results.append(
-            {
-                'url': extract_text(eval_xpath(item, "./span[contains(@class, 'url partner')]")),
-                'title': extract_text(eval_xpath(item, './h2/a')),
-                'content': extract_text(eval_xpath(item, './p')),
-            }
+        res.add(
+            res.types.MainResult(
+                url=extract_text(eval_xpath(item, "./span[contains(@class, 'url partner')]")),
+                title=extract_text(eval_xpath(item, './h2/a')) or "",
+                content=extract_text(eval_xpath(item, './p')) or "",
+            )
         )
+    return res
 
-    return results
 
-
-def parse_web_api(resp):
+def parse_web_api(resp: "SXNG_Response") -> EngineResults:
     """Parse results from Qwant's API"""
     # pylint: disable=too-many-locals, too-many-branches, too-many-statements
 
-    results = []
+    res = EngineResults()
 
     # Try to load JSON result
     try:
-        search_results = loads(resp.text)
+        search_results: dict[str, t.Any] = resp.json()
     except ValueError:
         search_results = {}
 
@@ -227,7 +248,7 @@ def parse_web_api(resp):
 
     # return empty array if there are no results
     if not mainline:
-        return []
+        return res
 
     for row in mainline:
         mainline_type = row.get('type', 'web')
@@ -238,53 +259,54 @@ def parse_web_api(resp):
             # ignore adds
             continue
 
-        mainline_items = row.get('items', [])
+        mainline_items: list[dict[str, str]] = row.get('items', [])  # type: ignore[reportAssignmentType]
         for item in mainline_items:
 
-            title = item.get('title', None)
-            res_url = item.get('url', None)
+            title: str = item.get('title', "")
+            res_url: str = item.get('url', "")
 
             if mainline_type == 'web':
-                content = item['desc']
-                results.append(
-                    {
-                        'title': title,
-                        'url': res_url,
-                        'content': content,
-                    }
+                res.add(
+                    res.types.MainResult(
+                        url=res_url,
+                        title=title,
+                        content=item['desc'],
+                    )
                 )
 
             elif mainline_type == 'news':
 
-                pub_date = item['date']
+                pub_date = item['date']  # type: ignore[reportAssignmentType]
                 if pub_date is not None:
-                    pub_date = datetime.fromtimestamp(pub_date)
+                    pub_date = datetime.fromtimestamp(pub_date)  # type: ignore
                 news_media = item.get('media', [])
                 thumbnail = None
                 if news_media:
-                    thumbnail = news_media[0].get('pict', {}).get('url', None)
-                results.append(
-                    {
-                        'title': title,
-                        'url': res_url,
-                        'publishedDate': pub_date,
-                        'thumbnail': thumbnail,
-                    }
+                    thumbnail = news_media[0].get('pict', {}).get('url')  # type: ignore
+
+                res.add(
+                    res.types.MainResult(
+                        url=res_url,
+                        title=title,
+                        publishedDate=pub_date,
+                        thumbnail=thumbnail,  # type: ignore
+                    )
                 )
 
             elif mainline_type == 'images':
                 thumbnail = item['thumbnail']
                 img_src = item['media']
-                results.append(
-                    {
-                        'title': title,
-                        'url': res_url,
-                        'template': 'images.html',
-                        'thumbnail_src': thumbnail,
-                        'img_src': img_src,
-                        'resolution': f"{item['width']} x {item['height']}",
-                        'img_format': item.get('thumb_type'),
-                    }
+
+                res.add(
+                    res.types.LegacyResult(
+                        title=title,
+                        url=res_url,
+                        template="images.html",
+                        thumbnail_src=thumbnail,
+                        img_src=img_src,
+                        resolution=f"{item['width']} x {item['height']}",
+                        img_format=item.get('thumb_type'),
+                    )
                 )
 
             elif mainline_type == 'videos':
@@ -292,7 +314,7 @@ def parse_web_api(resp):
                 # returns an empty string, such video from a qwant-web query
                 # miss the 'desc' key.
                 d, s, c = item.get('desc'), item.get('source'), item.get('channel')
-                content_parts = []
+                content_parts: list[str] = []
                 if d:
                     content_parts.append(d)
                 if s:
@@ -300,45 +322,47 @@ def parse_web_api(resp):
                 if c:
                     content_parts.append("%s: %s " % (gettext("Channel"), c))
                 content = ' // '.join(content_parts)
-                length = item['duration']
-                if length is not None:
-                    length = timedelta(milliseconds=length)
-                pub_date = item['date']
-                if pub_date is not None:
-                    pub_date = datetime.fromtimestamp(pub_date)
+                length: timedelta | None = None
+                if item.get("duration") is not None:
+                    length = timedelta(milliseconds=item['duration'])  # type: ignore
+                pub_date: datetime | None = None
+                if item.get("date") is not None:
+                    pub_date = datetime.fromtimestamp(item['date'])  # type: ignore
                 thumbnail = item['thumbnail']
                 # from some locations (DE and others?) the s2 link do
                 # response a 'Please wait ..' but does not deliver the thumbnail
                 thumbnail = thumbnail.replace('https://s2.qwant.com', 'https://s1.qwant.com', 1)
-                results.append(
-                    {
-                        'title': title,
-                        'url': res_url,
-                        'content': content,
-                        'iframe_src': get_embeded_stream_url(res_url),
-                        'publishedDate': pub_date,
-                        'thumbnail': thumbnail,
-                        'template': 'videos.html',
-                        'length': length,
-                    }
+                res.add(
+                    res.types.LegacyResult(
+                        title=title,
+                        url=res_url,
+                        content=content,
+                        iframe_src=get_embeded_stream_url(res_url),
+                        publishedDate=pub_date,
+                        thumbnail=thumbnail,
+                        template="videos.html",
+                        length=length,
+                    )
                 )
 
-    return results
+    return res
 
 
 def fetch_traits(engine_traits: EngineTraits):
 
     # pylint: disable=import-outside-toplevel
+    from json import loads
+
     from searx import network
     from searx.locales import region_tag
     from searx.utils import extr
 
-    resp = network.get(about['website'])
+    resp = network.get(about['website'])  # type: ignore[reportArgumentType]
     json_string = extr(resp.text, 'INITIAL_PROPS = ', '</script>')
 
     q_initial_props = loads(json_string)
     q_locales = q_initial_props.get('locales')
-    eng_tag_list = set()
+    eng_tag_list: set[str] = set()
 
     for country, v in q_locales.items():
         for lang in v['langs']:
