@@ -21,18 +21,20 @@ from urllib.parse import urlencode
 from lxml import html
 import babel
 import babel.core
-import babel.languages
 
 from searx.utils import extract_text, eval_xpath, eval_xpath_list, eval_xpath_getindex
 from searx.locales import language_tag, region_tag, get_official_locales
 from searx.network import get  # see https://github.com/searxng/searxng/issues/762
-from searx.exceptions import SearxEngineCaptchaException
+from searx.exceptions import SearxEngineCaptchaException, WebSessionRequired
 from searx.enginelib.traits import EngineTraits
 from searx.result_types import EngineResults
+from searx import sidecar
 
 if t.TYPE_CHECKING:
     from searx.extended_types import SXNG_Response
     from searx.search.processors import OnlineParams
+    from searx.sidecar_pkg.types import SessionType
+    from searx.sidecar_pkg.web_session import WebSession
 
 about = {
     "website": 'https://www.google.com',
@@ -46,15 +48,19 @@ about = {
 # engine dependent config
 categories = ['general', 'web']
 paging = True
+safesearch = True
+
+time_range_support = True
+time_range_dict = {'day': 'd', 'week': 'w', 'month': 'm', 'year': 'y'}
+
 max_page = 50
 """`Google max 50 pages`_
 
 .. _Google max 50 pages: https://github.com/searxng/searxng/issues/2982
 """
-time_range_support = True
-safesearch = True
 
-time_range_dict = {'day': 'd', 'week': 'w', 'month': 'm', 'year': 'y'}
+session_type: "SessionType" = "google.com"
+"""Type of the WebSession / see :py:obj:`searx.sidecar_pkg`."""
 
 # Filter results. 0: None, 1: Moderate, 2: Strict
 filter_mapping = {0: 'off', 1: 'medium', 2: 'high'}
@@ -140,6 +146,9 @@ def get_google_info(params: "OnlineParams", eng_traits: EngineTraits) -> dict[st
             - ``oe`` parameter: sets the character encoding scheme that should
               be used to decode the XML result ('utf8').
 
+        session:
+            WEB session for the :py:obj:`session_type`.
+
         headers:
             Py-Dictionary with additional HTTP headers (can be passed to
             request's headers)
@@ -151,11 +160,12 @@ def get_google_info(params: "OnlineParams", eng_traits: EngineTraits) -> dict[st
     ret_val: dict[str, t.Any] = {
         'language': None,
         'country': None,
+        'locale': None,
         'subdomain': None,
         'params': {},
+        'session': None,
         'headers': {},
         'cookies': {},
-        'locale': None,
     }
 
     sxng_locale = params.get('searxng_locale', 'all')
@@ -164,9 +174,9 @@ def get_google_info(params: "OnlineParams", eng_traits: EngineTraits) -> dict[st
     except babel.core.UnknownLocaleError:
         locale = None
 
-    eng_lang = eng_traits.get_language(sxng_locale, 'lang_en')
+    eng_lang: str = eng_traits.get_language(sxng_locale, 'lang_en')  # pyright: ignore[reportAssignmentType]
     lang_code = eng_lang.split('_')[-1]  # lang_zh-TW --> zh-TW / lang_en --> en
-    country = eng_traits.get_region(sxng_locale, eng_traits.all_locale)
+    country: str = eng_traits.get_region(sxng_locale, eng_traits.all_locale)
 
     # Test zh_hans & zh_hant --> in the topmost links in the result list of list
     # TW and HK you should a find wiktionary.org zh_hant link.  In the result
@@ -260,29 +270,43 @@ def get_google_info(params: "OnlineParams", eng_traits: EngineTraits) -> dict[st
     # ret_val['params']['num'] = 20
 
     # HTTP headers
-
-    ret_val['headers']['Accept'] = '*/*'
-
-    # Cookies
+    ret_val["headers"].update(params.get("headers", {}))
 
     # - https://github.com/searxng/searxng/pull/1679#issuecomment-1235432746
     # - https://github.com/searxng/searxng/issues/1555
-    ret_val['cookies']['CONSENT'] = "YES+"
+    # ret_val['cookies']['CONSENT'] = "YES+"
+    # WebSession
+    ret_val["session"] = sidecar.CACHE.session_get(session_type=session_type)
 
     return ret_val
 
 
-def detect_google_sorry(resp):
+def detect_google_sorry(resp: "SXNG_Response"):
     if resp.url.host == 'sorry.google.com' or resp.url.path.startswith('/sorry'):
         raise SearxEngineCaptchaException()
 
 
 def request(query: str, params: "OnlineParams") -> None:
-    """Google search request"""
+    """Google-Web search request"""
     # pylint: disable=line-too-long
+
+    google_info = get_google_info(params, traits)
+
+    session: "WebSession|None" = google_info["session"]
+    if not session:
+        # Google does not give any results without a valid session
+        # ToDo: suspended_time?
+        raise WebSessionRequired(session_type=session_type, suspended_time=60)
+
+    header_names = ["user-agent"]
+    session.upd_headers(params["headers"], names=header_names)
+    logger.debug("headers %s updated from WebSession: %s", header_names, params["headers"])
+
+    session.upd_cookies(params["cookies"])
+    logger.debug("cookies updated from WebSession: %s" % params["cookies"])
+
     start = (params['pageno'] - 1) * 10
     str_async = ui_async(start)
-    google_info = get_google_info(params, traits)
     logger.debug("ARC_ID: %s", str_async)
 
     # https://www.google.de/search?q=corona&hl=de&lr=lang_de&start=0&tbs=qdr%3Ad&safe=medium
@@ -319,9 +343,6 @@ def request(query: str, params: "OnlineParams") -> None:
         query_url += '&' + urlencode({'safe': filter_mapping[params['safesearch']]})
     params['url'] = query_url
 
-    params['cookies'] = google_info['cookies']
-    params['headers'].update(google_info['headers'])
-
 
 # =26;[3,"dimg_ZNMiZPCqE4apxc8P3a2tuAQ_137"]a87;data:image/jpeg;base64,/9j/4AAQSkZJRgABA
 # ...6T+9Nl4cnD+gr9OK8I56/tX3l86nWYw//2Q==26;
@@ -330,7 +351,7 @@ RE_DATA_IMAGE_end = re.compile(r'"(dimg_[^"]*)"[^;]*;(data:image[^;]*;[^;]*)$')
 
 
 def parse_data_images(text: str):
-    data_image_map = {}
+    data_image_map: dict[str, str] = {}
 
     for img_id, data_image in RE_DATA_IMAGE.findall(text):
         end_pos = data_image.rfind('=')
@@ -344,9 +365,10 @@ def parse_data_images(text: str):
     return data_image_map
 
 
-def response(resp: "SXNG_Response"):
+def response(resp: "SXNG_Response") -> EngineResults:
     """Get response from google's search request"""
     # pylint: disable=too-many-branches, too-many-statements
+
     detect_google_sorry(resp)
     data_image_map = parse_data_images(resp.text)
 
@@ -362,7 +384,7 @@ def response(resp: "SXNG_Response"):
             bubble.drop_tree()
         results.add(
             results.types.Answer(
-                answer=extract_text(item),
+                answer=extract_text(item) or "",
                 url=(eval_xpath(item, '../..//a/@href') + [None])[0],
             )
         )
@@ -378,9 +400,9 @@ def response(resp: "SXNG_Response"):
                 # this not one of the common google results *section*
                 logger.debug('ignoring item from the result_xpath list: missing title')
                 continue
-            title = extract_text(title_tag)
+            title: str = extract_text(title_tag) or ""
 
-            url = eval_xpath_getindex(result, './/a[h3]/@href', 0, None)
+            url: str | None = eval_xpath_getindex(result, './/a[h3]/@href', 0, None)
             if url is None:
                 logger.debug('ignoring item from the result_xpath list: missing url of title "%s"', title)
                 continue
@@ -396,26 +418,32 @@ def response(resp: "SXNG_Response"):
                 logger.debug('ignoring item from the result_xpath list: missing content of title "%s"', title)
                 continue
 
-            thumbnail = content_nodes[0].xpath('.//img/@src')
-            if thumbnail:
-                thumbnail = thumbnail[0]
-                if thumbnail.startswith('data:image'):
-                    img_id = content_nodes[0].xpath('.//img/@id')
+            thumbnail: str = ""
+            img_src: list[str] = content_nodes[0].xpath('.//img/@src')
+            if img_src:
+                if img_src[0].startswith('data:image'):
+                    img_id: list[str] = content_nodes[0].xpath('.//img/@id')
                     if img_id:
-                        thumbnail = data_image_map.get(img_id[0])
-            else:
-                thumbnail = None
+                        thumbnail = data_image_map.get(img_id[0], "")
 
-            results.append({'url': url, 'title': title, 'content': content, 'thumbnail': thumbnail})
+            results.add(
+                results.types.MainResult(
+                    url=url,
+                    title=title,
+                    content=content,
+                    thumbnail=thumbnail,
+                )
+            )
 
         except Exception as e:  # pylint: disable=broad-except
             logger.error(e, exc_info=True)
             continue
 
     # parse suggestion
+    suggestion: str
     for suggestion in eval_xpath_list(dom, suggestion_xpath):
         # append suggestion
-        results.append({'suggestion': extract_text(suggestion)})
+        results.append({'suggestion': extract_text(suggestion)})  # pyright: ignore[reportArgumentType]
 
     # return results
     return results
@@ -457,7 +485,7 @@ def fetch_traits(engine_traits: EngineTraits, add_domains: bool = True):
     engine_traits.custom['supported_domains'] = {}
 
     resp = get('https://www.google.com/preferences')
-    if not resp.ok:  # type: ignore
+    if not resp.ok:
         raise RuntimeError("Response from Google's preferences is not OK.")
 
     dom = html.fromstring(resp.text.replace('<?xml version="1.0" encoding="UTF-8"?>', ''))
@@ -495,7 +523,7 @@ def fetch_traits(engine_traits: EngineTraits, add_domains: bool = True):
             engine_traits.all_locale = 'ZZ'
             continue
 
-        sxng_locales = get_official_locales(eng_country, engine_traits.languages.keys(), regional=True)
+        sxng_locales = get_official_locales(eng_country, list(engine_traits.languages.keys()), regional=True)
 
         if not sxng_locales:
             print("ERROR: can't map from google country %s (%s) to a babel region." % (x.get('data-name'), eng_country))
@@ -511,17 +539,17 @@ def fetch_traits(engine_traits: EngineTraits, add_domains: bool = True):
 
     if add_domains:
         resp = get('https://www.google.com/supported_domains')
-        if not resp.ok:  # type: ignore
+        if not resp.ok:
             raise RuntimeError("Response from https://www.google.com/supported_domains is not OK.")
 
-        for domain in resp.text.split():  # type: ignore
+        for domain in resp.text.split():
             domain = domain.strip()
             if not domain or domain in [
                 '.google.com',
             ]:
                 continue
             region = domain.split('.')[-1].upper()
-            engine_traits.custom['supported_domains'][region] = 'www' + domain  # type: ignore
+            engine_traits.custom['supported_domains'][region] = 'www' + domain
             if region == 'HK':
                 # There is no google.cn, we use .com.hk for zh-CN
-                engine_traits.custom['supported_domains']['CN'] = 'www' + domain  # type: ignore
+                engine_traits.custom['supported_domains']['CN'] = 'www' + domain

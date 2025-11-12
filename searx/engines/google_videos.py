@@ -12,6 +12,8 @@
    https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URIs
 """
 
+import typing as t
+
 from urllib.parse import urlencode, urlparse, parse_qs
 from lxml import html
 
@@ -33,6 +35,15 @@ from searx.engines.google import (
 )
 from searx.utils import get_embeded_stream_url
 
+from searx.exceptions import WebSessionRequired
+
+if t.TYPE_CHECKING:
+    from searx.extended_types import SXNG_Response
+    from searx.search.processors import OnlineParams
+    from searx.sidecar_pkg.types import SessionType
+    from searx.sidecar_pkg.web_session import WebSession
+
+
 # about
 about = {
     "website": 'https://www.google.com',
@@ -51,10 +62,26 @@ language_support = True
 time_range_support = True
 safesearch = True
 
+session_type: "SessionType" = "google.com"
+"""Type of the WebSession / see :py:obj:`searx.sidecar_pkg`."""
 
-def request(query, params):
+
+def request(query: str, params: "OnlineParams") -> None:
     """Google-Video search request"""
+
     google_info = get_google_info(params, traits)
+    session: "WebSession|None" = google_info["session"]
+    if not session:
+        # Google does not give any results without a valid session
+        raise WebSessionRequired(session_type=session_type, suspended_time=3600)
+
+    header_names = ["user-agent"]
+    session.upd_headers(params["headers"], names=header_names)
+    logger.debug("headers %s updated from WebSession: %s", header_names, params["headers"])
+
+    session.upd_cookies(params["cookies"])
+    logger.debug("cookies updated from WebSession: %s" % params["cookies"])
+
     start = (params['pageno'] - 1) * 10
 
     query_url = (
@@ -80,14 +107,10 @@ def request(query, params):
         query_url += '&' + urlencode({'safe': filter_mapping[params['safesearch']]})
     params['url'] = query_url
 
-    params['cookies'] = google_info['cookies']
-    params['headers'].update(google_info['headers'])
-    return params
 
-
-def response(resp):
+def response(resp: "SXNG_Response") -> list[dict[str, t.Any]]:
     """Get response from google's search request"""
-    results = []
+    results: list[dict[str, t.Any]] = []
 
     detect_google_sorry(resp)
     data_image_map = parse_data_images(resp.text)
