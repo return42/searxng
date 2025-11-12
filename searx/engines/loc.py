@@ -11,8 +11,17 @@
 
 """
 
+import typing as t
+
 from urllib.parse import urlencode
+
+from searx import sidecar
 from searx.network import raise_for_httperror
+
+if t.TYPE_CHECKING:
+    from searx.extended_types import SXNG_Response
+    from searx.search.processors import OnlineParams
+    from searx.sidecar_pkg.types import SessionType
 
 about = {
     "website": 'https://www.loc.gov/pictures/',
@@ -30,8 +39,23 @@ endpoint = 'photos'
 base_url = 'https://www.loc.gov'
 search_string = "/{endpoint}/?sp={page}&{query}&fo=json"
 
+session_type: "SessionType" = "loc.gov"
+"""Type of the WEB session / see :py:obj:`searx.sidecar_pkg`."""
 
-def request(query, params):
+
+def request(query: str, params: "OnlineParams") -> None:
+
+    if not query:
+        return
+
+    session = sidecar.CACHE.session_get(session_type=session_type)
+    if session:
+        header_names = ["user-agent"]
+
+        session.upd_headers(params["headers"], names=header_names)
+        logger.debug("headers %s updated from WebSession: %s", header_names, params["headers"])
+        session.upd_cookies(params["cookies"])
+        logger.debug("cookies updated from WebSession: %s", params["cookies"])
 
     search_path = search_string.format(
         endpoint=endpoint,
@@ -40,12 +64,11 @@ def request(query, params):
     )
     params['url'] = base_url + search_path
     params['raise_for_httperror'] = False
-    return params
 
 
-def response(resp):
+def response(resp: "SXNG_Response"):
 
-    results = []
+    results: list[dict[str, t.Any]] = []
     json_data = resp.json()
 
     json_results = json_data.get('results')
