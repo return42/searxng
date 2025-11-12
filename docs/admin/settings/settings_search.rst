@@ -15,12 +15,12 @@
      max_page: 0
      max_ban_time_on_fail: 120
      suspended_times:
-       SearxEngineAccessDenied: 86400
-       SearxEngineCaptcha: 86400
+       SearxEngineAccessDenied: 3600
+       SearxEngineCaptcha: 3600
        SearxEngineTooManyRequests: 3600
-       cf_SearxEngineCaptcha: 1296000
-       cf_SearxEngineAccessDenied: 86400
-       recaptcha_SearxEngineCaptcha: 604800
+       cf_SearxEngineCaptcha: 3600
+       cf_SearxEngineAccessDenied: 3600
+       recaptcha_SearxEngineCaptcha: 3600
      formats:
        - html
 
@@ -93,21 +93,21 @@
 ``suspended_times``:
   Engine suspension time after error (in seconds; set to 0 to disable)
 
-  ``SearxEngineAccessDenied``: 86400
+  ``SearxEngineAccessDenied``:  3600
     For error "Access denied" and "HTTP error [402, 403]"
 
-  ``SearxEngineCaptcha``: 86400
+  ``SearxEngineCaptcha``: 3600
     For error "CAPTCHA"
 
   ``SearxEngineTooManyRequests``: 3600
     For error "Too many request" and "HTTP error 429"
 
   Cloudflare CAPTCHA:
-     - ``cf_SearxEngineCaptcha``: 1296000
-     - ``cf_SearxEngineAccessDenied``: 86400
+     - ``cf_SearxEngineCaptcha``: 3600
+     - ``cf_SearxEngineAccessDenied``: 3600
 
   Google CAPTCHA:
-    - ``recaptcha_SearxEngineCaptcha``: 604800
+    - ``recaptcha_SearxEngineCaptcha``: 3600
 
 ``formats``:
   Result formats available from web, remove format to deny access (use lower
