@@ -18,6 +18,7 @@ import typing as t
 from .startpage import Startpage
 from .google import Google
 from .qwant import Qwant
+from .loc import Loc
 
 if t.TYPE_CHECKING:
     from .web_session import WebContainer
@@ -26,4 +27,5 @@ MAP_CONTAINER_TYPES: "dict[str, type[WebContainer]]" = {
     Google.name: Google,
     Startpage.name: Startpage,
     Qwant.name: Qwant,
+    Loc.name: Loc,
 }
