@@ -47,6 +47,7 @@ from flask_babel import (
 )
 
 import searx
+import searx.sidecar
 from searx.extended_types import sxng_request
 from searx import (
     logger,
@@ -1389,6 +1390,7 @@ def init():
         logger.error("server.secret_key is not changed. Please use something else instead of ultrasecretkey.")
         sys.exit(1)
 
+    searx.sidecar.init_searxng(app)
     locales_initialize()
     valkey_initialize()
     searx.plugins.initialize(app)

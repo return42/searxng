@@ -59,6 +59,7 @@ exception_classname_to_text = {
     'searx.exceptions.SearxEngineAccessDeniedException': gettext("access denied"),
     'searx.exceptions.SearxEngineAPIException': gettext("server API error"),
     'searx.exceptions.SearxEngineXPathException': parsing_error_text,
+    'searx.exceptions.WebSessionRequired': gettext("WebSession required"),
     'KeyError': parsing_error_text,
     'json.decoder.JSONDecodeError': parsing_error_text,
     'lxml.etree.ParserError': parsing_error_text,
