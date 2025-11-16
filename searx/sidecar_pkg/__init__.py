@@ -19,6 +19,7 @@ from .startpage import Startpage
 from .google import Google
 from .qwant import Qwant
 from .loc import Loc
+from .ddg import DuckDuckGo
 
 if t.TYPE_CHECKING:
     from .web_session import WebContainer
@@ -28,4 +29,5 @@ MAP_CONTAINER_TYPES: "dict[str, type[WebContainer]]" = {
     Startpage.name: Startpage,
     Qwant.name: Qwant,
     Loc.name: Loc,
+    DuckDuckGo.name: DuckDuckGo,
 }
