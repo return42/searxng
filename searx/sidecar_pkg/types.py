@@ -12,5 +12,6 @@ SessionType: t.TypeAlias = t.Literal[
     "startpage.com",
     "qwant.com",
     "loc.gov",
+    "duckduckgo.com",
 ]
 SESSION_TYPES: t.Final[tuple[SessionType]] = t.get_args(SessionType)
