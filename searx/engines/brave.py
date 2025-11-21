@@ -134,7 +134,8 @@ from searx.utils import (
     eval_xpath,
     eval_xpath_list,
     eval_xpath_getindex,
-    js_variable_to_python,
+    js_obj_str_to_python,
+    js_obj_str_to_json_str,
     get_embeded_stream_url,
 )
 from searx.enginelib.traits import EngineTraits
