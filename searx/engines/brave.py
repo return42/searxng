@@ -140,6 +140,10 @@ from searx.utils import (
 from searx.enginelib.traits import EngineTraits
 from searx.result_types import EngineResults
 from searx.extended_types import SXNG_Response
+from searx import sidecar
+
+if t.TYPE_CHECKING:
+    from searx.sidecar_pkg.types import SessionType
 
 about = {
     "website": "https://search.brave.com/",
@@ -195,8 +199,23 @@ time_range_map: dict[str, str] = {
     "year": "py",
 }
 
+session_type: "SessionType" = "search.brave.com"
+"""Type of the WebSession / see :py:obj:`searx.sidecar_pkg`."""
+
 
 def request(query: str, params: dict[str, t.Any]) -> None:
+
+    if not query:
+        return
+
+    session = sidecar.CACHE.session_get(session_type=session_type)
+    if session:
+        header_names = ["user-agent"]
+
+        session.upd_headers(params["headers"], names=header_names)
+        logger.debug("headers %s updated from WebSession: %s", header_names, params["headers"])
+        session.upd_cookies(params["cookies"])
+        logger.debug("cookies updated from WebSession: %s", params["cookies"])
 
     args: dict[str, t.Any] = {
         "q": query,
