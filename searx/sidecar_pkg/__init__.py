@@ -16,7 +16,7 @@ via https://pypi.org/ (?)
 import typing as t
 
 from .startpage import Startpage
-from .google import Google
+from .google import Google, GoogleImpersonate
 from .qwant import Qwant
 from .loc import Loc
 from .ddg import DuckDuckGo
@@ -27,6 +27,7 @@ if t.TYPE_CHECKING:
 
 MAP_CONTAINER_TYPES: "dict[str, type[WebContainer]]" = {
     Google.name: Google,
+    GoogleImpersonate.name: GoogleImpersonate,
     Startpage.name: Startpage,
     Qwant.name: Qwant,
     Loc.name: Loc,

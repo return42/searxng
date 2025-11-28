@@ -126,6 +126,15 @@ class FormData(msgspec.Struct, kw_only=True):
                 return field
         return None
 
+    @classmethod
+    def from_dict(cls, d: dict[str, str]) -> "FormData":
+        fields = [FormField(name=k, value=v) for k, v in d.items()]
+        return cls(fields=fields)
+
+    @property
+    def as_dict(self) -> dict[str, str]:
+        return {i.name: i.value for i in self.fields}
+
 
 class FormField(msgspec.Struct, kw_only=True):
     """A input field from a HTML `<form>` element."""
@@ -376,7 +385,7 @@ class JS:
                 break
 
             for name, value in n_v_pairs:
-                if name in ("query",):
+                if name in ("query",):  # FIXME
                     continue
                 # sometimes we get "NaN" string for some fields ...
                 # https://developer.mozilla.org/en-US/docs/Glossary/Falsy

@@ -63,17 +63,23 @@ from __future__ import annotations
 # msgspec: note that if using PEP 563 “postponed evaluation of annotations”
 # (e.g. from __future__ import annotations) only the following spellings will
 # work: https://jcristharif.com/msgspec/structs.html#class-variables
+from dataclasses import fields
 from typing import ClassVar
 import typing as t
 
+import pdb
 import sys
 import time
 
-from .web_session import WebContainer, WebSession, JS
+import httpx
+import lxml.html
+
+from .web_session import WebContainer, WebSession, JS, FormData, FormField
 
 if t.TYPE_CHECKING:
     from splinter.driver.webdriver import WebDriverElement  # type: ignore[reportMissingTypeStubs]
     from splinter.driver.webdriver import BaseWebDriver  # type: ignore[reportMissingTypeStubs]
+    from curl_cffi import BrowserTypeLiteral
 
 
 @t.final
@@ -185,3 +191,137 @@ class Google(WebContainer):
         time.sleep(1)
         # from the resulting session, the session data is build up:
         return _session_data()
+
+
+@t.final
+class GoogleImpersonate(WebContainer):
+    """Container for google.com sessions."""
+
+    name: ClassVar[str] = "google.com:impersonate"
+    validity_sec: int = 60 * 60 * 2  # FIXME: ???
+
+    ui: ClassVar[bool] = False
+    js_required: ClassVar[bool] = False
+    # user_agent: ClassVar[str] = "Ping-Pong TV"
+
+    @classmethod
+    def get_browser(cls, *args, **kwargs) -> t.Any:  # type: ignore
+        return (args, kwargs)
+
+    def build_session_data(self, browser_args) -> WebSession | None:  # type: ignore
+        """Builds a :py:obj:`WebSession` object for a google.com session and
+        returns it.
+
+        Process:
+
+        #. visit https://www.google.com/
+        #. ..
+        """
+        # https://github.com/lexiforest/curl_cffi/blob/main/curl_cffi/requests/impersonate.py
+        impersonate: BrowserTypeLiteral = "firefox"
+        xpath_consent_form = "(//input[@name='set_eom' and @value='true'])[1]/../input"
+        import httpx_curl_cffi
+
+        transport = httpx_curl_cffi.CurlTransport(impersonate=impersonate)
+        client = httpx.Client(transport=transport, follow_redirects=False)
+
+        url: str = ""
+        query: str = "Porsche"
+        cookies: dict[str, str] = {}
+        headers: dict[str, str] = {}
+        resp: httpx.Response | None = None
+
+        # intro, find consent dialog
+
+        stop: bool = False
+        # c = 0
+        for url in [
+            "https://www.google.com/",
+            f"https://www.google.com/search?q={query}",
+        ]:
+            if stop:
+                break
+
+            while not stop:
+                print(f"REQUEST (HTTP GET): {resp} from --> {url} ")
+                resp = client.get(url=url, cookies=cookies, follow_redirects=False)
+                # FIXME ..
+                # with open(f"google_resp_{c}.html", "w") as f:
+                #    f.write(resp.text)
+                #    c+=1
+                headers.update(dict(resp.headers))
+                headers.pop("set-cookie", None)
+                cookies.update(dict(resp.cookies))
+
+                if resp.status_code >= 300 and resp.status_code <= 400:
+                    # https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status#redirection_messages
+                    url = headers.pop("location")
+                    print(f"  follow redirect (HTTP GET) {url}")
+                    continue
+
+                if str(resp.url).startswith("https://consent.google.com/"):
+                    stop = True
+                    break
+
+        if not resp:
+            raise ValueError("something went wrong")
+
+        # Answer consent dialog
+
+        doc: lxml.html.HtmlElement = lxml.html.fromstring(resp.text)
+        _form = doc.xpath(xpath_consent_form)
+        if not len(_form):
+            raise ValueError("missing google's consent dialog")
+        form = FormData.from_dict({i.get("name"): i.get("value") for i in _form})
+
+        print(f"cookies: {cookies}")
+        print(f"headers: {headers}")
+        print(f"form: {form.as_dict}")
+
+        # send form in a HTTP POST request (Content-Type:
+        # "application/x-www-form-urlencoded") send to
+        # - https://consent.google.com/save -
+
+        _headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Host": "consent.google.com",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "de,en-US;q=0.7,en;q=0.3",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "cross-site",
+            "Sec-Fetch-User": "?1",
+            "Priority": "u=0, i",
+        }
+
+        url = "https://consent.google.com/save"
+        print(f"Answer consent dialog (HTTP POST): {url}")
+        resp = client.post(url=url, data=form.as_dict, cookies=cookies, headers=_headers)
+
+        while resp.status_code >= 300 and resp.status_code <= 400:
+            headers.update(dict(resp.headers))
+            headers.pop("set-cookie", None)
+            cookies.update(dict(resp.cookies))
+            url = headers.pop("location")
+            print(f"  follow redirect (HTTP GET) {url}")
+            resp = client.get(url=url, cookies=cookies, headers=headers)
+
+        headers.update(dict(resp.headers))
+        headers.pop("set-cookie", None)
+        cookies.update(dict(resp.cookies))
+
+        # build WebSession ..
+
+        doc: lxml.html.HtmlElement = lxml.html.fromstring(resp.text)
+        _form = doc.xpath("//form//input")
+        if not len(_form):
+            raise ValueError("missing google's search form")
+        form = FormData.from_dict(
+            {i.get("name"): i.get("value") for i in _form if i.get("name") != "q"}  # skip query field!
+        )
+
+        session_data = WebSession(ctx=self.ctx, validity_sec=self.validity_sec)
+        session_data.ctx.http_headers.update(headers)
+        session_data.cookies = cookies
+        session_data.formdatas.append(form)
+        return session_data

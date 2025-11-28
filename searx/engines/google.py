@@ -49,6 +49,7 @@ about = {
 categories = ['general', 'web']
 paging = True
 safesearch = True
+timeout = 10  #
 
 time_range_support = True
 time_range_dict = {'day': 'd', 'week': 'w', 'month': 'm', 'year': 'y'}
@@ -312,7 +313,7 @@ def request(query: str, params: "OnlineParams") -> None:
     # https://www.google.de/search?q=corona&hl=de&lr=lang_de&start=0&tbs=qdr%3Ad&safe=medium
     query_url = (
         'https://'
-        + google_info['subdomain']
+        + "www.google.com"  # google_info['subdomain']
         + '/search'
         + "?"
         + urlencode(
@@ -342,6 +343,7 @@ def request(query: str, params: "OnlineParams") -> None:
     if params['safesearch']:
         query_url += '&' + urlencode({'safe': filter_mapping[params['safesearch']]})
     params['url'] = query_url
+    logger.debug("Google-WEB URL: %s", params["url"])
 
 
 # =26;[3,"dimg_ZNMiZPCqE4apxc8P3a2tuAQ_137"]a87;data:image/jpeg;base64,/9j/4AAQSkZJRgABA
@@ -369,6 +371,10 @@ def response(resp: "SXNG_Response") -> EngineResults:
     """Get response from google's search request"""
     # pylint: disable=too-many-branches, too-many-statements
 
+    # with open("google_web.html", "w") as f:
+    #    f.write(resp.text)
+    # import pdb
+    # pdb.set_trace()
     detect_google_sorry(resp)
     data_image_map = parse_data_images(resp.text)
 

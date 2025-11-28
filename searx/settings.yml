@@ -198,7 +198,7 @@ outgoing:
   # are also supported: see
   #   https://2.python-requests.org/en/latest/user/advanced/#socks
   #
-  #  proxies: socks5://127.0.0.1:8080
+  #proxies: socks5://127.0.0.1:8080
   #
   #  proxies:
   #    all://:
@@ -1017,39 +1017,36 @@ engines:
 
   - name: google
     engine: google
+    network:
+      impersonate: "chrome"
     shortcut: go
-    # additional_tests:
-    #   android: *test_android
 
   - name: google images
     engine: google_images
+    network: google
     shortcut: goi
-    # additional_tests:
-    #   android: *test_android
-    #   dali:
-    #     matrix:
-    #       query: ['Dali Christ']
-    #       lang: ['en', 'de', 'fr', 'zh-CN']
-    #     result_container:
-    #       - ['one_title_contains', 'Salvador']
 
   - name: google news
     engine: google_news
+    network: google
     shortcut: gon
     # additional_tests:
     #   android: *test_android
 
   - name: google videos
     engine: google_videos
+    network: google
     shortcut: gov
     # additional_tests:
     #   android: *test_android
 
   - name: google scholar
+    network: google
     engine: google_scholar
     shortcut: gos
 
   - name: google play apps
+    network: google
     engine: google_play
     categories: [files, apps]
     shortcut: gpa

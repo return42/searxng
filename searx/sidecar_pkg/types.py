@@ -9,6 +9,7 @@ HTTP_HEADER_Type: t.TypeAlias = dict[str, str]
 
 SessionType: t.TypeAlias = t.Literal[
     "google.com",
+    "google.com:impersonate",
     "startpage.com",
     "qwant.com",
     "loc.gov",
