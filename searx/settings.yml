@@ -30,7 +30,7 @@ brand:
   #     About: "https://searxng.org"
 
 sidecar:
-  auth_tokens: []
+  auth_tokens: ["4711"]
 
 search:
   # Filter results. 0: None, 1: Moderate, 2: Strict
@@ -1018,7 +1018,7 @@ engines:
   - name: google
     engine: google
     network:
-      impersonate: "chrome"
+      impersonate: "firefox"
     shortcut: go
 
   - name: google images

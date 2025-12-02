@@ -60,7 +60,7 @@ max_page = 50
 .. _Google max 50 pages: https://github.com/searxng/searxng/issues/2982
 """
 
-session_type: "SessionType" = "google.com"
+session_type: "SessionType" = "google.com:impersonate"
 """Type of the WebSession / see :py:obj:`searx.sidecar_pkg`."""
 
 # Filter results. 0: None, 1: Moderate, 2: Strict
@@ -273,14 +273,20 @@ def get_google_info(params: "OnlineParams", eng_traits: EngineTraits) -> dict[st
     # HTTP headers
     ret_val["headers"].update(params.get("headers", {}))
 
-    # - https://github.com/searxng/searxng/pull/1679#issuecomment-1235432746
-    # - https://github.com/searxng/searxng/issues/1555
-    # ret_val['cookies']['CONSENT'] = "YES+"
-    # WebSession
-    ret_val["session"] = sidecar.CACHE.session_get(session_type=session_type)
-
     return ret_val
 
+
+if t.TYPE_CHECKING:
+    from searx.sidecar_pkg.web_session import WebContainer
+
+def get_session() -> "WebSession|None":
+    # return sidecar.CACHE.session_get(session_type=session_type)
+    # FIXME ..
+    from searx.sidecar_pkg.google import GoogleImpersonate
+    from searx.sidecar_pkg.web_session import WebSessionCtx
+    ctx = WebSessionCtx(session_type=session_type, http_headers={})
+    container = GoogleImpersonate(ctx=ctx)
+    return container.build_session_data()
 
 def detect_google_sorry(resp: "SXNG_Response"):
     if resp.url.host == 'sorry.google.com' or resp.url.path.startswith('/sorry'):
@@ -292,8 +298,7 @@ def request(query: str, params: "OnlineParams") -> None:
     # pylint: disable=line-too-long
 
     google_info = get_google_info(params, traits)
-
-    session: "WebSession|None" = google_info["session"]
+    session: "WebSession|None" = get_session()
     if not session:
         # Google does not give any results without a valid session
         # ToDo: suspended_time?
@@ -344,6 +349,17 @@ def request(query: str, params: "OnlineParams") -> None:
         query_url += '&' + urlencode({'safe': filter_mapping[params['safesearch']]})
     params['url'] = query_url
     logger.debug("Google-WEB URL: %s", params["url"])
+
+    import httpx_curl_cffi, httpx
+
+    transport = httpx_curl_cffi.CurlTransport(impersonate="firefox")
+    client = httpx.Client(transport=transport, follow_redirects=False)
+    resp = client.get(url=params["url"], headers=params["headers"], cookies=params["cookies"])
+    import pdb
+    pdb.set_trace()
+    x=1
+
+
 
 
 # =26;[3,"dimg_ZNMiZPCqE4apxc8P3a2tuAQ_137"]a87;data:image/jpeg;base64,/9j/4AAQSkZJRgABA

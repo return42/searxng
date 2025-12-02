@@ -140,7 +140,7 @@ class FormField(msgspec.Struct, kw_only=True):
     """A input field from a HTML `<form>` element."""
 
     name: str
-    value: str
+    value: str | None
 
 
 class WebContainer(msgspec.Struct, kw_only=True):

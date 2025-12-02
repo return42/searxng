@@ -206,9 +206,9 @@ class GoogleImpersonate(WebContainer):
 
     @classmethod
     def get_browser(cls, *args, **kwargs) -> t.Any:  # type: ignore
-        return (args, kwargs)
+        return None # (args, kwargs)
 
-    def build_session_data(self, browser_args) -> WebSession | None:  # type: ignore
+    def build_session_data(self, browser=None) -> WebSession | None:
         """Builds a :py:obj:`WebSession` object for a google.com session and
         returns it.
 

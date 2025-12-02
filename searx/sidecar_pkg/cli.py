@@ -236,7 +236,8 @@ def cli_sessions_push(
     try:
         con = cls.from_browser(browser=browser, ctx=ctx, n=1)
     finally:
-        browser.quit()
+        if not isinstance(browser, tuple):
+            browser.quit()
 
     t1 = timeit.default_timer()
 
