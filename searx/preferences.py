@@ -27,7 +27,6 @@ from searx.webutils import VALID_LANGUAGE_CODE
 from ._settings import SettingsPref
 
 COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 5  # 5 years
-DOI_RESOLVERS = list(settings["doi_resolvers"])
 
 MAP_STR2BOOL: dict[str, bool] = OrderedDict(
     [
@@ -457,11 +456,6 @@ class Preferences:
                 get_setting("ui.results_on_new_tab"),
                 locked="results_on_new_tab" in self.cfg.lock,
             ),
-            "doi_resolver": EnumStringSetting(
-                get_setting("default_doi_resolver"),
-                locked="doi_resolver" in self.cfg.lock,
-                choices=["", *DOI_RESOLVERS],
-            ),
             'simple_style': EnumStringSetting(
                 get_setting("ui.theme_args.simple_style"),
                 locked="simple_style" in self.cfg.lock,
@@ -488,6 +482,13 @@ class Preferences:
                 choices=["pretty", "full", "host"],
             ),
         }
+
+        searx.plugins.STORAGE[""]
+        self.key_value_settings["doi_resolver"] = EnumStringSetting(
+            get_setting("default_doi_resolver"),
+            locked="doi_resolver" in self.cfg.lock,
+            choices=["", *DOI_RESOLVERS],
+        )
 
         self.engines = EnginesSetting('engines', engines=engines.values())
         self.plugins = PluginsSetting('plugins', plugins=plugins)

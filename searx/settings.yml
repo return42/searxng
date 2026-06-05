@@ -250,6 +250,13 @@ plugins:
 
   searx.plugins.oa_doi_rewrite.SXNGPlugin:
     active: false
+    config:
+      resolvers:
+        oadoi.org: https://oadoi.org/"
+        doi.org: https://doi.org/"
+        sci-hub.se: https://sci-hub.se/"
+        sci-hub.st: https://sci-hub.st/"
+        sci-hub.ru: https://sci-hub.ru/"
 
   searx.plugins.tor_check.SXNGPlugin:
     active: false
@@ -3212,12 +3219,3 @@ engines:
 #    delimiter:
 #        chars: ' '
 #        keys: ['line']
-
-doi_resolvers:
-  oadoi.org: 'https://oadoi.org/'
-  doi.org: 'https://doi.org/'
-  sci-hub.se: 'https://sci-hub.se/'
-  sci-hub.st: 'https://sci-hub.st/'
-  sci-hub.ru: 'https://sci-hub.ru/'
-
-default_doi_resolver: 'oadoi.org'

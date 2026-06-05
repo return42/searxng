@@ -16,6 +16,7 @@ from typing_extensions import override
 from .brand import SettingsBrand
 from .sxng_locales import sxng_locales
 from ._settings import SettingsPref
+from .plugins import PluginStorageCfg
 
 searx_dir = abspath(dirname(__file__))
 
@@ -142,7 +143,10 @@ class SettingsBytesValue(SettingsValue):
 def apply_schema(settings: dict[str, t.Any], schema: dict[str, t.Any], path_list: list[str]):
     error = False
     for key, value in schema.items():
-        if isinstance(value, type) and issubclass(value, msgspec.Struct):
+
+        if (isinstance(value, type) and issubclass(value, msgspec.Struct)) or (
+            t.get_origin(value) == dict and issubclass(t.get_args(value)[1], msgspec.Struct)
+        ):
             try:
                 # Type Validation at runtime:
                 # https://jcristharif.com/msgspec/structs.html#type-validation
@@ -150,7 +154,7 @@ def apply_schema(settings: dict[str, t.Any], schema: dict[str, t.Any], path_list
                 if cfg_dict is None:
                     cfg_dict = {}
                 cfg_json = msgspec.json.encode(cfg_dict)
-                settings[key] = msgspec.json.decode(cfg_json, type=value)
+                settings[key] = msgspec.json.decode(cfg_json, type=value)  # type: ignore
             except msgspec.ValidationError as e:
                 # To get a more meaningful error message, we need to replace the
                 # `$` by the (doted) name space.  For example if ValidationError
@@ -266,8 +270,7 @@ SCHEMA: dict[str, t.Any] = {
         'extra_proxy_timeout': SettingsValue(int, 0),
         'networks': {},
     },
-    'plugins': SettingsValue(dict, {}),
+    "plugins": PluginStorageCfg,
     'categories_as_tabs': SettingsValue(dict, CATEGORIES_AS_TABS),
     'engines': SettingsValue(list, []),
-    'doi_resolvers': {},
 }

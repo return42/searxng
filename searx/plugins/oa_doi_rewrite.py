@@ -1,22 +1,23 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# pylint: disable=missing-module-docstring
-import typing
+# pylint: disable=missing-module-docstring, too-few-public-methods
+
+import typing as t
 
 import re
-from urllib.parse import parse_qsl
+import urllib.parse
 
-from flask_babel import gettext
+import msgspec
+from flask_babel import gettext  # pyright: ignore[reportUnknownVariableType]
 from searx import get_setting
-from searx.plugins import Plugin, PluginInfo
+from searx.plugins import Plugin, PluginInfo, PluginCfg
 from searx.extended_types import sxng_request
 
 from ._core import log
 
-if typing.TYPE_CHECKING:
+if t.TYPE_CHECKING:
     from searx.search import SearchWithPlugins
     from searx.extended_types import SXNG_Request
-    from searx.result_types import Result, LegacyResult
-    from searx.plugins import PluginCfg
+    from searx.result_types import Result, LegacyResult  # pyright: ignore[reportPrivateLocalImportUsage]
 
 
 def filter_url_field(result: "Result|LegacyResult", field_name: str, url_src: str) -> bool | str:
@@ -30,7 +31,7 @@ def filter_url_field(result: "Result|LegacyResult", field_name: str, url_src: st
     if not resolver_url:
         return True  # use it unchanged
 
-    doi = extract_doi(result.parsed_url)
+    doi = extract_doi(result.parsed_url)  # pyright: ignore[reportArgumentType]
     if doi and len(doi) < 50:
         for suffix in ("/", ".pdf", ".xml", "/full", "/meta", "/abstract"):
             doi = doi.removesuffix(suffix)
@@ -43,10 +44,28 @@ def filter_url_field(result: "Result|LegacyResult", field_name: str, url_src: st
     return True  # use it unchanged
 
 
+@t.final
 class SXNGPlugin(Plugin):
     """Avoid paywalls by redirecting to open-access."""
 
     id = "oa_doi_rewrite"
+
+    class ConfigType(msgspec.Struct):
+        """DOI configuration from ``config``
+
+        .. code: yaml
+
+           searx.plugins.oa_doi_rewrite.SXNGPlugin:
+             active: false
+             config:
+               resolvers:
+                 oadoi.org: https://oadoi.org/"
+                 doi.org: https://doi.org/"
+                 sci-hub.se: https://sci-hub.se/"
+                 sci-hub.st: https://sci-hub.st/"
+                 sci-hub.ru: https://sci-hub.ru/"
+        """
+        resolvers: dict[str, str]
 
     def __init__(self, plg_cfg: "PluginCfg") -> None:
         super().__init__(plg_cfg)
@@ -68,14 +87,14 @@ class SXNGPlugin(Plugin):
         return True
 
 
-regex = re.compile(r'10\.\d{4,9}/[^\s]+')
+regex = re.compile(r"10\.\d{4,9}/[^\s]+")
 
 
-def extract_doi(url):
+def extract_doi(url: urllib.parse.ParseResult):
     m = regex.search(url.path)
     if m:
         return m.group(0)
-    for _, v in parse_qsl(url.query):
+    for _, v in urllib.parse.parse_qsl(url.query):
         m = regex.search(v)
         if m:
             return m.group(0)

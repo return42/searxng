@@ -3,16 +3,18 @@
 
 __all__ = ["PluginInfo", "Plugin", "PluginCfg", "PluginStorage"]
 
+import typing as t
+from collections.abc import Generator
+from dataclasses import dataclass, field
+
 import abc
 import importlib
 import inspect
 import logging
 import re
 
-import typing as t
-from collections.abc import Generator
+import msgspec
 
-from dataclasses import dataclass, field
 
 from searx.extended_types import SXNG_Request
 
@@ -65,13 +67,34 @@ class PluginInfo:
 ID_REGXP = re.compile("[a-z][a-z0-9].*")
 
 
+class PluginCfg(msgspec.Struct):
+    """Settings of a plugin.
+
+    .. code:: yaml
+
+       mypackage.mymodule.MyPlugin:
+         active: true
+         config:
+           option_a: 42
+           option_b:
+              - "foo"
+              - "bar"
+    """
+
+    active: bool = False
+    """Plugin is active by default and the user can *opt-out* in the preferences."""
+
+    config: dict[str, t.Any] = msgspec.field(default_factory=dict)
+    """The individual configuration of the plugin."""
+
+
 class Plugin(abc.ABC):
     """Abstract base class of all Plugins."""
 
     id: str = ""
     """The ID (suffix) in the HTML form."""
 
-    active: t.ClassVar[bool]
+    active: bool
     """Plugin is enabled/disabled by default (:py:obj:`PluginCfg.active`)."""
 
     keywords: list[str] = []
@@ -80,6 +103,11 @@ class Plugin(abc.ABC):
     of the search query, the list of keywords should be empty (which is also the
     default in the base class for Plugins)."""
 
+    ConfigType: t.ClassVar[type[msgspec.Struct] | type[dict[str, t.Any]]] = dict
+    config: dict[str, t.Any] | msgspec.Struct
+    """The individual configuration of the plugin build from
+    :py:obj:`PluginCfg.ConfigType`."""
+
     log: logging.Logger
     """A logger object, is automatically initialized when calling the
     constructor (if not already set in the subclass)."""
@@ -87,27 +115,18 @@ class Plugin(abc.ABC):
     info: PluginInfo
     """Information about the *plugin*, see :py:obj:`PluginInfo`."""
 
-    fqn: str = ""
+    fqn: str
 
-    def __init__(self, plg_cfg: "PluginCfg") -> None:
-        super().__init__()
-        if not self.fqn:
-            self.fqn = self.__class__.__mro__[0].__module__
-
-        # names from the configuration
-        for n, v in plg_cfg.__dict__.items():
-            setattr(self, n, v)
-
-        # names that must be set by the plugin implementation
-        for attr in [
-            "id",
-        ]:
-            if getattr(self, attr, None) is None:
-                raise NotImplementedError(f"plugin {self} is missing attribute {attr}")
-
+    def __init__(self, plg_cfg: PluginCfg) -> None:
+        if not self.id:
+            raise NotImplementedError(f"plugin {self} is missing attribute 'id'")
         if not ID_REGXP.match(self.id):
             raise ValueError(f"plugin ID {self.id} contains invalid character (use lowercase ASCII)")
-
+        self.fqn = self.__class__.__mro__[0].__module__
+        self.active = plg_cfg.active
+        self.config = plg_cfg.config
+        if self.ConfigType != dict:
+            self.config = self.ConfigType(**self.config)
         if not getattr(self, "log", None):
             pkg_name = inspect.getmodule(self.__class__).__package__  # pyright: ignore[reportOptionalMemberAccess]
             self.log = logging.getLogger(f"{pkg_name}.{self.id}")
@@ -120,13 +139,14 @@ class Plugin(abc.ABC):
 
         return id(self)
 
-    def __eq__(self, other: t.Any):
+    def __eq__(self, other: t.Any):  # pyright: ignore[reportAny]
         """py:obj:`Plugin` objects are equal if the hash values of the two
         objects are equal."""
 
-        return hash(self) == hash(other)
+        return hash(self) == hash(other)  # pyright: ignore[reportAny]
 
-    def init(self, app: "flask.Flask") -> bool:  # pylint: disable=unused-argument
+    # pylint: disable=unused-argument
+    def init(self, app: "flask.Flask") -> bool:  # pyright: ignore[reportUnusedParameter]
         """Initialization of the plugin, the return value decides whether this
         plugin is active or not.  Initialization only takes place once, at the
         time the WEB application is set up.  The base method always returns
@@ -137,8 +157,9 @@ class Plugin(abc.ABC):
         """
         return True
 
-    # pylint: disable=unused-argument
-    def pre_search(self, request: SXNG_Request, search: "SearchWithPlugins") -> bool:
+    def pre_search(
+        self, request: SXNG_Request, search: "SearchWithPlugins"  # pyright: ignore[reportUnusedParameter]
+    ) -> bool:
         """Runs BEFORE the search request and returns a boolean:
 
         - ``True`` to continue the search
@@ -146,7 +167,12 @@ class Plugin(abc.ABC):
         """
         return True
 
-    def on_result(self, request: SXNG_Request, search: "SearchWithPlugins", result: "Result") -> bool:
+    def on_result(
+        self,
+        request: SXNG_Request,  # pyright: ignore[reportUnusedParameter]
+        search: "SearchWithPlugins",  # pyright: ignore[reportUnusedParameter]
+        result: "Result",  # pyright: ignore[reportUnusedParameter]
+    ) -> bool:
         """Runs for each result of each engine and returns a boolean:
 
         - ``True`` to keep the result
@@ -167,7 +193,7 @@ class Plugin(abc.ABC):
         return True
 
     def post_search(
-        self, request: SXNG_Request, search: "SearchWithPlugins"
+        self, request: SXNG_Request, search: "SearchWithPlugins"  # pyright: ignore[reportUnusedParameter]
     ) -> "None | list[Result | LegacyResult] | EngineResults":
         """Runs AFTER the search request.  Can return a list of
         :py:obj:`Result <searx.result_types._base.Result>` objects to be added to the
@@ -175,47 +201,40 @@ class Plugin(abc.ABC):
         return
 
 
-@dataclass
-class PluginCfg:
-    """Settings of a plugin.
-
-    .. code:: yaml
-
-       mypackage.mymodule.MyPlugin:
-         active: true
-    """
-
-    active: bool = False
-    """Plugin is active by default and the user can *opt-out* in the preferences."""
+PluginStorageCfg = dict[str, PluginCfg]
 
 
 class PluginStorage:
     """A storage for managing the *plugins* of SearXNG."""
 
-    plugin_list: set[Plugin]
-    """The list of :py:obj:`Plugins` in this storage."""
+    @property
+    def plugin_list(self) -> set[Plugin]:
+        """The list of :py:obj:`Plugins` in this storage."""
+        return set(self._by_id.values())
 
     def __init__(self):
-        self.plugin_list = set()
+        self._by_id: dict[str, Plugin] = {}
 
     def __iter__(self) -> Generator[Plugin]:
-        yield from self.plugin_list
+        yield from self._by_id.values()
 
     def __len__(self):
-        return len(self.plugin_list)
+        return len(self._by_id)
+
+    def get(self, id: str) -> Plugin | None:
+        return self._by_id.get(id, None)
 
     @property
     def info(self) -> list[PluginInfo]:
+        return [p.info for p in self._by_id.values()]
 
-        return [p.info for p in self.plugin_list]
-
-    def load_settings(self, cfg: dict[str, dict[str, t.Any]]):
+    def load_settings(self, cfg: PluginStorageCfg):
         """Load plugins configured in SearXNG's settings :ref:`settings
         plugins`."""
 
-        for fqn, plg_settings in cfg.items():
-            cls = None
-            mod_name, cls_name = fqn.rsplit('.', 1)
+        for fqn, plg_cfg in cfg.items():
+            cls: type[Plugin] | None = None
+            mod_name, cls_name = fqn.rsplit(".", 1)
             try:
                 mod = importlib.import_module(mod_name)
                 cls = getattr(mod, cls_name, None)
@@ -225,19 +244,18 @@ class PluginStorage:
             if cls is None:
                 msg = f"plugin {fqn} is not implemented"
                 raise ValueError(msg)
-            plg = cls(PluginCfg(**plg_settings))
+            plg: Plugin = cls(plg_cfg)
             self.register(plg)
 
     def register(self, plugin: Plugin):
         """Register a :py:obj:`Plugin`.  In case of name collision (if two
         plugins have same ID) a :py:obj:`KeyError` exception is raised.
         """
-
-        if plugin in [p.id for p in self.plugin_list]:
+        if self.get(plugin.id):
             msg = f"name collision '{plugin.id}'"
             plugin.log.critical(msg)
             raise KeyError(msg)
-
+        self._by_id[plugin.id] = plugin
         self.plugin_list.add(plugin)
         plugin.log.debug("plugin has been loaded")
 
