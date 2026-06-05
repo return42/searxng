@@ -39,9 +39,10 @@ class SXNG_Request(flask.Request):
     """
 
     user_plugins: list[str]
-    """list of searx.plugins.Plugin.id (the id of the plugins)"""
+    """List of plugin IDs (:py:obj:`searx.plugins.Plugin.id`) for the plugins
+    that are active in this request."""
 
-    preferences: "searx.preferences.Preferences"
+    preferences: "searx.preferences.PrefStorage"
     """The preferences of the request."""
 
     errors: list[str]

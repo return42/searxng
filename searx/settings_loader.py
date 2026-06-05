@@ -139,9 +139,10 @@ def update_settings(default_settings: MutableMapping[str, t.Any], user_settings:
     if categories_as_tabs:
         default_settings['categories_as_tabs'] = categories_as_tabs
 
-    plugins = user_settings.get('plugins')
+    plugins = user_settings.get("plugins")
     if plugins is not None:
-        default_settings['plugins'] = plugins
+        # don't merge, replace plugin configuration
+        default_settings["plugins"] = plugins
 
     # parse the engines
     remove_engines: None | list[str] = None

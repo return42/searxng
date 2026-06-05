@@ -10,7 +10,7 @@ from os.path import dirname, abspath
 import logging
 
 import msgspec
-from ._settings import SettingsPref
+from searx.prefs import SettingsPref
 
 # Debug
 LOG_FORMAT_DEBUG: str = '%(levelname)-7s %(name)-30.30s: %(message)s'

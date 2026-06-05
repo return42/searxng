@@ -10,7 +10,7 @@ from threading import RLock
 from searx import logger as log
 import searx.engines
 from searx.metrics import histogram_observe, counter_add
-from searx.result_types import Result, LegacyResult, MainResult
+from searx.result_types import Result, LegacyResult, MainResult, ResultList
 from searx.result_types.answer import AnswerSet, BaseAnswer
 
 
@@ -75,12 +75,16 @@ class ResultContainer:
         self.unresponsive_engines: set[UnresponsiveEngine] = set()
         self.timings: list[Timing] = []
         self.redirect_url: str | None = None
-        self.on_result: t.Callable[[Result | LegacyResult], bool] = lambda _: True
         self._lock: RLock = RLock()
-        self._main_results_sorted: list[MainResult | LegacyResult] = None  # type: ignore
+        self._main_results_sorted: list[MainResult | LegacyResult] = None  # type: ignore[reportAttributeAccessIssue]
+
+        # HINT: on_result will be monkey patched from *outside*, see SearchWithPlugins
+        self.on_result: t.Callable[[Result | LegacyResult], bool] = lambda _: True
 
     def extend(
-        self, engine_name: str | None, results: list[Result | LegacyResult]
+        self,
+        engine_name: str | None,
+        results: ResultList,
     ):  # pylint: disable=too-many-branches
         if self._closed:
             log.debug("container is closed, ignoring results: %s", results)

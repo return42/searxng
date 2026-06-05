@@ -174,7 +174,7 @@ def get_json_response(sq: "SearchQuery", rc: "ResultContainer") -> str:
     return response
 
 
-def get_themes(templates_path):
+def get_themes(templates_path: str) -> list[str]:
     """Returns available themes list."""
     return os.listdir(templates_path)
 

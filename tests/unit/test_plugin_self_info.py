@@ -23,11 +23,11 @@ class PluginIPSelfInfo(SearxTestCase):
         super().setUp()
         engines = {}
 
-        self.storage = searx.plugins.PluginStorage()
+        self.storage = searx.plugins.Storage()
         self.storage.load_settings({"searx.plugins.self_info.SXNGPlugin": {"active": True}})
-        self.storage.init(self.app)
+        self.storage.init_from_app(self.app)
         self.pref = searx.preferences.Preferences(["simple"], ["general"], engines, self.storage)
-        self.pref.parse_dict({"locale": "en"})
+        self.pref.load_dict({"locale": "en"})
 
         cfg = searx.limiter.get_cfg()
         searx.botdetection.init(cfg, None)

@@ -1,43 +1,46 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# pylint: disable=missing-module-docstring, unused-argument
+"""Remove trackers arguments from the returned URL.
+
+The :py:obj:`tracker patterns <data.tracker_patterns>` are obtained from
+SearXNG's built-in DB.
+"""
 
 import logging
 import typing as t
 
-from flask_babel import gettext  # pyright: ignore[reportUnknownVariableType]
+import flask
+from flask_babel import lazy_gettext  # type: ignore[reportMissingTypeStubs]
 
 from searx.data import TRACKER_PATTERNS
 
-from . import Plugin, PluginInfo
+from searx.plugins import Plugin, PluginInfo, PluginCfg, PluginPrefs
 
 if t.TYPE_CHECKING:
-    import flask
     from searx.search import SearchWithPlugins
     from searx.extended_types import SXNG_Request
-    from searx.result_types import Result, LegacyResult  # pyright: ignore[reportPrivateLocalImportUsage]
-    from searx.plugins import PluginCfg
-
-
-log = logging.getLogger("searx.plugins.tracker_url_remover")
+    from searx.result_types import Result, LegacyResult  # type: ignore[reportPrivateLocalImportUsage]
 
 
 @t.final
-class SXNGPlugin(Plugin):
-    """Remove trackers arguments from the returned URL."""
+class Info(PluginInfo):
+    # pylint: disable=missing-class-docstring
+
+    name = lazy_gettext("Tracker URL remover")
+    preference_section = "privacy"
+    description = lazy_gettext("Remove trackers arguments from the returned URL")
+
+
+@t.final
+class SXNGPlugin(Plugin[Info, PluginCfg, PluginPrefs]):
+    # pylint: disable=missing-class-docstring, unused-argument
 
     id = "tracker_url_remover"
+    info_factory = Info
+    log = logging.getLogger("searx.plugins.tracker_url_remover")
 
-    def __init__(self, plg_cfg: "PluginCfg") -> None:
-
-        super().__init__(plg_cfg)
-        self.info = PluginInfo(
-            id=self.id,
-            name=gettext("Tracker URL remover"),
-            description=gettext("Remove trackers arguments from the returned URL"),
-            preference_section="privacy",
-        )
-
-    def init(self, app: "flask.Flask") -> bool:
+    def init_from_app(self, app: flask.Flask) -> bool:
+        if not super().init_from_app(app=app):
+            return False
         TRACKER_PATTERNS.init()
         return True
 
@@ -47,12 +50,17 @@ class SXNGPlugin(Plugin):
         return True
 
     @classmethod
-    def filter_url_field(cls, result: "Result|LegacyResult", field_name: str, url_src: str) -> bool | str:
+    def filter_url_field(
+        cls,
+        result: "Result|LegacyResult",  # type: ignore[reportUnusedParameter]
+        field_name: str,
+        url_src: str,
+    ) -> bool | str:
         """Returns bool ``True`` to use URL unchanged (``False`` to ignore URL).
         If URL should be modified, the returned string is the new URL to use."""
 
         if not url_src:
-            log.debug("missing a URL in field %s", field_name)
+            cls.log.debug("missing a URL in field %s", field_name)
             return True
 
         return TRACKER_PATTERNS.clean_url(url=url_src)

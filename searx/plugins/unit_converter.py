@@ -1,61 +1,62 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""A plugin for converting measured values from one unit to another unit (a
-unit converter).
+"""Convert between units.
+
+The result is displayed in the :ref:`area answer results`.
 
 The plugin looks up the symbols (given in the query term) in a list of
 converters, each converter is one item in the list (compare
 :py:obj:`ADDITIONAL_UNITS`).  If the symbols are ambiguous, the matching units
 of measurement are evaluated.  The weighting in the evaluation results from the
-sorting of the :py:obj:`list of unit converters<symbol_to_si>`.
+sorting of the :py:obj:`list of unit converters <symbol_to_si>`.
 """
-import typing
-import re
-import babel.numbers
 
-from flask_babel import gettext, get_locale
+import typing as t
+
+import re
+
+import babel.numbers
+from flask_babel import lazy_gettext, get_locale  # type: ignore[reportUnknownVariableType]
 
 from searx.wikidata_units import symbol_to_si
-from searx.plugins import Plugin, PluginInfo
+from searx.plugins import Plugin, PluginInfo, PluginCfg, PluginPrefs
 from searx.result_types import EngineResults
 
-if typing.TYPE_CHECKING:
+if t.TYPE_CHECKING:
     from searx.search import SearchWithPlugins
     from searx.extended_types import SXNG_Request
-    from searx.plugins import PluginCfg
 
 
 CONVERT_KEYWORDS = ["in", "to", "as"]
 
 
-class SXNGPlugin(Plugin):
-    """Convert between units.  The result is displayed in area for the
-    "answers".
-    """
+@t.final
+class Info(PluginInfo):
+    # pylint: disable=missing-class-docstring
+
+    name = lazy_gettext("Unit converter plugin")
+    preference_section = "general"
+    description = lazy_gettext("Convert between units")
+
+
+@t.final
+class SXNGPlugin(Plugin[Info, PluginCfg, PluginPrefs]):
+    # pylint: disable=missing-class-docstring
 
     id = "unit_converter"
-
-    def __init__(self, plg_cfg: "PluginCfg") -> None:
-        super().__init__(plg_cfg)
-
-        self.info = PluginInfo(
-            id=self.id,
-            name=gettext("Unit converter plugin"),
-            description=gettext("Convert between units"),
-            preference_section="general",
-        )
+    info_factory = Info
 
     def post_search(self, request: "SXNG_Request", search: "SearchWithPlugins") -> EngineResults:
-        results = EngineResults()
+        res = EngineResults()
 
         # only convert between units on the first page
         if search.search_query.pageno > 1:
-            return results
+            return res
 
         query = search.search_query.query
         query_parts = query.split(" ")
 
         if len(query_parts) < 3:
-            return results
+            return res
 
         for query_part in query_parts:
             for keyword in CONVERT_KEYWORDS:
@@ -63,9 +64,9 @@ class SXNGPlugin(Plugin):
                     from_query, to_query = query.split(keyword, 1)
                     target_val = _parse_text_and_convert(from_query.strip(), to_query.strip())
                     if target_val:
-                        results.add(results.types.Answer(answer=target_val))
+                        res.add(res.types.Answer(answer=target_val))
 
-        return results
+        return res
 
 
 # inspired from https://stackoverflow.com/a/42475086
@@ -79,7 +80,7 @@ RE_MEASURE = r'''
 '''
 
 
-def _parse_text_and_convert(from_query, to_query) -> str | None:
+def _parse_text_and_convert(from_query: str, to_query: str) -> str | None:
 
     # pylint: disable=too-many-branches, too-many-locals
 

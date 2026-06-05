@@ -77,33 +77,49 @@ is applied to all URL fields in the :py:obj:`Plugin.on_result` hook:
            result.filter_urls(my_url_filter)
            return True
 
-
 Implementation
 ==============
-
-.. autoclass:: Plugin
-   :members:
-
-.. autoclass:: PluginInfo
-   :members:
-
-.. autoclass:: PluginStorage
-   :members:
-
-.. autoclass:: PluginCfg
-   :members:
 """
 
+__all__ = [
+    # export local names ..
+    "STORAGE",
+    "initialize",
+    # export imported names ..
+    "Plugin",
+    "PluginCfg",
+    "PluginInfo",
+    "PluginPref",
+    "PluginType",
+    "Storage",
+    "StorageCfg",
+    "StoragePlgCfg",
+]
 
-__all__ = ["PluginInfo", "Plugin", "PluginStorage", "PluginCfg"]
-
+import typing as t
 
 import searx
-from ._core import PluginInfo, Plugin, PluginStorage, PluginCfg
 
-STORAGE: PluginStorage = PluginStorage()
+from ._core import (
+    Plugin,
+    PluginCfg,
+    PluginInfo,
+    PluginPref,
+    PluginType,
+    Storage,
+    StorageCfg,
+    StoragePlgCfg,
+)
+
+if t.TYPE_CHECKING:
+    import flask
 
 
-def initialize(app):
-    STORAGE.load_settings(searx.get_setting("plugins"))
-    STORAGE.init(app)
+STORAGE: Storage = Storage()
+"""Global plugin storage."""
+
+
+def initialize(app: "flask.Flask"):
+    """Initialize the global :py:obj:`STORAGE`"""
+    STORAGE.load_settings(t.cast(StorageCfg, searx.get_setting("plugins")))
+    STORAGE.init_from_app(app)

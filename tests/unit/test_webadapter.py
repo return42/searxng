@@ -25,7 +25,7 @@ class ValidateQueryCase(SearxTestCase):
 
     def test_with_incorrect_token(self):
         preferences_with_tokens = Preferences(['simple'], ['general'], engines, searx.plugins.STORAGE)
-        preferences_with_tokens.parse_dict({'tokens': 'bad-token'})
+        preferences_with_tokens.load_dict({"tokens": "bad-token"})
         valid, unknown, invalid_token = validate_engineref_list(SEARCHQUERY, preferences_with_tokens)
         self.assertEqual(len(valid), 0)
         self.assertEqual(len(unknown), 0)
@@ -33,7 +33,7 @@ class ValidateQueryCase(SearxTestCase):
 
     def test_with_correct_token(self):
         preferences_with_tokens = Preferences(['simple'], ['general'], engines, searx.plugins.STORAGE)
-        preferences_with_tokens.parse_dict({'tokens': 'my-token'})
+        preferences_with_tokens.load_dict({"tokens": "my-token"})
         valid, unknown, invalid_token = validate_engineref_list(SEARCHQUERY, preferences_with_tokens)
         self.assertEqual(len(valid), 1)
         self.assertEqual(len(unknown), 0)

@@ -26,6 +26,7 @@ from searx.search.processors.abstract import RequestParams
 if t.TYPE_CHECKING:
     from .models import SearchQuery
     from searx.extended_types import SXNG_Request
+    from searx.result_types import Result, LegacyResult  # type: ignore
 
 logger = logger.getChild('search')
 
@@ -53,6 +54,7 @@ class Search:
         super().__init__()
         self.search_query: "SearchQuery" = search_query
         self.result_container: ResultContainer = ResultContainer()
+        """:obj:`searx.results.ResultContainer` of this search order."""
         self.start_time: float | None = None
         self.actual_timeout: float | None = None
 
@@ -180,12 +182,17 @@ class Search:
 
 
 class SearchWithPlugins(Search):
-    """Inherit from the Search class, add calls to the plugins."""
+    """Inherit from the Search class ant the calls  add calls to the plugins."""
 
     def __init__(self, search_query: "SearchQuery", request: "SXNG_Request", user_plugins: list[str]):
         super().__init__(search_query)
-        self.user_plugins = user_plugins
+        self.user_plugins: list[str] = user_plugins
+        """Plugins active in this search Order."""
+
+        # ToDo: monkey patching the result container from outside feels not good
+        #       to me.
         self.result_container.on_result = self._on_result
+
         # pylint: disable=line-too-long
         # get the "real" request to use it outside the Flask context.
         # see
@@ -193,9 +200,9 @@ class SearchWithPlugins(Search):
         # * https://github.com/pallets/werkzeug/blob/3c5d3c9bd0d9ce64590f0af8997a38f3823b368d/src/werkzeug/local.py#L548-L559
         # * https://werkzeug.palletsprojects.com/en/2.0.x/local/#werkzeug.local.LocalProxy._get_current_object
         # pylint: enable=line-too-long
-        self.request = request._get_current_object()
+        self.request: "SXNG_Request" = request._get_current_object()  # type: ignore
 
-    def _on_result(self, result):
+    def _on_result(self, result: "Result|LegacyResult") -> bool:
         return searx.plugins.STORAGE.on_result(self.request, self, result)
 
     def search(self) -> ResultContainer:

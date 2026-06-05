@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# pylint: disable=too-many-branches, unused-argument
-"""During the initialization phase, the plugin checks whether a ``hostnames:``
+"""Rewrite hostnames, remove results or prioritize them.
+
+During the initialization phase, the plugin checks whether a ``hostnames:``
 configuration exists. If this is not the case, the plugin is not included in the
 PluginStorage (it is not available for selection).
 
@@ -85,41 +86,46 @@ import typing as t
 import re
 from urllib.parse import urlunparse, urlparse
 
-from flask_babel import gettext  # pyright: ignore[reportUnknownVariableType]
+import flask
+from flask_babel import lazy_gettext  # type: ignore[reportMissingTypeStubs]
 
-from searx import settings
+from searx import get_setting
 from searx.result_types._base import MainResult, LegacyResult
 from searx.settings_loader import get_yaml_cfg
-from searx.plugins import Plugin, PluginInfo
+from searx.plugins import Plugin, PluginInfo, PluginCfg, PluginPrefs
 
 from ._core import log
 
 if t.TYPE_CHECKING:
-    import flask
     from searx.search import SearchWithPlugins
     from searx.extended_types import SXNG_Request
     from searx.result_types import Result
-    from searx.plugins import PluginCfg
 
-REPLACE: dict[re.Pattern, str] = {}
-REMOVE: set = set()
-HIGH: set = set()
-LOW: set = set()
+YmlCfg: t.TypeAlias = dict[str, str] | list[str] | str | None
+
+REPLACE: dict[re.Pattern[str], str] = {}
+REMOVE: set[re.Pattern[str]] = set()
+HIGH: set[re.Pattern[str]] = set()
+LOW: set[re.Pattern[str]] = set()
+
+CfgType: t.TypeAlias = dict[re.Pattern[str], str] | set[re.Pattern[str]]
 
 
-class SXNGPlugin(Plugin):
-    """Rewrite hostnames, remove results or prioritize them."""
+@t.final
+class Info(PluginInfo):
+    # pylint: disable=missing-class-docstring
+
+    name = lazy_gettext("Hostnames plugin")
+    preference_section = "general"
+    description = lazy_gettext("Rewrite hostnames and remove or prioritize results based on the hostname")
+
+
+@t.final
+class SXNGPlugin(Plugin[Info, PluginCfg, PluginPrefs]):
+    # pylint: disable=missing-class-docstring
 
     id = "hostnames"
-
-    def __init__(self, plg_cfg: "PluginCfg") -> None:
-        super().__init__(plg_cfg)
-        self.info = PluginInfo(
-            id=self.id,
-            name=gettext("Hostnames plugin"),
-            description=gettext("Rewrite hostnames and remove or prioritize results based on the hostname"),
-            preference_section="general",
-        )
+    info_factory = Info
 
     def on_result(self, request: "SXNG_Request", search: "SearchWithPlugins", result: "Result") -> bool:
 
@@ -144,40 +150,47 @@ class SXNGPlugin(Plugin):
 
         return True
 
-    def init(self, app: "flask.Flask") -> bool:  # pylint: disable=unused-argument
+    def init_from_app(self, app: flask.Flask) -> bool:  # pylint: disable=unused-argument
         global REPLACE, REMOVE, HIGH, LOW  # pylint: disable=global-statement
 
-        if not settings.get(self.id):
+        if not super().init_from_app(app=app):
+            return False
+
+        if not get_setting(f"{self.id}", None):
             # Remove plugin, if there isn't a "hostnames:" setting
             return False
 
-        REPLACE = self._load_regular_expressions("replace") or {}  # type: ignore
-        REMOVE = self._load_regular_expressions("remove") or set()  # type: ignore
-        HIGH = self._load_regular_expressions("high_priority") or set()  # type: ignore
-        LOW = self._load_regular_expressions("low_priority") or set()  # type: ignore
+        REPLACE = self._load_regexp("replace") or {}  # type: ignore
+        REMOVE = self._load_regexp("remove") or set()  # type: ignore
+        HIGH = self._load_regexp("high_priority") or set()  # type: ignore
+        LOW = self._load_regexp("low_priority") or set()  # type: ignore
 
         return True
 
-    def _load_regular_expressions(self, settings_key) -> dict[re.Pattern, str] | set | None:
-        setting_value = settings.get(self.id, {}).get(settings_key)
-
-        if not setting_value:
+    def _load_regexp(self, cfg_name: str) -> CfgType | None:
+        cfg: YmlCfg = get_setting(f"{self.id}.{cfg_name}", None)
+        if not cfg:
             return None
 
         # load external file with configuration
-        if isinstance(setting_value, str):
-            setting_value = get_yaml_cfg(setting_value)
+        if isinstance(cfg, str):
+            cfg = t.cast(YmlCfg, get_yaml_cfg(file_name=cfg))
 
-        if isinstance(setting_value, list):
-            return {re.compile(r) for r in setting_value}
+        if isinstance(cfg, list):
+            return {re.compile(r) for r in cfg}
 
-        if isinstance(setting_value, dict):
-            return {re.compile(p): r for (p, r) in setting_value.items()}
+        if isinstance(cfg, dict):
+            return {re.compile(p): r for (p, r) in cfg.items()}
 
         return None
 
 
-def filter_url_field(result: "Result|LegacyResult", field_name: str, url_src: str) -> bool | str:
+def filter_url_field(
+    # pylint: disable=unused-argument
+    result: "Result|LegacyResult",  # type: ignore[reportUnusedParameter]
+    field_name: str,
+    url_src: str,
+) -> bool | str:
     """Returns bool ``True`` to use URL unchanged (``False`` to ignore URL).
     If URL should be modified, the returned string is the new URL to use."""
 

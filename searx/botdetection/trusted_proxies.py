@@ -85,7 +85,7 @@ class ProxyFix:
         # fallback to first address
         return x_forwarded_for[0].compressed
 
-    def __call__(self, environ: "WSGIEnvironment", start_response: "StartResponse") -> abc.Iterable[bytes]:
+    def __call__(self, environ: "WSGIEnvironment", start_response: "StartResponse") -> abc.Sequence[bytes]:
         # pylint: disable=too-many-statements
 
         trusted_proxies = self.trusted_proxies()

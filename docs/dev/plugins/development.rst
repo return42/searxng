@@ -5,3 +5,4 @@ Plugin Development
 ==================
 
 .. automodule:: searx.plugins
+   :members:

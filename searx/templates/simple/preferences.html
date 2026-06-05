@@ -1,6 +1,8 @@
 {%- from 'simple/icons.html' import icon_small, icon_big -%}
 {%- extends "simple/page_with_header.html" -%}
 
+{% set pref_form = "preferences_form" %}
+
 {%- macro tabs_open() -%}
 <div class="tabs" role="tablist">
 {%- endmacro -%}
@@ -19,36 +21,40 @@
 </div>
 {%- endmacro -%}
 
-{%- macro checkbox(name, checked, disabled) -%}
+{%- macro checkbox(name, checked, disabled, form_id) -%}
   {%- if checked == '?' -%}
     {{- icon_small('alert') -}}
   {%- else -%}
-    <input type="checkbox" {%- if name %} name="{{ name }}" {%- endif %} value="None" {%- if checked %} checked {%- endif -%}{%- if disabled %} disabled {%- endif -%}>
+    <input form="{{ form_id }}" type="checkbox" value="None"
+      {%- if name %} name="{{ name }}" {%- endif %}
+      {%- if checked %} checked {%- endif -%}
+      {%- if disabled %} disabled {%- endif -%}>
   {%- endif -%}
 {%- endmacro -%}
 
-{%- macro checkbox_onoff_reversed(name, checked, labelledby) -%}
-  <input type="checkbox" {{- ' ' -}}
-         name="{{ name }}" {{- ' ' -}}
-         id="{{ name }}" {{- ' ' -}}
-         {%- if labelledby -%} aria-labelledby="{{ labelledby }}"{{- ' ' -}}{%- endif -%}
-         class="checkbox-onoff reversed-checkbox"{{- ' ' -}}
-         {%- if checked -%} checked{%- endif -%}>
+{%- macro checkbox_onoff(name, checked, labelledby, form_id) -%}
+  <input form="{{ form_id }}" id="{{ name }}" type="checkbox" class="checkbox-onoff" value="on"
+    {%- if name %} name="{{ name }}" {%- endif %}
+    {%- if labelledby -%} aria-labelledby="{{ labelledby }}"
+    {%- if checked -%} checked{%- endif -%}>
 {%- endmacro -%}
 
-{%- macro plugin_preferences(section) -%}
-  {%- for plugin in plugins_storage -%}
-    {%- if plugin.preference_section == section -%}
-      <fieldset>{{- '' -}}
-	<legend>{{ _(plugin.name) }}</legend>{{- '' -}}
-	<div class="value">
-	  {{- checkbox_onoff_reversed('plugin_' + plugin.id, plugin.id not in allowed_plugins, 'plugin_labelledby' + plugin.id) -}}
-	</div>{{- '' -}}
-	<div class="description" id="{{ 'plugin_labelledby' + plugin.id }}">
-	  {{- _(plugin.description) -}}
-	</div>{{- '' -}}
-      </fieldset>
-    {%- endif -%}
+{%- macro plugin_preferences(section, form_id) -%}
+  {%- for plg in plugins_storage.pref_section(section) -%}
+    {% set _labelledby = "plugin_labelledby_" ~ plg.id %}
+    {% set _name = "plugin_" ~ plg.id %}
+    <fieldset>
+	    <legend>{{ _(plg.info.name) }}</legend>
+	    <div class="value">
+        {{- checkbox_onoff(name=_name, checked=plg.active, labelledby=_labelledby, form_id=form_id)-}}
+	    </div>
+	    <div class="description" id="{{ _labelledby }}">
+	      {{- _(plg.info.description) -}}
+	    </div>
+    </fieldset>
+    {%- for pref_name, pref_obj in plg.pref.elements.items() -%}
+      <p> {{ pref_name }}: XXXXXXXXXXXXXX {{pref_obj}}</p>
+    {%- endfor -%}
   {%- endfor -%}
 {%- endmacro -%}
 
@@ -161,7 +167,7 @@
     </div>
   {%- endif -%}
 
-  <form id="search_form" method="post" action="{{ url_for('preferences') }}" autocomplete="off">
+  <form id="{{ pref_form }}" method="post" action="{{ url_for('preferences') }}" autocomplete="off">
     {{- tabs_open() -}}
 
     {# tab: general #}
@@ -182,9 +188,6 @@
     {%- endif -%}
     {%- if 'favicon_resolver' not in locked_preferences -%}
       {%- include 'simple/preferences/favicon.html' -%}
-    {%- endif -%}
-    {%- if "doi_resolver" not in locked_preferences -%}
-      {%- include "simple/preferences/doi_resolver.html" -%}
     {%- endif -%}
     {% if 'safesearch' not in locked_preferences %}
       {%- include 'simple/preferences/safesearch.html' -%}

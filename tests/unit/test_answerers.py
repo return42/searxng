@@ -17,10 +17,10 @@ class AnswererTest(SearxTestCase):
     def setUp(self):
         super().setUp()
 
-        self.storage = searx.plugins.PluginStorage()
+        self.storage = searx.plugins.Storage()
         engines = {}
         self.pref = searx.preferences.Preferences(["simple"], ["general"], engines, self.storage)
-        self.pref.parse_dict({"locale": "en"})
+        self.pref.load_dict({"locale": "en"})
 
     @parameterized.expand(searx.answerers.STORAGE.answerer_list)
     def test_unicode_input(self, answerer_obj: searx.answerers.Answerer):

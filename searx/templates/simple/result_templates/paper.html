@@ -54,7 +54,11 @@
   {%- if result.doi %}
     <div>
       <span>{{ _("DOI") }}:</span>
-      <span>{{ result_link(doi_resolver + result.doi, result.doi) }}</span>
+      {%- if result.doi_url %}
+        <span>{{ result_link(result.doi_url, result.doi) }}</span>
+      {%- else %}
+        <span>{{ result.doi }}</span>
+      {%- endif -%}
     </div>
   {% endif -%}
   {%- if result.issn %}

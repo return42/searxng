@@ -2,6 +2,7 @@
 # pylint: disable=missing-module-docstring,disable=missing-class-docstring,invalid-name
 
 import babel
+from flask_babel import lazy_gettext
 from mock import Mock
 
 import searx
@@ -14,7 +15,7 @@ from searx.extended_types import sxng_request
 
 from tests import SearxTestCase
 
-plg_store = searx.plugins.PluginStorage()
+plg_store = searx.plugins.Storage()
 plg_store.load_settings(searx.get_setting("plugins"))
 
 
@@ -48,10 +49,25 @@ def do_post_search(query, storage, **kwargs) -> Mock:
 
 class PluginMock(searx.plugins.Plugin):
 
-    def __init__(self, _id: str, name: str, active: bool):
-        plg_cfg = searx.plugins.PluginCfg(active=active)
-        self.id = _id
-        self._name = name
+    def __init__(self, plg_id: str, plg_name: str, plg_active: bool):
+
+        class Info(searx.plugins.PluginInfo):
+            name = lazy_gettext(plg_name)
+            preference_section = "general"
+            description = lazy_gettext(f"Dummy plugin: {plg_id}")
+
+        class Cfg(searx.plugins.PluginCfg):
+            int_cfg: int
+            str_cfg: str
+
+        self.id = plg_id
+        self.info_factory = Info  # pyright: ignore[reportAttributeAccessIssue]
+        self.cfg_factory = Cfg  # pyright: ignore[reportAttributeAccessIssue]
+
+        plg_cfg = searx.plugins.StoragePlgCfg(
+            active=plg_active,
+            cfg={"int_cfg": "42", "str_cfg": "lorem"},
+        )
         super().__init__(plg_cfg)
 
     # pylint: disable= unused-argument
@@ -64,14 +80,6 @@ class PluginMock(searx.plugins.Plugin):
     def on_result(self, request, search, result) -> bool:
         return False
 
-    def info(self):
-        return searx.plugins.PluginInfo(
-            id=self.id,
-            name=self._name,
-            description=f"Dummy plugin: {self.id}",
-            preference_section="general",
-        )
-
 
 class PluginStorage(SearxTestCase):
 
@@ -79,12 +87,12 @@ class PluginStorage(SearxTestCase):
         super().setUp()
         engines = {}
 
-        self.storage = searx.plugins.PluginStorage()
+        self.storage = searx.plugins.Storage()
         self.storage.register(PluginMock("plg001", "first plugin", True))
         self.storage.register(PluginMock("plg002", "second plugin", True))
-        self.storage.init(self.app)
+        self.storage.init_from_app(self.app)
         self.pref = searx.preferences.Preferences(["simple"], ["general"], engines, self.storage)
-        self.pref.parse_dict({"locale": "en"})
+        self.pref.load_dict({"locale": "en"})
 
     def test_init(self):
 

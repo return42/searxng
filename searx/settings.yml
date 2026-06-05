@@ -157,20 +157,19 @@ ui:
 preferences:
   # Lock arbitrary settings on the preferences page.
   lock: []
-#     - categories
-#     - language
 #     - autocomplete
+#     - categories
+#     - center_alignment
 #     - favicon_resolver
-#     - safesearch
-#     - method
-#     - doi_resolver
-#     - locale
-#     - theme
-#     - results_on_new_tab
-#     - search_on_category_select
-#     - method
 #     - image_proxy
+#     - language
+#     - locale
+#     - method
 #     - query_in_title
+#     - results_on_new_tab
+#     - safesearch
+#     - search_on_category_select
+#     - theme
 
 # communication with search engines
 #
@@ -226,30 +225,46 @@ plugins:
 
   searx.plugins.calculator.SXNGPlugin:
     active: true
+    locked: false
 
   searx.plugins.infinite_scroll.SXNGPlugin:
     active: false
+    locked: false
 
   searx.plugins.hash_plugin.SXNGPlugin:
     active: true
+    locked: false
 
   searx.plugins.self_info.SXNGPlugin:
     active: true
+    locked: false
 
   searx.plugins.unit_converter.SXNGPlugin:
     active: true
+    locked: false
 
   searx.plugins.ahmia_filter.SXNGPlugin:
     active: true
+    locked: false
 
   searx.plugins.hostnames.SXNGPlugin:
     active: true
+    locked: false
 
   searx.plugins.time_zone.SXNGPlugin:
     active: true
+    locked: false
 
   searx.plugins.oa_doi_rewrite.SXNGPlugin:
-    active: false
+    active: true
+    locked: false
+    cfg:
+      resolvers:
+        oadoi.org: https://oadoi.org/"
+        doi.org: https://doi.org/"
+        sci-hub.se: https://sci-hub.se/"
+        sci-hub.st: https://sci-hub.st/"
+        sci-hub.ru: https://sci-hub.ru/"
 
   searx.plugins.tor_check.SXNGPlugin:
     active: false
@@ -3456,12 +3471,3 @@ engines:
 #    delimiter:
 #        chars: ' '
 #        keys: ['line']
-
-doi_resolvers:
-  oadoi.org: 'https://oadoi.org/'
-  doi.org: 'https://doi.org/'
-  sci-hub.se: 'https://sci-hub.se/'
-  sci-hub.st: 'https://sci-hub.st/'
-  sci-hub.ru: 'https://sci-hub.ru/'
-
-default_doi_resolver: 'oadoi.org'

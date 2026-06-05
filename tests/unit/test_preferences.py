@@ -12,7 +12,7 @@ from searx.preferences import (
     MapSetting,
     SearchLanguageSetting,
     MultipleChoiceSetting,
-    PluginsSetting,
+    PluginsActive,
     ValidationException,
 )
 import searx.plugins
@@ -116,18 +116,18 @@ class TestSettings(SearxTestCase):
     # plugins settings
 
     def test_plugins_setting_all_default_enabled(self):
-        storage = searx.plugins.PluginStorage()
+        storage = searx.plugins.Storage()
         storage.register(PluginMock("plg001", "first plugin", True))
         storage.register(PluginMock("plg002", "second plugin", True))
-        plgs_settings = PluginsSetting(False, storage)
+        plgs_settings = PluginsActive(storage.plugin_list)
         self.assertEqual(set(plgs_settings.get_enabled()), {"plg001", "plg002"})
 
     def test_plugins_setting_few_default_enabled(self):
-        storage = searx.plugins.PluginStorage()
+        storage = searx.plugins.Storage()
         storage.register(PluginMock("plg001", "first plugin", True))
         storage.register(PluginMock("plg002", "second plugin", False))
         storage.register(PluginMock("plg003", "third plugin", True))
-        plgs_settings = PluginsSetting(False, storage)
+        plgs_settings = PluginsActive(storage.plugin_list)
         self.assertEqual(set(plgs_settings.get_enabled()), set(['plg001', 'plg003']))
 
 
@@ -136,7 +136,7 @@ class TestPreferences(SearxTestCase):
     def setUp(self):
         super().setUp()
 
-        storage = searx.plugins.PluginStorage()
+        storage = searx.plugins.Storage()
         self.preferences = Preferences(['simple'], ['general'], {}, storage)
 
     def test_encode(self):

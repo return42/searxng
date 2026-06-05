@@ -76,6 +76,9 @@ class Paper(MainResult, kw_only=True):
     doi: str = ""
     """DOI number (like ``10.1038/d41586-018-07848-2``)."""
 
+    doi_url: str = ""
+    """URL of a DOI resolver."""
+
     issn: list[str] = []
     """List of ISSN numbers like ``1476-4687``"""
 

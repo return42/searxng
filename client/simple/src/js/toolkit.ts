@@ -7,7 +7,6 @@ type Settings = {
   plugins?: string[];
   autocomplete?: string;
   autocomplete_min?: number;
-  doi_resolver?: string;
   favicon_resolver?: string;
   hotkeys?: KeyBindingLayout;
   method?: "GET" | "POST";

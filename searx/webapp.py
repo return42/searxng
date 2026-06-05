@@ -7,11 +7,12 @@ import json
 import os
 import sys
 import base64
+from collections.abc import Iterable
 
 from timeit import default_timer
 from html import escape
 from io import StringIO
-import typing
+import typing as t
 
 import urllib
 import urllib.parse
@@ -46,7 +47,7 @@ from flask_babel import (
 )
 
 import searx
-from searx.extended_types import sxng_request
+from searx.extended_types import sxng_request, SXNG_Request
 from searx import (
     logger,
     get_setting,
@@ -87,9 +88,9 @@ from searx.webadapter import (
 from searx.utils import gen_useragent, dict_subset
 from searx.version import VERSION_STRING, GIT_URL, GIT_BRANCH
 from searx.query import RawTextQuery
-from searx.plugins.oa_doi_rewrite import get_doi_resolver
+
 from searx.preferences import (
-    Preferences,
+    PrefStorage,
     ClientPref,
     ValidationException,
 )
@@ -129,8 +130,8 @@ logger.debug('static directory is %s', settings['ui']['static_path'])
 # about templates
 logger.debug('templates directory is %s', settings['ui']['templates_path'])
 default_theme = settings['ui']['default_theme']
-templates_path = settings['ui']['templates_path']
-themes = get_themes(templates_path)
+templates_path: str = settings['ui']['templates_path']
+themes: list[str] = get_themes(templates_path)
 result_templates = get_result_templates(templates_path)
 
 STATS_SORT_PARAMETERS = {
@@ -160,10 +161,10 @@ def get_locale():
 babel = Babel(app, locale_selector=get_locale)
 
 
-def _get_browser_language(req, lang_list):
+def _get_browser_language(req: SXNG_Request, lang_list: Iterable[str]) -> str:
     client = ClientPref.from_http_request(req)
-    locale = match_locale(client.locale_tag, lang_list, fallback='en')
-    return locale
+    locale = match_locale(client.locale_tag or "en", lang_list)
+    return locale or "en"
 
 
 def _get_locale_rfc5646(locale):
@@ -331,7 +332,7 @@ def get_translations():
     }
 
 
-def get_enabled_categories(category_names: typing.Iterable[str]):
+def get_enabled_categories(category_names: Iterable[str]):
     """The categories in ``category_names```for which there is no active engine
     are filtered out and a reduced list is returned."""
 
@@ -380,7 +381,6 @@ def get_client_settings():
         'query_in_title': req_pref.get_value('query_in_title'),
         'safesearch': req_pref.get_value('safesearch'),
         'theme': req_pref.get_value('theme'),
-        'doi_resolver': get_doi_resolver(),
     }
 
 
@@ -462,16 +462,22 @@ def pre_request():
     sxng_request.errors = []  # pylint: disable=assigning-non-slot
 
     client_pref = ClientPref.from_http_request(sxng_request)
-    # pylint: disable=redefined-outer-name
-    preferences = Preferences(themes, list(categories.keys()), engines, searx.plugins.STORAGE, client_pref)
+    prefs = PrefStorage(
+        theme_names=themes,
+        categ_names=categories.keys(),
+        eng_list=engines.values(),
+        plg_list=searx.plugins.STORAGE.plugin_list,
+        client=client_pref,
+    )
+    sxng_request.preferences = prefs
 
-    user_agent = sxng_request.headers.get('User-Agent', '').lower()
-    if 'webkit' in user_agent and 'android' in user_agent:
-        preferences.key_value_settings['method'].value = 'GET'
-    sxng_request.preferences = preferences  # pylint: disable=assigning-non-slot
+    # FIXME ....
 
+    user_agent = sxng_request.headers.get("User-Agent", "").lower()
+    if "webkit" in user_agent and "android" in user_agent:
+        prefs.set(pref_name="method", value="GET")
     try:
-        preferences.parse_dict(sxng_request.cookies)
+        prefs.load_cookies(cookies=sxng_request.cookies)
 
     except Exception as e:  # pylint: disable=broad-except
         logger.exception(e, exc_info=True)
@@ -484,35 +490,36 @@ def pre_request():
         if k not in sxng_request.form:
             sxng_request.form[k] = v
 
-    if sxng_request.form.get('preferences'):
-        preferences.parse_encoded_data(sxng_request.form['preferences'])
+    field_preferences = sxng_request.form.get("preferences")
+    if field_preferences:
+        prefs.parse_encoded_data(field_preferences)
     else:
         try:
-            preferences.parse_dict(sxng_request.form)
+            prefs.load_form(sxng_request.form)
         except Exception as e:  # pylint: disable=broad-except
             logger.exception(e, exc_info=True)
-            sxng_request.errors.append(gettext('Invalid settings'))
+            sxng_request.errors.append(gettext("Invalid settings"))
 
     # language is defined neither in settings nor in preferences
     # use browser headers
-    if not preferences.get_value("language"):
-        language = _get_browser_language(sxng_request, settings['search']['languages'])
-        preferences.parse_dict({"language": language})
-        logger.debug('set language %s (from browser)', preferences.get_value("language"))
+    if not prefs.get_value("language"):
+        language = _get_browser_language(sxng_request, get_setting("search.languages", []))
+        prefs.load_dict({"language": language})
+        logger.debug(f"set language {prefs.get_value('language')} (from browser)")
 
     # UI locale is defined neither in settings nor in preferences
     # use browser headers
-    if not preferences.get_value("locale"):
+    if not prefs.get_value("locale"):
         locale = _get_browser_language(sxng_request, LOCALE_NAMES.keys())
-        preferences.parse_dict({"locale": locale})
-        logger.debug('set locale %s (from browser)', preferences.get_value("locale"))
+        prefs.load_dict({"locale": locale})
+        logger.debug(f"set locale {prefs.get_value('locale')} (from browser)")
 
     # request.user_plugins
     sxng_request.user_plugins = []  # pylint: disable=assigning-non-slot
-    allowed_plugins = preferences.plugins.get_enabled()
-    disabled_plugins = preferences.plugins.get_disabled()
+    active_plugins = prefs.plugins.get_enabled()
+    inactive_plugins = prefs.plugins.get_disabled()
     for plugin in searx.plugins.STORAGE:
-        if (plugin.id not in disabled_plugins) or plugin.id in allowed_plugins:
+        if (plugin.id not in inactive_plugins) or (plugin.id in active_plugins):
             sxng_request.user_plugins.append(plugin.id)
 
 
@@ -871,7 +878,7 @@ def preferences():
     if sxng_request.method == 'POST':
         resp = make_response(redirect(url_for('index', _external=True)))
         try:
-            sxng_request.preferences.parse_form(sxng_request.form)
+            sxng_request.preferences.load_form(sxng_request.form)
         except ValidationException:
             sxng_request.errors.append(gettext('Invalid settings, please edit your preferences'))
             return resp
@@ -880,7 +887,6 @@ def preferences():
     # render preferences
     image_proxy = sxng_request.preferences.get_value('image_proxy')  # pylint: disable=redefined-outer-name
     disabled_engines = sxng_request.preferences.engines.get_disabled()
-    allowed_plugins = sxng_request.preferences.plugins.get_enabled()
 
     # stats for preferences page
     filtered_engines = dict(filter(lambda kv: sxng_request.preferences.validate_token(kv[1]), engines.items()))
@@ -973,12 +979,9 @@ def preferences():
         favicon_resolver_names = favicons.proxy.CFG.resolver_map.keys(),
         shortcuts = {y: x for x, y in engine_shortcuts.items()},
         themes = themes,
-        plugins_storage = searx.plugins.STORAGE.info,
-        current_doi_resolver = sxng_request.preferences.get_value("doi_resolver"),
-        allowed_plugins = allowed_plugins,
+        plugins_storage = searx.plugins.STORAGE,
         preferences_url_params = sxng_request.preferences.get_as_url_params(),
         locked_preferences = get_setting("preferences").lock,
-        doi_resolvers = get_setting("doi_resolvers", {}),
         # fmt: on
     )
 
@@ -1297,8 +1300,6 @@ def config():
                 'botdetection.ip_limit.link_token': _limiter_cfg.get('botdetection.ip_limit.link_token'),
                 'botdetection.ip_lists.pass_searxng_org': _limiter_cfg.get('botdetection.ip_lists.pass_searxng_org'),
             },
-            'doi_resolvers': list(settings['doi_resolvers'].keys()),
-            'default_doi_resolver': settings['default_doi_resolver'],
             'public_instance': settings['server']['public_instance'],
         }
     )

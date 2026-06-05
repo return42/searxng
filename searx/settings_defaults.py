@@ -13,9 +13,11 @@ from os.path import dirname, abspath
 import msgspec
 
 from typing_extensions import override
+
+from searx import plugins
 from .brand import SettingsBrand
 from .sxng_locales import sxng_locales
-from ._settings import SettingsPref
+from .prefs import SettingsPref
 
 searx_dir = abspath(dirname(__file__))
 
@@ -142,6 +144,7 @@ class SettingsBytesValue(SettingsValue):
 def apply_schema(settings: dict[str, t.Any], schema: dict[str, t.Any], path_list: list[str]):
     error = False
     for key, value in schema.items():
+
         if isinstance(value, type) and issubclass(value, msgspec.Struct):
             try:
                 # Type Validation at runtime:
@@ -162,6 +165,10 @@ def apply_schema(settings: dict[str, t.Any], schema: dict[str, t.Any], path_list
                 msg = msg.replace("`$.", "`" + ".".join([*path_list, key]) + ".")
                 logger.error(msg)
                 error = True
+
+        elif isinstance(value, plugins.StorageCfg):
+            settings[key] = value
+
         elif isinstance(value, SettingsValue):
             try:
                 settings[key] = value(settings.get(key, _UNDEFINED))
@@ -170,10 +177,13 @@ def apply_schema(settings: dict[str, t.Any], schema: dict[str, t.Any], path_list
                 msg = ".".join([*path_list, key]) + f": {e}"
                 logger.error(msg)
                 error = True
+
         elif isinstance(value, dict):
             error = error or apply_schema(settings.setdefault(key, {}), schema[key], [*path_list, key])
+
         else:
             settings.setdefault(key, value)
+
     if len(path_list) == 0 and error:
         raise ValueError("Invalid settings.yml")
     return error
@@ -266,8 +276,7 @@ SCHEMA: dict[str, t.Any] = {
         'extra_proxy_timeout': SettingsValue(int, 0),
         'networks': {},
     },
-    'plugins': SettingsValue(dict, {}),
+    "plugins": plugins.StorageCfg,
     'categories_as_tabs': SettingsValue(dict, CATEGORIES_AS_TABS),
     'engines': SettingsValue(list, []),
-    'doi_resolvers': {},
 }

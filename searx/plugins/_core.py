@@ -1,48 +1,141 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# pylint: disable=too-few-public-methods,missing-module-docstring
+# pylint: disable=missing-module-docstring, too-few-public-methods
 
-__all__ = ["PluginInfo", "Plugin", "PluginCfg", "PluginStorage"]
+import typing as t
+from collections import abc as c_abc
 
 import abc
 import importlib
 import inspect
 import logging
-import re
 
-import typing as t
-from collections.abc import Generator
-
-from dataclasses import dataclass, field
+import msgspec
+import flask
+from flask_babel import LazyString  # type: ignore[reportMissingTypeStubs]
 
 from searx.extended_types import SXNG_Request
+from searx import prefs, forms
 
 if t.TYPE_CHECKING:
     from searx.search import SearchWithPlugins
-    from searx.result_types import Result, EngineResults, LegacyResult  # pyright: ignore[reportPrivateLocalImportUsage]
-    import flask
+    from searx.result_types import Result, ResultList
 
 log: logging.Logger = logging.getLogger("searx.plugins")
 
 
-@dataclass
+PrefSection: t.TypeAlias = t.Literal["general", "ui", "privacy", "query", None]
+"""Section (tab/group) in the preferences where this plugin is shown to the
+user.
+
+The value ``query`` is reserved for plugins that are activated via a *keyword*
+as part of a search query, see:
+
+- :py:obj:`PluginInfo.examples`
+- :py:obj:`Plugin.keywords`
+
+Those plugins are shown in the preferences in tab *Special Queries*.
+"""
+
+PREF_SECTIONS: list[PrefSection] = list(t.get_args(PrefSection))
+"""List off prefernces sections (:obj:`PrefSection`)"""
+
+# Configuration of a plugin
+# -------------------------
+
+
+class PluginCfg(msgspec.Struct):
+    """Base class for the individual configuration of all types of plugins."""
+
+
+PluginCfgTypeT = t.TypeVar("PluginCfgTypeT", bound=PluginCfg)
+
+
+class StoragePlgCfg(msgspec.Struct):
+    """A plugin configuration in the list of configured Plugins.
+
+    .. code:: yaml
+
+       plugins:                       # <-- Storage.load_settings(StorageCfg)
+         # ...
+         mypackage.mymodule.MyPlugin: # <-- Plugin[<plugin-id>] / base class: StoragePlgCfg
+           active: true
+           locked: false              # lock preferences
+           cfg:                       # <-- Plugin.cfg / base class: PluginCfg
+             option_a: 42
+             option_b:
+                - "foo"
+                - "bar"
+    """
+
+    active: bool = True
+    """Plugin is "on" by default and the user can *opt-out* in the preferences
+    :py:obj:`Plugin.active`."""
+
+    locked: bool = False
+    """Plugin's preference are un-locked by default (:py:obj:`Plugin.locked`)."""
+
+    cfg: dict[str, t.Any] = msgspec.field(default_factory=dict)
+
+
+# Preferences of a plugin
+# -----------------------
+
+
+class PrefMap(t.TypedDict):
+    pass
+
+
+class PluginPref(prefs.Pref[forms.ValT], t.Generic[forms.ValT]):
+
+    name: str
+    """Name of the plugin preference."""
+
+    plg: "PluginType"
+    """Plugin to which this preference belongs."""
+
+    def __init__(
+        self,
+        name: str,
+        plg: "Plugin[t.Any, t.Any]",
+        default: c_abc.Sequence[forms.ValT] | forms.ValT,
+        catalog: forms.Catalog[forms.ValT] | forms.CatalogDefType[forms.ValT] | None = None,
+        l10n_descr: LazyString | str = "",
+    ):
+
+        self.name = name
+        self.plg = plg
+
+        super().__init__(
+            id=f"{plg.id}_{name}",
+            default=default,
+            catalog=catalog,
+            locked=plg.locked,
+            l10n_descr=l10n_descr,
+        )
+
+
+# Representation of the plugin in the UI
+# --------------------------------------
+
+
 class PluginInfo:
     """Object that holds information about a *plugin*, these infos are shown to
     the user in the Preferences menu.
 
     To be able to translate the information into other languages, the text must
-    be written in English and translated with :py:obj:`flask_babel.gettext`.
+    be written in English and translated with :py:obj:`flask_babel.lazy_gettext`.
     """
 
     id: str
-    """The ID-selector in HTML/CSS `#<id>`."""
+    """The ID-selector in HTML/CSS `#<id>` (default is :py:obj:`Plugin.id`)."""
 
-    name: str
+    name: LazyString
     """Name of the *plugin*."""
 
-    description: str
+    description: LazyString
     """Short description of the *answerer*."""
 
-    preference_section: t.Literal["general", "ui", "privacy", "query"] | None = "general"
+    preference_section: PrefSection | None = "general"
     """Section (tab/group) in the preferences where this plugin is shown to the
     user.
 
@@ -55,24 +148,36 @@ class PluginInfo:
     Those plugins are shown in the preferences in tab *Special Queries*.
     """
 
-    examples: list[str] = field(default_factory=list)
+    examples: list[str] = []
     """List of short examples of the usage / of query terms."""
 
-    keywords: list[str] = field(default_factory=list)
+    keywords: list[str] = []
     """See :py:obj:`Plugin.keywords`"""
 
+    def __init__(self, plg: "Plugin[t.Any, t.Any]"):
+        self.plg: "Plugin[t.Any, t.Any]" = plg
+        self.id = plg.id
+        self.keywords = plg.keywords
 
-ID_REGXP = re.compile("[a-z][a-z0-9].*")
+
+PluginInfoTypeT = t.TypeVar("PluginInfoTypeT", bound=PluginInfo)
+
+# Plugin instances at runtime
+# ---------------------------
 
 
-class Plugin(abc.ABC):
+class Plugin(abc.ABC, t.Generic[PluginInfoTypeT, PluginCfgTypeT]):
     """Abstract base class of all Plugins."""
 
     id: str = ""
-    """The ID (suffix) in the HTML form."""
+    """The ID used in the HTML form and as cookie name
+    (:obj:`prefs.PREF_ID_PATTERN`).
+    """
+    active: bool
+    """Plugin is enabled/disabled by default (:py:obj:`StoragePlgCfg.active`)."""
 
-    active: t.ClassVar[bool]
-    """Plugin is enabled/disabled by default (:py:obj:`PluginCfg.active`)."""
+    locked: bool
+    """Plugin's preference are un-locked by default (:py:obj:`StoragePlgCfg.locked`)."""
 
     keywords: list[str] = []
     """Keywords in the search query that activate the plugin.  The *keyword* is
@@ -80,37 +185,54 @@ class Plugin(abc.ABC):
     of the search query, the list of keywords should be empty (which is also the
     default in the base class for Plugins)."""
 
+    info_factory: t.ClassVar[type[PluginInfo]]
+    info: PluginInfoTypeT
+    """Information about the *plugin*, see :py:obj:`PluginInfo`."""
+
+    cfg_factory: t.ClassVar[type[PluginCfg]] = PluginCfg
+    cfg: PluginCfgTypeT
+    """Configuration (setup) of the *plugin*, see :py:obj:`PluginCfg`."""
+
     log: logging.Logger
     """A logger object, is automatically initialized when calling the
     constructor (if not already set in the subclass)."""
 
-    info: PluginInfo
-    """Information about the *plugin*, see :py:obj:`PluginInfo`."""
+    fqn: str
 
-    fqn: str = ""
+    # will be annotated in the sub-classes
+    prefs = {}  # pyright: ignore[reportUnannotatedClassAttribute]
 
-    def __init__(self, plg_cfg: "PluginCfg") -> None:
-        super().__init__()
-        if not self.fqn:
-            self.fqn = self.__class__.__mro__[0].__module__
+    def __init__(self, storage_plg_item: dict[str, t.Any]) -> None:
 
-        # names from the configuration
-        for n, v in plg_cfg.__dict__.items():
-            setattr(self, n, v)
-
-        # names that must be set by the plugin implementation
-        for attr in [
-            "id",
-        ]:
-            if getattr(self, attr, None) is None:
-                raise NotImplementedError(f"plugin {self} is missing attribute {attr}")
-
-        if not ID_REGXP.match(self.id):
+        if not getattr(self, "info_factory"):
+            raise NotImplementedError(f"plugin {self} is missing attribute 'info_factory'")
+        if not self.id:
+            raise NotImplementedError(f"plugin {self} is missing attribute 'id'")
+        if not forms.FIELD_ID_PATTERN.fullmatch(self.id):
             raise ValueError(f"plugin ID {self.id} contains invalid character (use lowercase ASCII)")
-
         if not getattr(self, "log", None):
-            pkg_name = inspect.getmodule(self.__class__).__package__  # pyright: ignore[reportOptionalMemberAccess]
+            pkg_name = inspect.getmodule(self.__class__).__package__  # type: ignore[reportOptionalMemberAccess]
             self.log = logging.getLogger(f"{pkg_name}.{self.id}")
+
+        self.fqn = self.__class__.__mro__[0].__module__
+
+        # Initially, the on/off state is taken from the configuration (StoragePlgCfg)
+        storage_plg = StoragePlgCfg(**storage_plg_item)  # type: ignore[reportAny]
+        self.active = storage_plg.active
+        self.locked = storage_plg.locked
+
+        self.cfg = t.cast(PluginCfgTypeT, self.cfg_factory(**storage_plg.cfg))
+        self.info = t.cast(PluginInfoTypeT, self.info_factory(self))
+
+    def init(self):
+        self.prefs = {}
+
+    # @property
+    # def prefs(self) -> PrefMap:
+    #     """Provides the individual preferences for this plugin and may need to
+    #     be adjusted in the heirs if they have special preferences.
+    #     """
+    #     return self._prefs
 
     def __hash__(self) -> int:
         """The hash value is used in :py:obj:`set`, for example, when an object
@@ -120,25 +242,48 @@ class Plugin(abc.ABC):
 
         return id(self)
 
-    def __eq__(self, other: t.Any):
+    def __eq__(self, other: t.Any):  # type: ignore[reportAny]
         """py:obj:`Plugin` objects are equal if the hash values of the two
         objects are equal."""
 
-        return hash(self) == hash(other)
-
-    def init(self, app: "flask.Flask") -> bool:  # pylint: disable=unused-argument
-        """Initialization of the plugin, the return value decides whether this
-        plugin is active or not.  Initialization only takes place once, at the
-        time the WEB application is set up.  The base method always returns
-        ``True``, the method can be overwritten in the inheritances,
-
-        - ``True`` plugin is active
-        - ``False`` plugin is inactive
-        """
-        return True
+        return hash(self) == hash(other)  # type: ignore[reportAny]
 
     # pylint: disable=unused-argument
-    def pre_search(self, request: SXNG_Request, search: "SearchWithPlugins") -> bool:
+    def init_from_app(self, app: flask.Flask) -> bool:  # type: ignore[reportUnusedParameter]
+        """Initialization of the plugin in application's context.
+
+        Initialization only takes place once, at the time the WEB application is
+        set up.  The return value decides whether this plugin is available in
+        the application or not. Don't mess with *active/inactive* state of a
+        plugin:
+
+        - ``True``: plugin is available in the application. If a plugin is
+           available in the application, it can be *active* or *inactive*.
+
+        - ``False`` plugin is NOT available in the application.  If a plugin is
+           not available in the application, then it cannot be *active*.
+           either.
+
+        The method can be overridden; however, the method in the base class
+        should always be checked as well (necessary for future developments
+        within the base class).
+        """
+
+        # FIXME: die Plugins haben bis hier in die Einstellungen aus der
+        # Konfiguration (settings.yml).  Die Erben der Plugin Klasse können
+        # diese init-Methode überschreiben um ggf. aus dem Anwendungskontext
+        # (der Flask app) weitere Initialisierungen vorzunehmen
+        #
+        # FIXME: Was bisher noch fehlt ist eine Methode
+        # (Plugin.init_from_request), die hier in der Basisklsase noch eine
+        # Initialisierung aus dem Request Kontext (z.B. aus den Cookies) vornimmt.
+        return True
+
+    def pre_search(
+        self,
+        request: SXNG_Request,  # type: ignore[reportUnusedParameter]
+        search: "SearchWithPlugins",  # type: ignore[reportUnusedParameter]
+    ) -> bool:
         """Runs BEFORE the search request and returns a boolean:
 
         - ``True`` to continue the search
@@ -146,7 +291,12 @@ class Plugin(abc.ABC):
         """
         return True
 
-    def on_result(self, request: SXNG_Request, search: "SearchWithPlugins", result: "Result") -> bool:
+    def on_result(
+        self,
+        request: SXNG_Request,  # type: ignore[reportUnusedParameter]
+        search: "SearchWithPlugins",  # type: ignore[reportUnusedParameter]
+        result: "Result",  # type: ignore[reportUnusedParameter]
+    ) -> bool:
         """Runs for each result of each engine and returns a boolean:
 
         - ``True`` to keep the result
@@ -167,55 +317,65 @@ class Plugin(abc.ABC):
         return True
 
     def post_search(
-        self, request: SXNG_Request, search: "SearchWithPlugins"
-    ) -> "None | list[Result | LegacyResult] | EngineResults":
+        self,
+        request: SXNG_Request,  # pyright: ignore[reportUnusedParameter]
+        search: "SearchWithPlugins",  # pyright: ignore[reportUnusedParameter]
+    ) -> "None | ResultList":
         """Runs AFTER the search request.  Can return a list of
         :py:obj:`Result <searx.result_types._base.Result>` objects to be added to the
         final result list."""
         return
 
 
-@dataclass
-class PluginCfg:
-    """Settings of a plugin.
-
-    .. code:: yaml
-
-       mypackage.mymodule.MyPlugin:
-         active: true
-    """
-
-    active: bool = False
-    """Plugin is active by default and the user can *opt-out* in the preferences."""
+PluginType: t.TypeAlias = Plugin[PluginInfo, PluginCfg]
+PluginTypeT = t.TypeVar("PluginTypeT", bound=PluginType)
 
 
-class PluginStorage:
+class StorageCfg(dict[str, dict[str, t.Any]]):
+    pass
+
+
+class Storage:
     """A storage for managing the *plugins* of SearXNG."""
 
-    plugin_list: set[Plugin]
-    """The list of :py:obj:`Plugins` in this storage."""
-
     def __init__(self):
-        self.plugin_list = set()
-
-    def __iter__(self) -> Generator[Plugin]:
-        yield from self.plugin_list
+        self._by_id: dict[str, PluginType] = {}
 
     def __len__(self):
-        return len(self.plugin_list)
+        return len(self._by_id)
 
-    @property
-    def info(self) -> list[PluginInfo]:
+    def __iter__(self) -> c_abc.Generator[PluginType]:
+        yield from self._by_id.values()
 
-        return [p.info for p in self.plugin_list]
+    def items(self) -> list[tuple[str, PluginType]]:
+        return [i for i in self._by_id.items()]
 
-    def load_settings(self, cfg: dict[str, dict[str, t.Any]]):
+    def get(self, plg_id: str) -> PluginType | None:
+        return self._by_id.get(plg_id, None)
+
+    def section(self, name: PrefSection) -> c_abc.Sequence[PluginType]:
+        """Returns the list of plugins in a preference section
+        (:obj:`PrefSection`)."""
+        return [plg for plg in self if plg.info.preference_section == name]
+
+    def register(self, plg: PluginType):
+        """Register a :py:obj:`Plugin`.  In case of name collision (if two
+        plugins have same ID) a :py:obj:`KeyError` exception is raised.
+        """
+        if self.get(plg.id):
+            msg = f"name collision '{plg.id}'"
+            plg.log.critical(msg)
+            raise KeyError(msg)
+        self._by_id[plg.id] = plg
+        plg.log.debug("plugin has been loaded")
+
+    def load_settings(self, cfg: StorageCfg):
         """Load plugins configured in SearXNG's settings :ref:`settings
         plugins`."""
 
-        for fqn, plg_settings in cfg.items():
-            cls = None
-            mod_name, cls_name = fqn.rsplit('.', 1)
+        for fqn, plg_cfg in cfg.items():
+            cls: type[PluginType] | None = None
+            mod_name, cls_name = fqn.rsplit(".", 1)
             try:
                 mod = importlib.import_module(mod_name)
                 cls = getattr(mod, cls_name, None)
@@ -225,39 +385,28 @@ class PluginStorage:
             if cls is None:
                 msg = f"plugin {fqn} is not implemented"
                 raise ValueError(msg)
-            plg = cls(PluginCfg(**plg_settings))
+            plg = cls(plg_cfg)
             self.register(plg)
 
-    def register(self, plugin: Plugin):
-        """Register a :py:obj:`Plugin`.  In case of name collision (if two
-        plugins have same ID) a :py:obj:`KeyError` exception is raised.
-        """
-
-        if plugin in [p.id for p in self.plugin_list]:
-            msg = f"name collision '{plugin.id}'"
-            plugin.log.critical(msg)
-            raise KeyError(msg)
-
-        self.plugin_list.add(plugin)
-        plugin.log.debug("plugin has been loaded")
-
-    def init(self, app: "flask.Flask") -> None:
+    def init_from_app(self, app: flask.Flask) -> None:
         """Calls the method :py:obj:`Plugin.init` of each plugin in this
         storage.  Depending on its return value, the plugin is removed from
         *this* storage or not."""
 
-        for plg in self.plugin_list.copy():
-            if not plg.init(app):
-                self.plugin_list.remove(plg)
+        for plg_id, plg_obj in self.items():
+            if not plg_obj.init_from_app(app):
+                del self._by_id[plg_id]
 
     def pre_search(self, request: SXNG_Request, search: "SearchWithPlugins") -> bool:
-
+        """Calls the handle :obj:`Plugin.pre_search` for the plugins in this
+        search query and stops as soon as a plugin returns `False`.
+        """
         ret = True
-        for plugin in [p for p in self.plugin_list if p.id in search.user_plugins]:
+        for plg in [p for p in self if p.id in search.user_plugins]:
             try:
-                ret = bool(plugin.pre_search(request=request, search=search))
+                ret = bool(plg.pre_search(request=request, search=search))
             except Exception:  # pylint: disable=broad-except
-                plugin.log.exception("Exception while calling pre_search")
+                plg.log.exception("Exception while calling pre_search")
                 continue
             if not ret:
                 # skip this search on the first False from a plugin
@@ -265,13 +414,16 @@ class PluginStorage:
         return ret
 
     def on_result(self, request: SXNG_Request, search: "SearchWithPlugins", result: "Result") -> bool:
-
+        """Calls the handle :obj:`Plugin.on_result` for the plugins in this
+        search query and discards the :obj:`.Result` item as soon as a plugin
+        returns `False`.
+        """
         ret = True
-        for plugin in [p for p in self.plugin_list if p.id in search.user_plugins]:
+        for plg in [p for p in self if p.id in search.user_plugins]:
             try:
-                ret = bool(plugin.on_result(request=request, search=search, result=result))
+                ret = bool(plg.on_result(request=request, search=search, result=result))
             except Exception:  # pylint: disable=broad-except
-                plugin.log.exception("Exception while calling on_result")
+                plg.log.exception("Exception while calling on_result")
                 continue
             if not ret:
                 # ignore this result item on the first False from a plugin
@@ -280,9 +432,8 @@ class PluginStorage:
         return ret
 
     def post_search(self, request: SXNG_Request, search: "SearchWithPlugins") -> None:
-        """Extend :py:obj:`search.result_container
-        <searx.results.ResultContainer`> with result items from plugins listed
-        in :py:obj:`search.user_plugins <SearchWithPlugins.user_plugins>`.
+        """Extend :obj:`searx.search.Search.result_container` with result
+        items from plugins listed in :obj:`searx.search.SearchWithPlugins.user_plugins`.
         """
 
         keyword = None
@@ -290,17 +441,19 @@ class PluginStorage:
             if keyword:
                 break
 
-        for plugin in [p for p in self.plugin_list if p.id in search.user_plugins]:
+        for plg in [p for p in self if p.id in search.user_plugins]:
 
-            if plugin.keywords:
+            if plg.keywords:
                 # plugin with keywords: skip plugin if no keyword match
-                if keyword and keyword not in plugin.keywords:
+                if keyword and keyword not in plg.keywords:
                     continue
             try:
-                results = plugin.post_search(request=request, search=search) or []
+                results: ResultList | None = plg.post_search(request=request, search=search)
             except Exception:  # pylint: disable=broad-except
-                plugin.log.exception("Exception while calling post_search")
+                plg.log.exception("Exception while calling post_search")
                 continue
 
+            if results is None:
+                continue
             # In case of *plugins* prefix ``plugin:`` is set, see searx.result_types.Result
-            search.result_container.extend(f"plugin: {plugin.id}", results)
+            search.result_container.extend(engine_name="plugin: {plg.id}", results=results)

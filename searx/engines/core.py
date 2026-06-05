@@ -99,6 +99,7 @@ def response(resp: "SXNG_Response") -> EngineResults:
         # Get URL - try different options
         url: str | None = None
 
+        # FIXME: was hiervon kann das oa_doi_rewrite Plugin übernehmen?
         # Try DOI first
         doi: str = result.get("doi")
         if doi:
