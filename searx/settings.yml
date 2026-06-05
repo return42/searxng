@@ -250,7 +250,7 @@ plugins:
 
   searx.plugins.oa_doi_rewrite.SXNGPlugin:
     active: false
-    config:
+    cfg:
       resolvers:
         oadoi.org: https://oadoi.org/"
         doi.org: https://doi.org/"

@@ -12,12 +12,38 @@ from searx import get_setting
 from searx.plugins import Plugin, PluginInfo, PluginCfg
 from searx.extended_types import sxng_request
 
-from ._core import log
+from ._core import log, PluginCfg, PluginPrefs
 
 if t.TYPE_CHECKING:
     from searx.search import SearchWithPlugins
     from searx.extended_types import SXNG_Request
     from searx.result_types import Result, LegacyResult  # pyright: ignore[reportPrivateLocalImportUsage]
+
+
+class DOICfgType(msgspec.Struct):
+    resolvers: dict[str, str] = msgspec.field(default_factory=dict)
+
+
+class DOIConfig(PluginCfg[DOICfgType]):
+    """DOI configuration from ``config``
+
+    .. code: yaml
+
+       searx.plugins.oa_doi_rewrite.SXNGPlugin:
+         active: true
+         config:    # DOICfgType
+           resolvers:
+             oadoi.org: https://oadoi.org/"
+             doi.org: https://doi.org/"
+             sci-hub.se: https://sci-hub.se/"
+             sci-hub.st: https://sci-hub.st/"
+             sci-hub.ru: https://sci-hub.ru/"
+    """
+
+    resolvers: dict[str, str] = msgspec.field(default_factory=dict)
+
+
+###################################################
 
 
 def filter_url_field(result: "Result|LegacyResult", field_name: str, url_src: str) -> bool | str:
@@ -44,28 +70,13 @@ def filter_url_field(result: "Result|LegacyResult", field_name: str, url_src: st
     return True  # use it unchanged
 
 
+
+
 @t.final
 class SXNGPlugin(Plugin):
     """Avoid paywalls by redirecting to open-access."""
 
     id = "oa_doi_rewrite"
-
-    class ConfigType(msgspec.Struct):
-        """DOI configuration from ``config``
-
-        .. code: yaml
-
-           searx.plugins.oa_doi_rewrite.SXNGPlugin:
-             active: false
-             config:
-               resolvers:
-                 oadoi.org: https://oadoi.org/"
-                 doi.org: https://doi.org/"
-                 sci-hub.se: https://sci-hub.se/"
-                 sci-hub.st: https://sci-hub.st/"
-                 sci-hub.ru: https://sci-hub.ru/"
-        """
-        resolvers: dict[str, str]
 
     def __init__(self, plg_cfg: "PluginCfg") -> None:
         super().__init__(plg_cfg)

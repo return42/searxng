@@ -94,13 +94,13 @@ Implementation
    :members:
 """
 
-__all__ = ["PluginInfo", "Plugin", "PluginStorage", "PluginStorageCfg", "PluginCfg"]
+__all__ = ["PluginInfo", "Plugin", "PluginStorage", "PluginsStorageCfg", "PluginCfg"]
 
 import typing as t
 
 import searx
 
-from ._core import PluginInfo, Plugin, PluginStorage, PluginStorageCfg, PluginCfg
+from ._core import PluginInfo, Plugin, PluginStorage, PluginsStorageCfg, PluginCfg
 
 if t.TYPE_CHECKING:
     import flask
