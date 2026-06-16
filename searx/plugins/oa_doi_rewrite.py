@@ -9,41 +9,15 @@ import urllib.parse
 import msgspec
 from flask_babel import gettext  # pyright: ignore[reportUnknownVariableType]
 from searx import get_setting
-from searx.plugins import Plugin, PluginInfo, PluginCfg
+from searx.plugins import Plugin, PluginInfo, PluginCfg, StoragePlgCfg
 from searx.extended_types import sxng_request
 
-from ._core import log, PluginCfg, PluginPrefs
+from ._core import log, PluginCfg
 
 if t.TYPE_CHECKING:
     from searx.search import SearchWithPlugins
     from searx.extended_types import SXNG_Request
     from searx.result_types import Result, LegacyResult  # pyright: ignore[reportPrivateLocalImportUsage]
-
-
-class DOICfgType(msgspec.Struct):
-    resolvers: dict[str, str] = msgspec.field(default_factory=dict)
-
-
-class DOIConfig(PluginCfg[DOICfgType]):
-    """DOI configuration from ``config``
-
-    .. code: yaml
-
-       searx.plugins.oa_doi_rewrite.SXNGPlugin:
-         active: true
-         config:    # DOICfgType
-           resolvers:
-             oadoi.org: https://oadoi.org/"
-             doi.org: https://doi.org/"
-             sci-hub.se: https://sci-hub.se/"
-             sci-hub.st: https://sci-hub.st/"
-             sci-hub.ru: https://sci-hub.ru/"
-    """
-
-    resolvers: dict[str, str] = msgspec.field(default_factory=dict)
-
-
-###################################################
 
 
 def filter_url_field(result: "Result|LegacyResult", field_name: str, url_src: str) -> bool | str:
@@ -70,16 +44,36 @@ def filter_url_field(result: "Result|LegacyResult", field_name: str, url_src: st
     return True  # use it unchanged
 
 
+class DOICfg(PluginCfg):
+    """Setup of the DOI plugin.
+
+    .. code: yaml
+
+       searx.plugins.oa_doi_rewrite.SXNGPlugin:
+         active: true
+         cfg:          # <-- DOICfg
+           resolvers:
+             oadoi.org: https://oadoi.org/"
+             doi.org: https://doi.org/"
+             sci-hub.se: https://sci-hub.se/"
+             sci-hub.st: https://sci-hub.st/"
+             sci-hub.ru: https://sci-hub.ru/"
+    """
+    resolvers: dict[str, str] = msgspec.field(default_factory=dict)
+
+
 
 
 @t.final
-class SXNGPlugin(Plugin):
+class SXNGPlugin(Plugin[DOICfg]):
     """Avoid paywalls by redirecting to open-access."""
 
     id = "oa_doi_rewrite"
 
-    def __init__(self, plg_cfg: "PluginCfg") -> None:
-        super().__init__(plg_cfg)
+    cfg_cls = DOICfg
+
+    def __init__(self, storage_cfg: StoragePlgCfg) -> None:
+        super().__init__(storage_cfg)
         self.info = PluginInfo(
             id=self.id,
             name=gettext("Open Access DOI rewrite"),

@@ -16,7 +16,7 @@ from typing_extensions import override
 from .brand import SettingsBrand
 from .sxng_locales import sxng_locales
 from ._settings import SettingsPref
-from .plugins import PluginsStorageCfg
+from searx import plugins
 
 searx_dir = abspath(dirname(__file__))
 
@@ -270,7 +270,7 @@ SCHEMA: dict[str, t.Any] = {
         'extra_proxy_timeout': SettingsValue(int, 0),
         'networks': {},
     },
-    "plugins": PluginsStorageCfg,
+    "plugins": plugins.StorageCfg,
     'categories_as_tabs': SettingsValue(dict, CATEGORIES_AS_TABS),
     'engines': SettingsValue(list, []),
 }

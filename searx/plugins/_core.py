@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # pylint: disable=too-few-public-methods,missing-module-docstring
 
-__all__ = ["PluginInfo", "Plugin", "PluginCfg", "PluginStorage"]
+__all__ = ["Plugin", "PluginInfo", "PluginCfg", "Storage", "StorageCfg", "StoragePlgCfg"]
 
 import typing as t
-from collections.abc import Generator, Mapping, Hashable
+from collections.abc import Generator
 import dataclasses
 
 import abc
@@ -29,101 +29,36 @@ ID_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*$")
 """In order for IDs to be used in forms, they should consist of simple sequences
 of letters and, if applicable, digits."""
 
-KeyType = t.TypeVar("KeyType", bound=Hashable)
-"""Type variable for generic type definitions of the hashable keys of a mapping
-typ."""
-
-ValueType = t.TypeVar("ValueType")
-"""Type variable for generic type definitions of the values of a mapping typ."""
-
-T = t.TypeVar("T")
-"""Unspecified, general variable for generic type definitions"""
-
-PluginType = t.TypeVar("PluginType")
-"""Type variable for generic type definitions of the :py:obj:`Plugin`
-inheritances"""
-
-CatalogType = t.TypeVar("CatalogType")
-"""Type variable for generic type definitions of the :py:obj:`Catalog`
-inheritances"""
-
-
-# @t.final
-# class TV_GuardType:
-#     __slots__ = ()
-#
-#     @staticmethod
-#     def __call__(val: ValueType | "TV_GuardType") -> t.TypeGuard[ValueType]:
-#         """Generic TypeGuard function."""
-#         return val is not TV_Guard
-#
-# TV_Guard = TV_GuardType()
-# """A type and value -guard (singelton) for static type checkers."""
-
-
 # Configuration of a Plugin
 # -------------------------
 
-PluginCfgType = t.TypeVar("PluginCfgType", bound=msgspec.Struct)
-"""Generic type definition used for the :py:obj:`PluginCfg` class and its
-inheritors.
+class StoragePlgCfg(msgspec.Struct):
+    """A plugin configuration in the list of configured Plugins.
 
 .. code:: yaml
 
-   plugins:                       # <-- PluginStorage
+   plugins:                       # <-- StorageCfg
      # ...
-     mypackage.mymodule.MyPlugin: # <-- PluginSetup
+     mypackage.mymodule.MyPlugin: # <-- StoragePlgCfg
        active: true
-       cfg:                       # <-- PluginCfgType
+       cfg:                       # <-- PluginCfg
          option_a: 42
          option_b:
             - "foo"
             - "bar"
-"""
-
-
-class PluginSetup(msgspec.Struct, t.Generic[PluginCfgType]):
-    """Base class for plugin configurations
-
-    .. code:: yaml
-
-       mypackage.mymodule.MyPlugin:   # PluginSetup
-         active: true
     """
 
     active: bool = True
     """Plugin is "on" by default and the user can *opt-out* in the preferences
     :py:obj:`PluginPref.active`."""
 
-    cfg: PluginCfgType | None = None
-    """Configuration regarding the (individual) functions of the plugin."""
+    cfg: dict[str, t.Any] = msgspec.field(default_factory=dict)
 
 
-# FIXME: move DOI config to the oa_doi_rewrite plugin
+class PluginCfg(msgspec.Struct):
+    """Base class for all plugin configurations."""
 
-class DOICfgType(msgspec.Struct):
-    resolvers: dict[str, str] = msgspec.field(default_factory=dict)
-
-
-@t.final
-class DOISetup(PluginSetup[DOICfgType]):
-    """Setup of the DOI plugin.
-
-    .. code: yaml
-
-       searx.plugins.oa_doi_rewrite.SXNGPlugin:
-         active: true
-         cfg:          # <-- DOICfgType
-           resolvers:
-             oadoi.org: https://oadoi.org/"
-             doi.org: https://doi.org/"
-             sci-hub.se: https://sci-hub.se/"
-             sci-hub.st: https://sci-hub.st/"
-             sci-hub.ru: https://sci-hub.ru/"
-    """
-
-    resolvers: dict[str, str] = msgspec.field(default_factory=dict)
-
+PluginCfgType = t.TypeVar("PluginCfgType", bound=PluginCfg)
 
 # Plugin instances at runtime
 # ---------------------------
@@ -184,9 +119,10 @@ class Plugin(abc.ABC, t.Generic[PluginCfgType]):
     info: PluginInfo
     """Information about the *plugin*, see :py:obj:`PluginInfo`."""
 
-    cfg: PluginSetup[PluginCfgType]
+    cfg: PluginCfgType
     """Configuration (setup) of the *plugin*, see :py:obj:`PluginSetup`."""
 
+    cfg_cls: type[PluginCfg] = PluginCfg
     #PrefType: type[PluginPrefs] = PluginPrefs
     #"""Data type for the user settings (aka preferences)."""
 
@@ -194,10 +130,9 @@ class Plugin(abc.ABC, t.Generic[PluginCfgType]):
     """A logger object, is automatically initialized when calling the
     constructor (if not already set in the subclass)."""
 
-
     fqn: str
 
-    def __init__(self, plg_cfg: PluginSetup[PluginCfgType]) -> None:
+    def __init__(self, storage_plg: StoragePlgCfg) -> None:
         if not self.id:
             raise NotImplementedError(f"plugin {self} is missing attribute 'id'")
         if not ID_PATTERN.fullmatch(self.id):
@@ -207,8 +142,8 @@ class Plugin(abc.ABC, t.Generic[PluginCfgType]):
             self.log = logging.getLogger(f"{pkg_name}.{self.id}")
 
         self.fqn = self.__class__.__mro__[0].__module__
-        self.cfg = plg_cfg
-        self.active = plg_cfg.active
+        self.cfg = self.cfg_cls(**storage_plg.cfg)
+        self.active = storage_plg.active
 
     def __hash__(self) -> int:
         """The hash value is used in :py:obj:`set`, for example, when an object
@@ -281,195 +216,41 @@ class Plugin(abc.ABC, t.Generic[PluginCfgType]):
 
 
 
-# Prefernces of a Plugin
-# ----------------------
 
-class Catalog(t.Generic[KeyType, ValueType]):
-    """Base class for catalogs that can be passed in the preferences."""
+StorageCfg = dict[str, StoragePlgCfg]
 
-    def __init__(self, records: Mapping[KeyType, ValueType]):
-        self._records: Mapping[KeyType, ValueType] = records
 
-    def __getitem__(self, key: KeyType) -> ValueType:
-        return self._records[key]
-
-    def get_value(self, name: KeyType) -> ValueType | None:
-        """Get python value for catalog item of `name`"""
-        return self._records.get(name)
-
-    def get_name(self, value: ValueType) -> KeyType:
-        for name, py_val in self._records.items():
-            if py_val == value:
-                return name
-        raise KeyError(value)
-
-
-class PrefCatalog(t.Generic[PluginType, CatalogType]):
-    """A preference item based on a catalog."""
-
-    def __init__(self, plg: Plugin, catalog: CatalogType):
-
-        self.plg: Plugin = plg
-        self.catalog: CatalogType = catalog
-
-    def serialize(self) -> PrefDataType:
-        data: PrefDataType = PrefDataType()
-
-        # If Plugin.active does not match the default, the value is added to the
-        # preferences; otherwise, this is not necessary.
-        if self.plg.active != self.plg.cfg.active:
-            pref_data.active = BoolCatalog.serialize(self.plg.active)
-
-        return PrefDataStruct(plugins={self.plg.id: pref_data})
-
-
-
-
-
-OnOffLiteral = t.Literal["on", "off"]
-OnOffCatalog: Catalog[OnOffLiteral, bool] = Catalog({"on": True, "off": False})
-# OnOffPref = PrefCatalog(plg, OnOffCatalog)
-
-
-
-
-
-
-class PrefDataStruct(msgspec.Struct):
-    """A mapping table that references the preference settings (data structures)
-    for a plugin by its name."""
-    plugins: dict[str, PrefDataType] = {}
-
-
-
-
-
-class PrefType:
-    catalog: t.Any = None
-
-
-class PrefTypeBool(PrefType):
-
-    catalog: Catalog[BoolLiterals, bool] = Catalog({"on": True, "off": False})
-
-    def __init__(field_id: str):
-
-
-class PrefDataType(msgspec.Struct):
-    """Base class of all types (data structures) for the configuration (setup)
-    of the preferences."""
-
-    active: BoolLiterals | None = None
-
-    @classmethod
-    def serialize(cls, plg: "Plugin[PluginType]"):
-        field_dict = {}
-
-
-
-
-        pref_data: PrefDataType = cls()
-        # If Plugin.active does not match the default, the value is added to the
-        # preferences; otherwise, this is not necessary.
-        if plg.active != plg.cfg.active:
-            pref_data.active = BoolCatalog.serialize(plg.active)
-
-        return PrefDataStruct(plugins={plg.id: pref_data})
-
-    @classmethod
-    def deserialize(cls, plg: "Plugin[PluginType]", prefs: PrefDataStruct):
-        plg_prefs: PrefDataType | TVGuardType = prefs.plugins.get(plg.id, TVGuard)
-        if not TVGuard(plg_prefs):
-            return
-        kv_fields = {}
-        for field_name in
-
-
-
-
-
-
-class PluginPref(t.Generic[PluginType]):
-    """Base class for preferences of a plugin."""
-
-    plg: "Plugin[PluginType]"
-    """Backward reference to the plugin to which these preferences belong."""
-
-    def __init__(self, plg: "Plugin[PluginType]"):
-        self.plg = plg
-
-    def serialize(self) -> PrefDataStruct:
-        pref_data: PrefDataType = PrefDataType()
-
-        # If Plugin.active does not match the default, the value is added to the
-        # preferences; otherwise, this is not necessary.
-        if self.plg.active != self.plg.cfg.active:
-            pref_data.active = BoolCatalog.serialize(self.plg.active)
-
-        return PrefDataStruct(plugins={self.plg.id: pref_data})
-
-    def load(self, preferences: PrefDataStruct):
-
-        if pref_data.active is not None:
-
-
-
-
-            and  != pref_data.active:
-
-
-
-
-        active = pref_data.get("active", TVGuard)
-        if TVGuard(active):
-            # FIXME: TVGuard funktioniert nicht, weil isinstance(y, BoolLiterals) auch nicht funktioniert.
-            self.plg.active = BoolCatalog.get_value(x)
-
-        if isinstance(active, BoolLiterals):
-            pass
-
-
-
-
-
-
-
-
-
-
-PluginsStorageCfg = dict[str, PluginCfg]
-
-
-class PluginStorage:
+class Storage:
     """A storage for managing the *plugins* of SearXNG."""
 
     @property
-    def plugin_list(self) -> set[Plugin]:
+    def plugin_list(self) -> set[Plugin[PluginCfg]]:
         """The list of :py:obj:`Plugins` in this storage."""
         return set(self._by_id.values())
 
     def __init__(self):
-        self._by_id: dict[str, Plugin] = {}
+        self._by_id: dict[str, Plugin[PluginCfg]] = {}
 
-    def __iter__(self) -> Generator[Plugin]:
+    def __iter__(self) -> Generator[Plugin[PluginCfg]]:
         yield from self._by_id.values()
 
     def __len__(self):
         return len(self._by_id)
 
-    def get(self, id: str) -> Plugin | None:
+    def get(self, id: str) -> Plugin[PluginCfg] | None:
         return self._by_id.get(id, None)
 
     @property
     def info(self) -> list[PluginInfo]:
         return [p.info for p in self._by_id.values()]
 
-    def load_settings(self, cfg: PluginsStorageCfg):
+    def load_settings(self, cfg: StorageCfg):
         """Load plugins configured in SearXNG's settings :ref:`settings
         plugins`."""
 
+        plg_cfg: StoragePlgCfg
         for fqn, plg_cfg in cfg.items():
-            cls: type[Plugin] | None = None
+            cls: type[Plugin[PluginCfg]] | None = None
             mod_name, cls_name = fqn.rsplit(".", 1)
             try:
                 mod = importlib.import_module(mod_name)
@@ -480,10 +261,13 @@ class PluginStorage:
             if cls is None:
                 msg = f"plugin {fqn} is not implemented"
                 raise ValueError(msg)
-            plg: Plugin = cls(plg_cfg)
+            plg: Plugin[PluginCfg] = cls(plg_cfg)
+
+            import pdb
+            pdb.set_trace()
             self.register(plg)
 
-    def register(self, plugin: Plugin):
+    def register(self, plugin: Plugin[PluginCfg]):
         """Register a :py:obj:`Plugin`.  In case of name collision (if two
         plugins have same ID) a :py:obj:`KeyError` exception is raised.
         """
@@ -558,3 +342,175 @@ class PluginStorage:
 
             # In case of *plugins* prefix ``plugin:`` is set, see searx.result_types.Result
             search.result_container.extend(f"plugin: {plugin.id}", results)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Prefernces of a Plugin
+# ----------------------
+
+# class Catalog(t.Generic[KeyType, ValueType]):
+#     """Base class for catalogs that can be passed in the preferences."""
+
+#     def __init__(self, records: Mapping[KeyType, ValueType]):
+#         self._records: Mapping[KeyType, ValueType] = records
+
+#     def __getitem__(self, key: KeyType) -> ValueType:
+#         return self._records[key]
+
+#     def get_value(self, name: KeyType) -> ValueType | None:
+#         """Get python value for catalog item of `name`"""
+#         return self._records.get(name)
+
+#     def get_name(self, value: ValueType) -> KeyType:
+#         for name, py_val in self._records.items():
+#             if py_val == value:
+#                 return name
+#         raise KeyError(value)
+
+
+# class PrefCatalog(t.Generic[PluginType, CatalogType]):
+#     """A preference item based on a catalog."""
+
+#     def __init__(self, plg: Plugin, catalog: CatalogType):
+
+#         self.plg: Plugin = plg
+#         self.catalog: CatalogType = catalog
+
+#     def serialize(self) -> PrefDataType:
+#         data: PrefDataType = PrefDataType()
+
+#         # If Plugin.active does not match the default, the value is added to the
+#         # preferences; otherwise, this is not necessary.
+#         if self.plg.active != self.plg.cfg.active:
+#             pref_data.active = BoolCatalog.serialize(self.plg.active)
+
+#         return PrefDataStruct(plugins={self.plg.id: pref_data})
+
+
+
+
+
+# OnOffLiteral = t.Literal["on", "off"]
+# OnOffCatalog: Catalog[OnOffLiteral, bool] = Catalog({"on": True, "off": False})
+# # OnOffPref = PrefCatalog(plg, OnOffCatalog)
+
+
+
+
+
+
+# class PrefDataStruct(msgspec.Struct):
+#     """A mapping table that references the preference settings (data structures)
+#     for a plugin by its name."""
+#     plugins: dict[str, PrefDataType] = {}
+
+
+
+
+
+# class PrefType:
+#     catalog: t.Any = None
+
+
+# class PrefTypeBool(PrefType):
+
+#     catalog: Catalog[BoolLiterals, bool] = Catalog({"on": True, "off": False})
+
+#     def __init__(field_id: str):
+
+
+# class PrefDataType(msgspec.Struct):
+#     """Base class of all types (data structures) for the configuration (setup)
+#     of the preferences."""
+
+#     active: BoolLiterals | None = None
+
+#     @classmethod
+#     def serialize(cls, plg: "Plugin[PluginType]"):
+#         field_dict = {}
+
+
+
+
+#         pref_data: PrefDataType = cls()
+#         # If Plugin.active does not match the default, the value is added to the
+#         # preferences; otherwise, this is not necessary.
+#         if plg.active != plg.cfg.active:
+#             pref_data.active = BoolCatalog.serialize(plg.active)
+
+#         return PrefDataStruct(plugins={plg.id: pref_data})
+
+#     @classmethod
+#     def deserialize(cls, plg: "Plugin[PluginType]", prefs: PrefDataStruct):
+#         plg_prefs: PrefDataType | TVGuardType = prefs.plugins.get(plg.id, TVGuard)
+#         if not TVGuard(plg_prefs):
+#             return
+#         kv_fields = {}
+#         for field_name in
+
+
+
+
+
+
+# class PluginPref(t.Generic[PluginType]):
+#     """Base class for preferences of a plugin."""
+
+#     plg: "Plugin[PluginType]"
+#     """Backward reference to the plugin to which these preferences belong."""
+
+#     def __init__(self, plg: "Plugin[PluginType]"):
+#         self.plg = plg
+
+#     def serialize(self) -> PrefDataStruct:
+#         pref_data: PrefDataType = PrefDataType()
+
+#         # If Plugin.active does not match the default, the value is added to the
+#         # preferences; otherwise, this is not necessary.
+#         if self.plg.active != self.plg.cfg.active:
+#             pref_data.active = BoolCatalog.serialize(self.plg.active)
+
+#         return PrefDataStruct(plugins={self.plg.id: pref_data})
+
+#     def load(self, preferences: PrefDataStruct):
+
+#         if pref_data.active is not None:
+
+
+
+
+#             and  != pref_data.active:
+
+
+
+
+#         active = pref_data.get("active", TVGuard)
+#         if TVGuard(active):
+#             # FIXME: TVGuard funktioniert nicht, weil isinstance(y, BoolLiterals) auch nicht funktioniert.
+#             self.plg.active = BoolCatalog.get_value(x)
+
+#         if isinstance(active, BoolLiterals):
+#             pass
+
+
+
+
+
+
+
+
+
+
+# PluginsStorageCfg = dict[str, PluginCfg]

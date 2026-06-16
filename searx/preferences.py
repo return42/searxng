@@ -15,6 +15,8 @@ import flask
 import babel
 import babel.core
 
+import searx.plugins
+
 from searx import get_setting, settings, autocomplete, favicons
 from searx.enginelib import Engine
 from searx.engines import DEFAULT_CATEGORY
@@ -23,10 +25,6 @@ from searx.locales import LOCALE_NAMES
 from searx.webutils import VALID_LANGUAGE_CODE
 
 from ._settings import SettingsPref
-
-if t.TYPE_CHECKING:
-    import searx.plugins
-
 
 COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 5  # 5 years
 
@@ -327,39 +325,11 @@ class EnginesSetting(BooleanChoices):
         return transformed_values
 
 
-class PluginStoragePref:
-    """Plugin settings in the preferences."""
+class PluginsSetting(BooleanChoices):
+    """Plugin settings"""
 
-    def __init__(self, plugins: searx.plugins.PluginStorage):
-        self.plugins: searx.plugins.PluginStorage = plugins
-
-    def serialize(self):
-        data = {}
-        for plg in self.plugins:
-
-
-
-
-
-
-
-
-
-        import pdb
-        pdb.set_trace()
-        x=1 # FIXME
-        # oa_doi_rewrite = plugins.get("oa_doi_rewrite")
-        # if oa_doi_rewrite:
-        #     self.key_value_settings["doi_resolver"] = EnumStringSetting(
-        #         "",
-        #         locked="doi_resolver" in self.cfg.lock,
-        #         choices=["", oa_doi_rewrite.config.resolvers],
-        #     )
+    def __init__(self, default_value, plugins: Iterable[searx.plugins.Plugin]):
         super().__init__(default_value, {plugin.id: plugin.active for plugin in plugins})
-
-
-
-
 
     def transform_form_items(self, items):
         return [item[len('plugin_') :] for item in items]
@@ -425,7 +395,7 @@ class Preferences:
         themes: list[str],
         categories: list[str],
         engines: dict[str, Engine],
-        plugins: "searx.plugins.PluginStorage",
+        plugins: searx.plugins.Storage,
         client: ClientPref | None = None,
     ):
 
@@ -513,8 +483,15 @@ class Preferences:
             ),
         }
 
+        searx.plugins.STORAGE[""]
+        self.key_value_settings["doi_resolver"] = EnumStringSetting(
+            get_setting("default_doi_resolver"),
+            locked="doi_resolver" in self.cfg.lock,
+            choices=["", *DOI_RESOLVERS],
+        )
+
         self.engines = EnginesSetting('engines', engines=engines.values())
-        self.plugins = PluginStoragePref(plugins=plugins)
+        self.plugins = PluginsSetting('plugins', plugins=plugins)
         self.tokens = SetSetting('tokens')
         self.client = client or ClientPref()
 

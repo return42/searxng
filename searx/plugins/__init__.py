@@ -94,19 +94,19 @@ Implementation
    :members:
 """
 
-__all__ = ["PluginInfo", "Plugin", "PluginStorage", "PluginsStorageCfg", "PluginCfg"]
+__all__ = ["initialize", "Plugin", "PluginInfo", "PluginCfg", "StorageCfg", "StoragePlgCfg"]
 
 import typing as t
 
 import searx
 
-from ._core import PluginInfo, Plugin, PluginStorage, PluginsStorageCfg, PluginCfg
+from ._core import Plugin, PluginInfo, PluginCfg, Storage, StorageCfg, StoragePlgCfg
 
 if t.TYPE_CHECKING:
     import flask
 
 
-STORAGE: PluginStorage = PluginStorage()
+STORAGE: Storage = Storage()
 
 
 def initialize(app: "flask.Flask"):
