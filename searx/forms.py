@@ -253,12 +253,12 @@ MsgT = t.TypeVar("MsgT", bound="Msg[t.Any]")
 
 FieldType: t.TypeAlias = "Field[ValT] | OnOffGroup"
 Listener: t.TypeAlias = "t.Callable[[MsgT], None]"
-MSG_TYPES: set[type[Msg[t.Any]]] = set()
+MSG_TYPES: "set[type[Msg[t.Any]]]" = set()
 
 
 @dataclass(frozen=True)
 class Msg(abc.ABC, t.Generic[ValT]):
-    field: FieldType[ValT]
+    field: "FieldType[ValT]"
 
     def __init_subclass__(cls, **kwargs: t.Any):  # type: ignore[reportAny]
         MSG_TYPES.add(cls)
@@ -267,7 +267,7 @@ class Msg(abc.ABC, t.Generic[ValT]):
 
 class MsgBus:
 
-    listeners: dict[type[Msg[t.Any]], set[Listener[t.Any]]]
+    listeners: "dict[type[Msg[t.Any]], set[Listener[t.Any]]]"
 
     class msg:
         @dataclass(frozen=True)
@@ -283,10 +283,10 @@ class MsgBus:
     def __init__(self) -> None:
         self.listeners = {}
 
-    def listen(self, msg_cls: type[MsgT], listener: Listener[MsgT]) -> None:
+    def listen(self, msg_cls: type[MsgT], listener: "Listener[MsgT]") -> None:
         self.listeners.setdefault(msg_cls, set()).add(listener)
 
-    def unlisten(self, listener: Listener[MsgT], msg_type: type[Msg[t.Any]] | None) -> None:
+    def unlisten(self, listener: "Listener[MsgT]", msg_type: "type[Msg[t.Any]] | None") -> None:
         if msg_type is None:
             for s in self.listeners.values():
                 s.discard(listener)

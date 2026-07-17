@@ -4,7 +4,8 @@
 import types
 from collections import abc as c_abc
 
-import babel, babel.core
+import babel
+import babel.core
 
 from . import prefs, plugins, forms
 from searx import get_setting, autocomplete, favicons
@@ -69,6 +70,7 @@ class ClientPref:
 
 
 class PlgGroup(prefs.OnOffGroup):
+    """This class handles the active/inactive preferences of all plugins."""
 
     def __init__(self, grp_id: str, plg_list: c_abc.Sequence[plugins.PluginType]):
         dflt = forms.OnOffStruct()
@@ -81,6 +83,11 @@ class PlgGroup(prefs.OnOffGroup):
 
 
 class EngCtxGroup(prefs.OnOffGroup):
+    """In this group of preferences, the status (active/inactive) of all engines
+    is summarized.  The special thing about this group is that the status of an
+    engine always has a context, the category. An engine can thus be active in
+    one category and inactive in another.
+    """
 
     def __init__(self, grp_id: str, eng_list: c_abc.Sequence[Engine | types.ModuleType]):
         dflt = forms.OnOffStruct()

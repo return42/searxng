@@ -81,10 +81,6 @@ class StoragePlgCfg(msgspec.Struct):
 # -----------------------
 
 
-class PrefMap(t.TypedDict):
-    pass
-
-
 class PluginPref(prefs.Pref[forms.ValT], t.Generic[forms.ValT]):
 
     name: str
@@ -94,12 +90,12 @@ class PluginPref(prefs.Pref[forms.ValT], t.Generic[forms.ValT]):
     """Plugin to which this preference belongs."""
 
     def __init__(
-        self,
-        name: str,
-        plg: "Plugin[t.Any, t.Any]",
-        default: c_abc.Sequence[forms.ValT] | forms.ValT,
-        catalog: forms.Catalog[forms.ValT] | forms.CatalogDefType[forms.ValT] | None = None,
-        l10n_descr: LazyString | str = "",
+            self,
+            name: str,
+            plg: "Plugin[t.Any, t.Any, t.Any]",
+            default: c_abc.Sequence[forms.ValT] | forms.ValT,
+            catalog: forms.Catalog[forms.ValT] | forms.CatalogDefType[forms.ValT] | None = None,
+            l10n_descr: LazyString | str = "",
     ):
 
         self.name = name

@@ -47,10 +47,12 @@ class SettingsPref(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
 
 
 class Pref(forms.Field[forms.ValT], t.Generic[forms.ValT]):
+    """Base class for preferences."""
     pass
 
 
 class OnOffGroup(forms.OnOffGroup):
+    """Base class for groups of on/off preferences """
     pass
 
 
