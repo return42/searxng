@@ -48,12 +48,10 @@ class SettingsPref(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
 
 class Pref(forms.Field[forms.ValT], t.Generic[forms.ValT]):
     """Base class for preferences."""
-    pass
 
 
 class OnOffGroup(forms.OnOffGroup):
-    """Base class for groups of on/off preferences """
-    pass
+    """Base class for groups of on/off preferences"""
 
 
 PrefType: t.TypeAlias = Pref[t.Any] | OnOffGroup
@@ -71,14 +69,17 @@ class PrefStorage:
     def __len__(self):
         return len(self._by_id)
 
+    def __getitem__(self, pref_id: str) -> PrefType:
+        return self._by_id[pref_id]
+
     def get(self, pref_id: str) -> PrefType | None:
         return self._by_id.get(pref_id)
 
-    def register(self, pref_list: PrefType | c_abc.Sequence[PrefType]):
+    def register(self, pref_list: PrefType | c_abc.Sequence[PrefType] | c_abc.ValuesView[PrefType]):
         """Register preference objects.  In case of name collision (if two
         preferences have same ID) a :obj:`KeyError` exception is raised.
         """
-        if not isinstance(pref_list, c_abc.Sequence):
+        if not isinstance(pref_list, (c_abc.Sequence, c_abc.ValuesView)):
             pref_list = [pref_list]
         for pref in pref_list:
             if self.get(pref.id):

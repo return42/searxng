@@ -89,11 +89,8 @@ from searx.utils import gen_useragent, dict_subset
 from searx.version import VERSION_STRING, GIT_URL, GIT_BRANCH
 from searx.query import RawTextQuery
 
-from searx.preferences import (
-    PrefStorage,
-    ClientPref,
-    ValidationException,
-)
+from searx.preferences import ClientPref, SXNGPrefs
+from searx.prefs import Pref, OnOffGroup
 import searx.answerers
 import searx.plugins
 
@@ -159,12 +156,6 @@ def get_locale():
 
 
 babel = Babel(app, locale_selector=get_locale)
-
-
-def _get_browser_language(req: SXNG_Request, lang_list: Iterable[str]) -> str:
-    client = ClientPref.from_http_request(req)
-    locale = match_locale(client.locale_tag or "en", lang_list)
-    return locale or "en"
 
 
 def _get_locale_rfc5646(locale):
@@ -462,57 +453,47 @@ def pre_request():
     sxng_request.errors = []  # pylint: disable=assigning-non-slot
 
     client_pref = ClientPref.from_http_request(sxng_request)
-    prefs = PrefStorage(
+    prefs = SXNGPrefs(
         theme_names=themes,
-        categ_names=categories.keys(),
-        eng_list=engines.values(),
-        plg_list=searx.plugins.STORAGE.plugin_list,
+        categ_names=list(categories.keys()),
+        eng_list=list(engines.values()),
+        plg_list=searx.plugins.STORAGE.plugins,
         client=client_pref,
     )
     sxng_request.preferences = prefs
 
+    prefs.upd_from_cookies(cookies=sxng_request.cookies)
+    client_pref.upd_sxngprefs(prefs)
+
     # FIXME ....
 
-    user_agent = sxng_request.headers.get("User-Agent", "").lower()
-    if "webkit" in user_agent and "android" in user_agent:
-        prefs.set(pref_name="method", value="GET")
-    try:
-        prefs.load_cookies(cookies=sxng_request.cookies)
 
-    except Exception as e:  # pylint: disable=broad-except
-        logger.exception(e, exc_info=True)
-        sxng_request.errors.append(gettext('Invalid settings, please edit your preferences'))
 
     # merge GET, POST vars
     # HINT request.form is of type werkzeug.datastructures.ImmutableMultiDict
-    sxng_request.form = dict(sxng_request.form.items())  # type: ignore
-    for k, v in sxng_request.args.items():
-        if k not in sxng_request.form:
-            sxng_request.form[k] = v
+    #
+    # FIXME: ich bin der Meinung, das dies schon immer ein großer Bug war: hier
+    # wird nicht berücksichtigt, das dies ein *MultiDict* ist, in dem Schlüssel
+    # mehrfach vorkommen können!!!
+    #
+    # sxng_request.form = dict(sxng_request.form.items())  type: ignore
+    # for k, v in sxng_request.args.items():
+    #     if k not in sxng_request.form:
+    #         sxng_request.form[k] = v
 
-    field_preferences = sxng_request.form.get("preferences")
-    if field_preferences:
-        prefs.parse_encoded_data(field_preferences)
-    else:
-        try:
-            prefs.load_form(sxng_request.form)
-        except Exception as e:  # pylint: disable=broad-except
-            logger.exception(e, exc_info=True)
-            sxng_request.errors.append(gettext("Invalid settings"))
-
-    # language is defined neither in settings nor in preferences
-    # use browser headers
-    if not prefs.get_value("language"):
-        language = _get_browser_language(sxng_request, get_setting("search.languages", []))
-        prefs.load_dict({"language": language})
-        logger.debug(f"set language {prefs.get_value('language')} (from browser)")
-
-    # UI locale is defined neither in settings nor in preferences
-    # use browser headers
-    if not prefs.get_value("locale"):
-        locale = _get_browser_language(sxng_request, LOCALE_NAMES.keys())
-        prefs.load_dict({"locale": locale})
-        logger.debug(f"set locale {prefs.get_value('locale')} (from browser)")
+    # FIXME: auch das hier ist ein großer Bug, die Prefernces werden nur auf dem
+    # endpunkt /preferences gesetzt und haben auf anderen endpoints keine
+    # Bedeutung.
+    #
+    # field_preferences = sxng_request.form.get("preferences")
+    # if field_preferences:
+    #     prefs.parse_encoded_data(field_preferences)
+    # else:
+    #     try:
+    #         prefs.load_form(sxng_request.form)
+    #     except Exception as e:  # pylint: disable=broad-except
+    #         logger.exception(e, exc_info=True)
+    #         sxng_request.errors.append(gettext("Invalid settings"))
 
     # request.user_plugins
     sxng_request.user_plugins = []  # pylint: disable=assigning-non-slot
@@ -656,7 +637,7 @@ def search():
         search_query, raw_text_query, _, _, selected_locale = get_search_query_from_webapp(
             sxng_request.preferences, sxng_request.form
         )
-        search_obj = searx.search.SearchWithPlugins(search_query, sxng_request, sxng_request.user_plugins)
+        search_obj = searx.search.SearchWithPlugins(search_query, sxng_request)
         result_container = search_obj.search()
 
     except SearxParameterException as e:

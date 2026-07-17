@@ -65,17 +65,18 @@ class Resolver(PluginPref[str | None]):
         self.listen(PluginPref.msg.updated, upd)
 
 
-class DOIPrefs(t.TypedDict):
+class Prefs(t.TypedDict):
+    """User can select one of the resolvers, or none to deactivate the plugin."""
+
     doi_resolver: Resolver
 
 
 @t.final
-class SXNGPlugin(Plugin[Info, Cfg]):
+class SXNGPlugin(Plugin[Info, Cfg, Prefs]):
 
     id = "oa_doi_rewrite"
     cfg_factory = Cfg
     info_factory = Info
-    prefs: DOIPrefs
 
     def init(self):
         self.prefs = {"doi_resolver": Resolver(self)}
@@ -92,11 +93,15 @@ class SXNGPlugin(Plugin[Info, Cfg]):
             return True
         doi_host = doi_host.rstrip("/")
 
-        if isinstance(result, Paper) and result.doi and not result.doi_url:
+        # Paper.doi: set a doi-URL
+        if isinstance(result, Paper) and result.doi:
             if doi := extract_doi(result.doi):
+                new_url = f"{doi_host}/{doi}"
+                # in sense of "rewrite", its intended to overwrite existing Paper.doi_url
+                self.log.debug("oa_doi_rewrite: [field: url] %s -> %s", result.doi_url, new_url)
                 result.doi_url = f"{doi_host}/{doi}"
-                self.log.debug("oa_doi_rewrite: [field: doi_url] '' -> %s", result.doi_url)
 
+        # If result link contains a doi, rewrite link's URL
         if result.parsed_url:
             if doi := extract_doi(result.parsed_url):
                 new_url = f"{doi_host}/{doi}"

@@ -27,6 +27,7 @@ if t.TYPE_CHECKING:
     from .models import SearchQuery
     from searx.extended_types import SXNG_Request
     from searx.result_types import Result, LegacyResult  # type: ignore
+    from searx.preferences import PlgGroup
 
 logger = logger.getChild('search')
 
@@ -184,9 +185,10 @@ class Search:
 class SearchWithPlugins(Search):
     """Inherit from the Search class ant the calls  add calls to the plugins."""
 
-    def __init__(self, search_query: "SearchQuery", request: "SXNG_Request", user_plugins: list[str]):
+    def __init__(self, search_query: "SearchQuery", request: "SXNG_Request"):
         super().__init__(search_query)
-        self.user_plugins: list[str] = user_plugins
+        plg_group: "PlgGroup" = request.preferences["plg"]  # pyright: ignore[reportAssignmentType]
+        self.user_plugins: set[str] = plg_group.val.enabled
         """Plugins active in this search Order."""
 
         # ToDo: monkey patching the result container from outside feels not good

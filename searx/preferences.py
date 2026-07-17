@@ -1,22 +1,27 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """SearXNG preferences implementation."""
 
+import typing as t
 import types
 from collections import abc as c_abc
 
 import babel
 import babel.core
 
-from . import prefs, plugins, forms
-from searx import get_setting, autocomplete, favicons
-
+from searx import get_setting, autocomplete, favicons, logger
 from searx.enginelib import Engine
 from searx.engines import DEFAULT_CATEGORY
 from searx.extended_types import SXNG_Request
-from searx.locales import LOCALE_NAMES
+from searx.locales import LOCALE_NAMES, match_locale
 from searx.settings_defaults import SIMPLE_STYLE, SCHEMA
 from searx.webutils import VALID_LANGUAGE_CODE
 
+from . import prefs, plugins, forms
+
+logger = logger.getChild("preferences")
+
+HttpMethod: t.TypeAlias = t.Literal["GET", "POST"]
+HTTP_METHODES: HttpMethod = SCHEMA["server"]["method"].type_definition  # pyright: ignore[reportAny]
 
 class ClientPref:
     """Container to assemble client prefferences and settings."""
@@ -26,8 +31,11 @@ class ClientPref:
     locale: babel.Locale | None
     """Locale preferred by the client."""
 
-    def __init__(self, locale: babel.Locale | None = None):
+    http_method: HttpMethod | None
+
+    def __init__(self, locale: babel.Locale | None = None, http_method: HttpMethod | None = None):
         self.locale = locale
+        self.http_method = http_method
 
     @property
     def locale_tag(self):
@@ -44,11 +52,17 @@ class ClientPref:
 
         - `Accept-Language used for locale setting
           <https://www.w3.org/International/questions/qa-accept-lang-locales.en>`__
-
         """
+
+        method = None
+        ua = http_request.headers.get("User-Agent", "").lower()
+        if "webkit" in ua and "android" in ua:
+            # https://github.com/searx/searx/pull/2132
+            method = "GET"
+
         al_header = http_request.headers.get("Accept-Language")
         if not al_header:
-            return cls(locale=None)
+            return cls(locale=None, http_method=method)
 
         pairs: list[tuple[babel.Locale, float]] = []
         for l in al_header.split(','):
@@ -66,7 +80,31 @@ class ClientPref:
         if pairs:
             pairs.sort(reverse=True, key=lambda x: x[1])
             locale = pairs[0][0]
-        return cls(locale=locale)
+        return cls(locale=locale, http_method=method)
+
+    def upd_sxngprefs(self, sxng_prefs: SXNGPrefs):
+        if self.http_method:
+            sxng_prefs.upd("method", self.http_method)
+
+        # language is defined neither in settings nor in preferences
+        # use browser headers
+
+        if not sxng_prefs["language"]:
+            language = match_locale(self.locale_tag or "en", get_setting("search.languages", [])) or "en"
+            t.cast(prefs.Pref[str], sxng_prefs["language"]).upd(language)
+            logger.debug(f"set language {sxng_prefs['language']} (from browser)")
+
+        # UI locale is defined neither in settings nor in preferences
+        # use browser headers
+
+        if not sxng_prefs["locale"]:
+            locale = match_locale(self.locale_tag or "en", list(LOCALE_NAMES.keys())) or "en"
+            t.cast(prefs.Pref[str], sxng_prefs["locale"]).upd(locale)
+            logger.debug(f"set locale {sxng_prefs['locale']} (from browser)")
+
+
+    def match_locale(self, tag_list: list[str], fallback: str = "en") -> str:
+        return match_locale(self.locale_tag or "en", tag_list) or fallback
 
 
 class PlgGroup(prefs.OnOffGroup):
@@ -118,6 +156,21 @@ def _languages_catalog() -> forms.Catalog[str]:
 
 
 class SXNGPrefs(prefs.PrefStorage):
+    """Preferences of a SearXNG session.
+
+    Unlike other web applications, in SearXNG the session data is not stored on
+    the server but on the client (and passed to the server via cookies).
+    """
+
+    def upd(self, pref_name: str, value: t.Any):
+        pref_obj = self.get(pref_name)
+        if pref_obj is None:
+            raise ValueError(f"preference '{pref_name}' does not exists")
+        pref_obj.upd(value)
+
+    def upd_from_cookies(self, cookies: dict[str, str]):
+        for pref_obj in self:
+            pref_obj.upd_from_cookies(cookies)
 
     def __init__(
         self,
@@ -132,7 +185,7 @@ class SXNGPrefs(prefs.PrefStorage):
         self.cfg: prefs.SettingsPref = get_setting("preferences")
 
         for plg in plg_list:
-            self.register(plg.get_prefs())
+            self.register(plg.prefs.values())
 
         sxng_prefs: list[prefs.PrefType] = [
             # engine & plugin groups
@@ -180,7 +233,7 @@ class SXNGPrefs(prefs.PrefStorage):
                 "method",
                 locked="method" in self.cfg.lock,
                 default=get_setting("method"),  # type: ignore[reportAny]
-                catalog=SCHEMA["server"]["method"].type_definition,  # type: ignore[reportAny]
+                catalog=HTTP_METHODES,
             ),
             # ui
             prefs.Pref(

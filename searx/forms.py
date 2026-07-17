@@ -245,6 +245,12 @@ class Catalog(t.Generic[ValT]):
         """Options that the catalog offers."""
         return [k for k in self.__catalog.keys() if isinstance(k, str)]
 
+    @t.final
+    @cached_property
+    def values(self) -> list[ValT]:
+        """Values that the catalog offers."""
+        return [v for v in self.__catalog.values() if not callable(v)]
+
 
 # Field Listeners
 # ---------------
@@ -308,7 +314,7 @@ class FieldDef(t.TypedDict, t.Generic[ValT]):
     used in factory, class method: :obj:`Field.from_def`."""
 
     id: str
-    default: c_abc.Sequence[ValT] | ValT
+    default: list[ValT] | ValT
 
     catalog: t.NotRequired[CatalogDefType[ValT]]
     locked: t.NotRequired[bool]
@@ -348,7 +354,7 @@ class Field(MsgBus, t.Generic[ValT]):
     id: str
     """ID of this field, see :py:obj:`FIELD_ID_PATTERN`"""
 
-    catalog: Catalog[ValT]
+    catalog: Catalog[ValT] | None
     """Access to the :obj:`Catalog` of this field."""
 
     locked: bool = False
@@ -377,7 +383,7 @@ class Field(MsgBus, t.Generic[ValT]):
     def __init__(
         self,
         id: str,
-        default: c_abc.Sequence[ValT] | ValT,
+        default: list[ValT] | ValT,
         catalog: Catalog[ValT] | CatalogDefType[ValT] | None = None,
         locked: bool = False,
         l10n_descr: LazyString | str = "",
@@ -402,8 +408,8 @@ class Field(MsgBus, t.Generic[ValT]):
 
         if isinstance(catalog, Catalog):
             self.catalog = catalog
-        else:
-            self.catalog = Catalog(catalog=catalog or {})
+        elif catalog is not None:
+            self.catalog = Catalog(catalog=catalog)
 
         self.locked = False
         self.upd(default)  # pyright: ignore[reportUnknownArgumentType]
@@ -432,17 +438,26 @@ class Field(MsgBus, t.Generic[ValT]):
 
     @t.final
     @if_mutable
-    def upd(self, new_val: ValT | c_abc.Sequence[ValT]) -> None:
+    def upd(self, new_val: ValT | list[ValT], validate: bool = True) -> None:
         """Setter method to set the *internal* (python) value of this field.
 
         If the field is :obj:`Field.locked`, the call is ignored and :obj:`VOID`
         is returned.
         """
         old_val = self.values
-        if isinstance(new_val, c_abc.Sequence):
-            self.__values = new_val  # type: ignore[reportAttributeAccessIssue]
-        else:
-            self.__values = [new_val]
+        if not isinstance(new_val, list):
+            new_val = [new_val]
+
+        if validate:
+            if self.catalog and self.catalog.restrict:
+                if valid := self.catalog.values:
+                    invalid = [x for x in new_val if x not in valid]  # type: ignore
+                    if invalid:
+                        raise ValueError(f"invalid value(s): {invalid} (not listed in the catalog)")
+            else:
+                invalid = [(x, type(x)) for x in new_val if not isinstance(x, self.__py_type)]  # type: ignore
+                if invalid:
+                    raise ValueError(f"invalid value(s): {invalid} (not of type {self.__py_type})")
 
         self.publish(self.msg.updated(field=self, old_val=old_val))
 
@@ -477,7 +492,8 @@ class Field(MsgBus, t.Generic[ValT]):
         if not raw:
             return
         new_val = self.strlist2py(raw)
-        self.upd(new_val)
+        # values from self.strlist2py are valid
+        self.upd(new_val, validate=False)
 
     def py2strlist(self, obj_list: list[ValT]) -> list[str]:
         """Converts Python objects to strings.
@@ -539,7 +555,8 @@ class Field(MsgBus, t.Generic[ValT]):
         if raw_str is None:
             return
         new_val = self.strlist2py(self.cookie2strlist(raw_str))
-        self.upd(new_val)
+        # values from self.strlist2py are valid
+        self.upd(new_val, validate=False)
 
     def strlist2cookie(self, str_list: list[str]) -> str:
         cookie_obj = Cookie(data=str_list)
@@ -580,13 +597,13 @@ class OnOffStruct(msgspec.Struct, kw_only=True):
 
     # pylint: disable=invalid-name
 
-    # { <name>: <ctx> , ... }
-    on: dict[str, str] = msgspec.field(default_factory=dict)
-    off: dict[str, str] = msgspec.field(default_factory=dict)
+    # tuple: name, ctx
+    on: set[tuple[str,str]] = msgspec.field(default_factory=set)
+    off: set[tuple[str,str]] = msgspec.field(default_factory=set)
 
     def __post_init__(self):
         if not self.is_valid:
-            intersect = set(self.on.items()) & set(self.off.items())
+            intersect = self.on & self.off
             raise ValueError(f"State of entity can't be *on* and *off* at the same time: {intersect}")
 
     @property
@@ -594,10 +611,9 @@ class OnOffStruct(msgspec.Struct, kw_only=True):
         """An entity of ``(name, ctx)`` can only exist once (the state is
         disjoint); it cannot be *on* and *off* at the same time.
         """
-        on = set(self.on.items())
-        off = set(self.off.items())
-        return on.isdisjoint(off)
+        return self.on.isdisjoint(self.off)
 
+    FIXME: ...
     def enable(self, name: str, ctx: str = ""):
         self.on[name] = ctx
         if self.off.get(name) == ctx:
@@ -706,13 +722,18 @@ class OnOffGroup(MsgBus):
 
     @t.final
     @if_mutable
-    def upd(self, new_val: OnOffStruct) -> None:
+    def upd(self, new_val: OnOffStruct, validate: bool = True) -> None:
         """Setter method to set the *internal* (python) value of this group of
         fields.
 
         If the group is :obj:`OnOffStruct.locked`, the call is ignored and
         :obj:`VOID` is returned.
         """
+        if validate and not isinstance(new_val, OnOffStruct):
+            raise ValueError(
+                f"invalid value(s): {repr(new_val)} (expected value of type OnOffStruct)"
+            )  # pyright: ignore[reportUnreachable]
+
         old_val = self.__values
         self.__values = new_val
         self.publish(self.msg.updated(field=self, old_val=old_val))
@@ -810,4 +831,5 @@ class OnOffGroup(MsgBus):
 
         new_val = msgspec.convert(msgspec.to_builtins(self.cfg), type=OnOffStruct)
         new_val.update(diff_obj)
-        self.upd(new_val)
+        # values from msgspec.convert are valid
+        self.upd(new_val, validate=False)

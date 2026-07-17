@@ -90,12 +90,12 @@ class PluginPref(prefs.Pref[forms.ValT], t.Generic[forms.ValT]):
     """Plugin to which this preference belongs."""
 
     def __init__(
-            self,
-            name: str,
-            plg: "Plugin[t.Any, t.Any, t.Any]",
-            default: c_abc.Sequence[forms.ValT] | forms.ValT,
-            catalog: forms.Catalog[forms.ValT] | forms.CatalogDefType[forms.ValT] | None = None,
-            l10n_descr: LazyString | str = "",
+        self,
+        name: str,
+        plg: "Plugin[t.Any, t.Any, t.Any]",
+        default: c_abc.Sequence[forms.ValT] | forms.ValT,
+        catalog: forms.Catalog[forms.ValT] | forms.CatalogDefType[forms.ValT] | None = None,
+        l10n_descr: LazyString | str = "",
     ):
 
         self.name = name
@@ -108,6 +108,10 @@ class PluginPref(prefs.Pref[forms.ValT], t.Generic[forms.ValT]):
             locked=plg.locked,
             l10n_descr=l10n_descr,
         )
+
+
+PrefByNameT = t.TypeVar("PrefByNameT")
+PrefByName: t.TypeAlias = dict[str, PluginPref[t.Any]]
 
 
 # Representation of the plugin in the UI
@@ -150,8 +154,8 @@ class PluginInfo:
     keywords: list[str] = []
     """See :py:obj:`Plugin.keywords`"""
 
-    def __init__(self, plg: "Plugin[t.Any, t.Any]"):
-        self.plg: "Plugin[t.Any, t.Any]" = plg
+    def __init__(self, plg: "Plugin[t.Any, t.Any, t.Any]"):
+        self.plg: "Plugin[t.Any, t.Any, t.Any]" = plg
         self.id = plg.id
         self.keywords = plg.keywords
 
@@ -162,7 +166,7 @@ PluginInfoTypeT = t.TypeVar("PluginInfoTypeT", bound=PluginInfo)
 # ---------------------------
 
 
-class Plugin(abc.ABC, t.Generic[PluginInfoTypeT, PluginCfgTypeT]):
+class Plugin(abc.ABC, t.Generic[PluginInfoTypeT, PluginCfgTypeT, PrefByNameT]):
     """Abstract base class of all Plugins."""
 
     id: str = ""
@@ -196,7 +200,7 @@ class Plugin(abc.ABC, t.Generic[PluginInfoTypeT, PluginCfgTypeT]):
     fqn: str
 
     # will be annotated in the sub-classes
-    prefs = {}  # pyright: ignore[reportUnannotatedClassAttribute]
+    prefs: PrefByNameT
 
     def __init__(self, storage_plg_item: dict[str, t.Any]) -> None:
 
@@ -221,7 +225,7 @@ class Plugin(abc.ABC, t.Generic[PluginInfoTypeT, PluginCfgTypeT]):
         self.info = t.cast(PluginInfoTypeT, self.info_factory(self))
 
     def init(self):
-        self.prefs = {}
+        pass  # self.prefs = {}
 
     # @property
     # def prefs(self) -> PrefMap:
@@ -323,7 +327,7 @@ class Plugin(abc.ABC, t.Generic[PluginInfoTypeT, PluginCfgTypeT]):
         return
 
 
-PluginType: t.TypeAlias = Plugin[PluginInfo, PluginCfg]
+PluginType: t.TypeAlias = Plugin[PluginInfo, PluginCfg, PrefByName]
 PluginTypeT = t.TypeVar("PluginTypeT", bound=PluginType)
 
 
@@ -344,7 +348,11 @@ class Storage:
         yield from self._by_id.values()
 
     def items(self) -> list[tuple[str, PluginType]]:
-        return [i for i in self._by_id.items()]
+        return list(self._by_id.items())
+
+    @property
+    def plugins(self) -> list[PluginType]:
+        return list(self._by_id.values())
 
     def get(self, plg_id: str) -> PluginType | None:
         return self._by_id.get(plg_id, None)
