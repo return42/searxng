@@ -47,6 +47,7 @@ from flask_babel import (
 )
 
 import searx
+from searx import goto
 from searx.extended_types import sxng_request
 from searx import (
     logger,
@@ -1010,6 +1011,9 @@ def preferences():
 
 
 app.add_url_rule('/favicon_proxy', methods=['GET'], endpoint="favicon_proxy", view_func=favicons.favicon_proxy)
+
+# register a redirect proxy for GOTO links
+app.register_blueprint(goto.app)
 
 
 @app.route('/image', methods=['GET'])
